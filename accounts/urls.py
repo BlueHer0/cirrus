@@ -39,4 +39,9 @@ urlpatterns = [
     # Account
     path("perfil/", views.app_perfil, name="perfil"),
     path("facturacion/", views.app_facturacion, name="facturacion"),
+
+    # Analysis
+    path("analysis/summary/", views.analysis_summary_view, name="analysis_summary"),
+    path("analysis/fiscal/", views.analysis_fiscal_view, name="analysis_fiscal"),
+    path("analysis/iva/", views.analysis_iva_view, name="analysis_iva"),
 ]

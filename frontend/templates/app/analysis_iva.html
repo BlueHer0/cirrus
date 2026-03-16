@@ -1,0 +1,64 @@
+{% extends "app/analysis_base.html" %}
+
+{% block content %}
+<!-- IVA Flow Diagram -->
+<div class="iva-flow">
+  <div class="iva-box">
+    <div class="iva-box-label">IVA Trasladado</div>
+    <div class="iva-box-value green">${{ data.iva_trasladado_fmt }}</div>
+  </div>
+  <span class="iva-arrow">−</span>
+  <div class="iva-box">
+    <div class="iva-box-label">IVA Acreditable</div>
+    <div class="iva-box-value blue">${{ data.iva_acreditable_fmt }}</div>
+  </div>
+  <span class="iva-arrow">=</span>
+  <div class="iva-box" style="border-color: rgba(99,102,241,0.3);">
+    <div class="iva-box-label">IVA por Pagar</div>
+    <div class="iva-box-value {% if data.iva_por_pagar >= 0 %}amber{% else %}green{% endif %}">${{ data.iva_por_pagar_fmt }}</div>
+  </div>
+</div>
+
+<!-- Cards -->
+<div class="cards cards-3">
+  <div class="card">
+    <div class="card-label">IVA Retenido</div>
+    <div class="card-value cyan">${{ data.iva_retenido_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">IVA Efectivo No Acreditable</div>
+    <div class="card-value red">${{ data.iva_efectivo_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">IVA Neto a Enterar</div>
+    <div class="card-value amber">${{ data.iva_neto_fmt }}</div>
+  </div>
+</div>
+
+<!-- IVA by rate + Trend -->
+<div class="two-cols">
+  <div class="section">
+    <div class="section-title">IVA por Tasa</div>
+    {% for t in data.por_tasa %}
+    <div class="bar-row">
+      <div class="bar-label">{{ t.tasa }}</div>
+      <div class="bar-track">
+        <div class="bar-fill {{ t.bar_class }}" style="width: {{ t.pct }}%;">${{ t.monto_fmt }}</div>
+      </div>
+      <div class="bar-value">${{ t.monto_fmt }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="section">
+    <div class="section-title">Tendencia IVA a Pagar (6 meses)</div>
+    {% for t in data.tendencia %}
+    <div class="bar-row">
+      <div class="bar-label" style="width: 70px; font-size: 11px;">{{ t.mes }}</div>
+      <div class="bar-track">
+        <div class="bar-fill {% if t.valor >= 0 %}bg-indigo{% else %}bg-red{% endif %}" style="width: {{ t.pct }}%;">${{ t.valor_fmt }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

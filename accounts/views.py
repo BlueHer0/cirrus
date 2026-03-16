@@ -936,3 +936,288 @@ def app_facturacion(request):
         "current_page": "facturacion",
         "profile": profile,
     })
+
+
+# ── Analysis Views ────────────────────────────────────────────────────
+
+import calendar
+from decimal import Decimal
+
+MONTH_NAMES_ES = [
+    "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+TIPO_LABELS = {"I": "Ingreso", "E": "Egreso", "P": "Pago", "N": "Nómina", "T": "Traslado"}
+FORMA_PAGO_LABELS = {
+    "01": "Efectivo", "02": "Cheque", "03": "Transferencia",
+    "04": "Tarjeta créd.", "06": "Dinero elec.", "08": "Vales",
+    "28": "Tarjeta déb.", "99": "Por definir",
+}
+BAR_CLASSES = ["bg-indigo", "bg-green", "bg-blue", "bg-amber", "bg-purple", "bg-pink", "bg-cyan", "bg-red"]
+
+
+def _fmt(val):
+    """Format number with commas."""
+    if val is None:
+        val = 0
+    v = float(val)
+    if abs(v) >= 1_000_000:
+        return f"{v/1_000_000:,.1f}M"
+    return f"{v:,.0f}"
+
+
+def _analysis_base_qs(request, empresa_id, year, month):
+    """Validate access and return (empresa, base_qs) or redirect."""
+    from core.models import Empresa, CFDI
+    try:
+        empresa = Empresa.objects.get(id=empresa_id)
+    except (Empresa.DoesNotExist, ValueError):
+        return None, None
+    if empresa.owner_id != request.user.id and not request.user.is_staff:
+        return None, None
+    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month)
+    return empresa, qs
+
+
+@login_required(login_url=APP_LOGIN_URL)
+def analysis_summary_view(request):
+    from core.models import CFDI
+    from django.db.models import Sum, Count, Max
+    from django.db.models.functions import ExtractDay
+
+    empresa_id = request.GET.get("empresa", "")
+    year = int(request.GET.get("year", 2026))
+    month = int(request.GET.get("month", 3))
+
+    empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
+    if not empresa:
+        return redirect("app:cfdis")
+
+    total = qs.count()
+    emitidos = qs.filter(tipo_relacion="emitido").count()
+    recibidos = qs.filter(tipo_relacion="recibido").count()
+
+    emitidos_i = qs.filter(tipo_relacion="emitido", tipo_comprobante="I")
+    recibidos_i = qs.filter(tipo_relacion="recibido", tipo_comprobante="I")
+
+    facturado = emitidos_i.aggregate(s=Sum("total"))["s"] or 0
+    gastos = recibidos_i.aggregate(s=Sum("total"))["s"] or 0
+    resultado = float(facturado) - float(gastos)
+    ticket = float(facturado) / max(emitidos_i.count(), 1)
+    factura_max = emitidos_i.aggregate(m=Max("total"))["m"] or 0
+
+    # Delta vs previous month
+    pm = month - 1 if month > 1 else 12
+    py = year if month > 1 else year - 1
+    _, prev_qs = _analysis_base_qs(request, empresa_id, py, pm)
+    prev_total = prev_qs.count() if prev_qs is not None else 0
+    prev_emit = prev_qs.filter(tipo_relacion="emitido").count() if prev_qs is not None else 0
+    prev_recv = prev_qs.filter(tipo_relacion="recibido").count() if prev_qs is not None else 0
+
+    # Por tipo comprobante
+    por_tipo_raw = qs.values("tipo_comprobante").annotate(count=Count("uuid")).order_by("-count")
+    max_tipo = max((r["count"] for r in por_tipo_raw), default=1)
+    por_tipo = [
+        {
+            "label": TIPO_LABELS.get(r["tipo_comprobante"], r["tipo_comprobante"]),
+            "count": r["count"],
+            "pct": round(r["count"] / max_tipo * 100),
+            "bar_class": BAR_CLASSES[i % len(BAR_CLASSES)],
+        }
+        for i, r in enumerate(por_tipo_raw)
+    ]
+
+    # Por forma de pago
+    por_fp_raw = qs.exclude(forma_pago="").values("forma_pago").annotate(count=Count("uuid")).order_by("-count")[:6]
+    fp_total = sum(r["count"] for r in por_fp_raw) or 1
+    por_forma_pago = [
+        {
+            "label": FORMA_PAGO_LABELS.get(r["forma_pago"], r["forma_pago"]),
+            "pct": round(r["count"] / fp_total * 100),
+            "bar_class": BAR_CLASSES[(i + 2) % len(BAR_CLASSES)],
+        }
+        for i, r in enumerate(por_fp_raw)
+    ]
+
+    # Actividad diaria
+    daily_raw = qs.annotate(dia=ExtractDay("fecha")).values("dia").annotate(count=Count("uuid"), monto=Sum("total")).order_by("dia")
+    days = calendar.monthrange(year, month)[1]
+    dmap = {r["dia"]: r for r in daily_raw}
+    max_daily = max((dmap[d]["count"] for d in dmap), default=1)
+    actividad_diaria = [
+        {
+            "dia": d,
+            "count": dmap[d]["count"] if d in dmap else 0,
+            "pct": round((dmap[d]["count"] / max_daily) * 100) if d in dmap else 2,
+            "monto_fmt": _fmt(dmap[d]["monto"]) if d in dmap else "0",
+        }
+        for d in range(1, days + 1)
+    ]
+
+    # Top 5 clients + providers
+    top_clientes = [
+        {"rfc": r["rfc_receptor"], "monto_fmt": _fmt(r["monto"])}
+        for r in emitidos_i.values("rfc_receptor").annotate(monto=Sum("total")).order_by("-monto")[:5]
+    ]
+    top_proveedores = [
+        {"rfc": r["rfc_emisor"], "monto_fmt": _fmt(r["monto"])}
+        for r in qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).values("rfc_emisor").annotate(monto=Sum("total")).order_by("-monto")[:5]
+    ]
+
+    # Alertas
+    efectivo = qs.filter(forma_pago="01", total__gt=2000).count()
+    ppd = qs.filter(metodo_pago="PPD").count()
+
+    data = {
+        "total_cfdi": total, "emitidos": emitidos, "recibidos": recibidos,
+        "delta_total": total - prev_total, "delta_emitidos": emitidos - prev_emit, "delta_recibidos": recibidos - prev_recv,
+        "resultado": resultado, "resultado_fmt": _fmt(resultado),
+        "facturado_fmt": _fmt(facturado), "gastos_fmt": _fmt(gastos),
+        "ticket_fmt": _fmt(ticket), "factura_max_fmt": _fmt(factura_max),
+        "por_tipo": por_tipo, "por_forma_pago": por_forma_pago,
+        "actividad_diaria": actividad_diaria, "days_in_month": days,
+        "top_clientes": top_clientes, "top_proveedores": top_proveedores,
+        "alertas": {"cancelados": 0, "efectivo": efectivo, "ppd": ppd, "listas_negras": 0},
+    }
+    return render(request, "app/analysis_summary.html", {
+        "titulo": "📊 Resumen Rápido",
+        "empresa": empresa, "year": year, "month": month,
+        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "data": data, "now": datetime.now(),
+    })
+
+
+@login_required(login_url=APP_LOGIN_URL)
+def analysis_fiscal_view(request):
+    from core.models import CFDI
+    from django.db.models import Sum
+
+    empresa_id = request.GET.get("empresa", "")
+    year = int(request.GET.get("year", 2026))
+    month = int(request.GET.get("month", 3))
+
+    empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
+    if not empresa:
+        return redirect("app:cfdis")
+
+    ingresos = float(qs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)
+    gastos_qs = qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"])
+    gastos_total = float(gastos_qs.aggregate(s=Sum("total"))["s"] or 0)
+
+    no_ded_efectivo = float(gastos_qs.filter(forma_pago="01", total__gt=2000).aggregate(s=Sum("total"))["s"] or 0)
+    no_ded = no_ded_efectivo
+    gastos_ded = gastos_total - no_ded
+
+    utilidad = ingresos - gastos_ded
+    isr = utilidad * 0.30 if utilidad > 0 else 0
+
+    ret_agg = qs.filter(tipo_relacion="recibido").aggregate(isr=Sum("isr_retenido"), iva=Sum("iva_retenido"))
+    ret_isr = float(ret_agg["isr"] or 0)
+    ret_iva = float(ret_agg["iva"] or 0)
+
+    ded_pct = round(gastos_ded / gastos_total * 100) if gastos_total > 0 else 100
+    no_ded_pct = 100 - ded_pct
+
+    # Motivos
+    motivos = []
+    if no_ded_efectivo > 0:
+        cnt = gastos_qs.filter(forma_pago="01", total__gt=2000).count()
+        motivos.append({
+            "motivo": "Efectivo > $2,000", "count": cnt,
+            "monto_fmt": _fmt(no_ded_efectivo),
+            "pct": round(no_ded_efectivo / max(no_ded, 1) * 100),
+        })
+
+    # Delta
+    pm = month - 1 if month > 1 else 12
+    py = year if month > 1 else year - 1
+    _, prev_qs = _analysis_base_qs(request, empresa_id, py, pm)
+    prev_ing = float((prev_qs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)) if prev_qs is not None else 0
+    prev_gas = float((prev_qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)) if prev_qs is not None else 0
+    delta_ing = round((ingresos - prev_ing) / prev_ing * 100) if prev_ing else 0
+    delta_gas = round((gastos_total - prev_gas) / prev_gas * 100) if prev_gas else 0
+
+    data = {
+        "ingresos_fmt": _fmt(ingresos), "gastos_ded_fmt": _fmt(gastos_ded),
+        "utilidad": utilidad, "utilidad_fmt": _fmt(utilidad),
+        "isr_fmt": _fmt(isr), "ret_isr_fmt": _fmt(ret_isr), "ret_iva_fmt": _fmt(ret_iva),
+        "no_ded_fmt": _fmt(no_ded), "ded_pct": ded_pct, "no_ded_pct": no_ded_pct,
+        "motivos": motivos, "delta_ingresos": delta_ing, "delta_gastos": delta_gas,
+    }
+    return render(request, "app/analysis_fiscal.html", {
+        "titulo": "💰 Análisis Fiscal",
+        "empresa": empresa, "year": year, "month": month,
+        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "data": data, "now": datetime.now(),
+    })
+
+
+@login_required(login_url=APP_LOGIN_URL)
+def analysis_iva_view(request):
+    from core.models import CFDI
+    from django.db.models import Sum, F
+
+    empresa_id = request.GET.get("empresa", "")
+    year = int(request.GET.get("year", 2026))
+    month = int(request.GET.get("month", 3))
+
+    empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
+    if not empresa:
+        return redirect("app:cfdis")
+
+    iva_trasladado = float(qs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("iva"))["s"] or 0)
+    recibidos_ie = qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"])
+    iva_acreditable_total = float(recibidos_ie.aggregate(s=Sum("iva"))["s"] or 0)
+    iva_efectivo = float(recibidos_ie.filter(forma_pago="01", total__gt=2000).aggregate(s=Sum("iva"))["s"] or 0)
+    iva_acreditable = iva_acreditable_total - iva_efectivo
+    iva_por_pagar = iva_trasladado - iva_acreditable
+    iva_retenido = float(qs.filter(tipo_relacion="recibido").aggregate(s=Sum("iva_retenido"))["s"] or 0)
+    iva_neto = iva_por_pagar - iva_retenido
+
+    # Por tasa
+    emitidos_i = qs.filter(tipo_relacion="emitido", tipo_comprobante="I", subtotal__gt=0)
+    iva_16 = float(emitidos_i.filter(iva__gt=F("subtotal") * Decimal("0.10")).aggregate(s=Sum("iva"))["s"] or 0)
+    iva_8 = float(emitidos_i.filter(iva__gt=0, iva__lte=F("subtotal") * Decimal("0.10")).aggregate(s=Sum("iva"))["s"] or 0)
+    iva_0 = float(emitidos_i.filter(iva=0).aggregate(s=Sum("total"))["s"] or 0)
+    max_tasa = max(iva_16, iva_8, iva_0, 1)
+    por_tasa = [
+        {"tasa": "16%", "monto_fmt": _fmt(iva_16), "pct": round(iva_16 / max_tasa * 100), "bar_class": "bg-indigo"},
+        {"tasa": "8%", "monto_fmt": _fmt(iva_8), "pct": round(iva_8 / max_tasa * 100), "bar_class": "bg-green"},
+        {"tasa": "0%", "monto_fmt": _fmt(iva_0), "pct": round(iva_0 / max_tasa * 100), "bar_class": "bg-blue"},
+    ]
+
+    # Tendencia 6 meses
+    tendencia = []
+    max_tend = 1
+    for i in range(5, -1, -1):
+        m = month - i
+        y = year
+        while m <= 0:
+            m += 12
+            y -= 1
+        _, tqs = _analysis_base_qs(request, empresa_id, y, m)
+        if tqs is not None:
+            tt = float(tqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("iva"))["s"] or 0)
+            ta = float(tqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("iva"))["s"] or 0)
+        else:
+            tt, ta = 0, 0
+        v = tt - ta
+        max_tend = max(max_tend, abs(v))
+        tendencia.append({"mes": f"{MONTH_NAMES_ES[m][:3]} {y}", "valor": v, "valor_fmt": _fmt(v)})
+
+    for t in tendencia:
+        t["pct"] = round(abs(t["valor"]) / max_tend * 100) if max_tend > 0 else 0
+
+    data = {
+        "iva_trasladado_fmt": _fmt(iva_trasladado), "iva_acreditable_fmt": _fmt(iva_acreditable),
+        "iva_por_pagar": iva_por_pagar, "iva_por_pagar_fmt": _fmt(iva_por_pagar),
+        "iva_retenido_fmt": _fmt(iva_retenido), "iva_efectivo_fmt": _fmt(iva_efectivo),
+        "iva_neto_fmt": _fmt(iva_neto),
+        "por_tasa": por_tasa, "tendencia": tendencia,
+    }
+    return render(request, "app/analysis_iva.html", {
+        "titulo": "🧾 IVA del Periodo",
+        "empresa": empresa, "year": year, "month": month,
+        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "data": data, "now": datetime.now(),
+    })

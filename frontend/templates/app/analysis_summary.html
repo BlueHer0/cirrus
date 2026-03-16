@@ -1,0 +1,129 @@
+{% extends "app/analysis_base.html" %}
+
+{% block content %}
+<!-- Row 1: Main counts -->
+<div class="cards cards-4">
+  <div class="card">
+    <div class="card-label">Total CFDIs</div>
+    <div class="card-value white">{{ data.total_cfdi }}</div>
+    {% if data.delta_total > 0 %}<div class="card-delta delta-up">+{{ data.delta_total }} vs mes anterior</div>
+    {% elif data.delta_total < 0 %}<div class="card-delta delta-down">{{ data.delta_total }} vs mes anterior</div>
+    {% else %}<div class="card-delta delta-flat">— sin cambio</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-label">Emitidos</div>
+    <div class="card-value green">{{ data.emitidos }}</div>
+    {% if data.delta_emitidos > 0 %}<div class="card-delta delta-up">+{{ data.delta_emitidos }}</div>
+    {% elif data.delta_emitidos < 0 %}<div class="card-delta delta-down">{{ data.delta_emitidos }}</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-label">Recibidos</div>
+    <div class="card-value blue">{{ data.recibidos }}</div>
+    {% if data.delta_recibidos > 0 %}<div class="card-delta delta-up">+{{ data.delta_recibidos }}</div>
+    {% elif data.delta_recibidos < 0 %}<div class="card-delta delta-down">{{ data.delta_recibidos }}</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-label">Resultado est.</div>
+    <div class="card-value {% if data.resultado >= 0 %}green{% else %}red{% endif %}">${{ data.resultado_fmt }}</div>
+  </div>
+</div>
+
+<!-- Row 2: Amounts -->
+<div class="cards cards-4">
+  <div class="card">
+    <div class="card-label">Facturado</div>
+    <div class="card-value green">${{ data.facturado_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Gastos</div>
+    <div class="card-value blue">${{ data.gastos_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Ticket prom.</div>
+    <div class="card-value purple">${{ data.ticket_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Factura máx.</div>
+    <div class="card-value amber">${{ data.factura_max_fmt }}</div>
+  </div>
+</div>
+
+<!-- Row 3: Tipo comprobante + Actividad diaria -->
+<div class="two-cols">
+  <div class="section">
+    <div class="section-title">Tipo de Comprobante</div>
+    {% for t in data.por_tipo %}
+    <div class="bar-row">
+      <div class="bar-label">{{ t.label }}</div>
+      <div class="bar-track">
+        <div class="bar-fill {{ t.bar_class }}" style="width: {{ t.pct }}%;">{{ t.count }}</div>
+      </div>
+      <div class="bar-value">{{ t.count }}</div>
+    </div>
+    {% endfor %}
+
+    <div class="section-title" style="margin-top: 20px;">Forma de Pago</div>
+    {% for f in data.por_forma_pago %}
+    <div class="bar-row">
+      <div class="bar-label">{{ f.label }}</div>
+      <div class="bar-track">
+        <div class="bar-fill {{ f.bar_class }}" style="width: {{ f.pct }}%;">{{ f.pct }}%</div>
+      </div>
+      <div class="bar-value">{{ f.pct }}%</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="section">
+    <div class="section-title">Actividad Diaria</div>
+    <div class="daily-chart">
+      {% for d in data.actividad_diaria %}
+      <div class="daily-bar" style="height: {{ d.pct }}%;" title="Día {{ d.dia }}: {{ d.count }} CFDIs — ${{ d.monto_fmt }}"></div>
+      {% endfor %}
+    </div>
+    <div class="daily-labels">
+      <span>1</span>
+      <span>{{ data.days_in_month }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Row 4: Top clients + providers -->
+<div class="two-cols">
+  <div class="section">
+    <div class="section-title">Top 5 Clientes (por monto facturado)</div>
+    {% for c in data.top_clientes %}
+    <div class="rfc-row">
+      <span class="rfc-code">{{ c.rfc }}</span>
+      <span class="rfc-monto green">${{ c.monto_fmt }}</span>
+    </div>
+    {% empty %}
+    <div style="color: #475569; font-size: 13px;">Sin emitidos en este periodo</div>
+    {% endfor %}
+  </div>
+  <div class="section">
+    <div class="section-title">Top 5 Proveedores (por monto recibido)</div>
+    {% for p in data.top_proveedores %}
+    <div class="rfc-row">
+      <span class="rfc-code">{{ p.rfc }}</span>
+      <span class="rfc-monto red">${{ p.monto_fmt }}</span>
+    </div>
+    {% empty %}
+    <div style="color: #475569; font-size: 13px;">Sin recibidos en este periodo</div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Alerts -->
+<div class="section">
+  <div class="section-title">Alertas</div>
+  <div class="badges">
+    {% if data.alertas.cancelados %}<span class="badge badge-amber">{{ data.alertas.cancelados }} cancelados</span>{% endif %}
+    {% if data.alertas.efectivo %}<span class="badge badge-red">{{ data.alertas.efectivo }} efectivo &gt; $2,000</span>{% endif %}
+    {% if data.alertas.ppd %}<span class="badge badge-blue">{{ data.alertas.ppd }} PPD sin complemento</span>{% endif %}
+    <span class="badge badge-green">✓ {{ data.alertas.listas_negras }} en listas negras</span>
+    {% if not data.alertas.cancelados and not data.alertas.efectivo and not data.alertas.ppd %}
+    <span class="badge badge-green">✓ Sin alertas</span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ titulo }} — Cirrus</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f0f23; color: #e2e8f0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+    /* Header */
+    .header { display: flex; justify-content: space-between; align-items: center;
+              border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; margin-bottom: 24px; }
+    .header-title { font-size: 20px; font-weight: 600; margin: 0; }
+    .header-sub { font-size: 13px; color: #718096; margin: 4px 0 0; }
+    .actions { display: flex; gap: 8px; }
+    .btn { padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+           background: rgba(255,255,255,0.05); color: #a0aec0; text-decoration: none;
+           font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+    /* Cards */
+    .cards { display: grid; gap: 12px; margin-bottom: 20px; }
+    .cards-4 { grid-template-columns: repeat(4, 1fr); }
+    .cards-3 { grid-template-columns: repeat(3, 1fr); }
+    .cards-2 { grid-template-columns: repeat(2, 1fr); }
+    .card { background: rgba(30,30,50,0.6); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px; padding: 16px; }
+    .card-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .card-value { font-size: 24px; font-weight: 700; line-height: 1.2; }
+    .card-delta { font-size: 12px; margin-top: 2px; }
+    .delta-up { color: #34d399; }
+    .delta-down { color: #f87171; }
+    .delta-flat { color: #718096; }
+
+    /* Colors */
+    .green { color: #34d399; }
+    .blue { color: #60a5fa; }
+    .amber { color: #fbbf24; }
+    .red { color: #f87171; }
+    .teal { color: #2dd4bf; }
+    .purple { color: #a78bfa; }
+    .cyan { color: #22d3ee; }
+    .white { color: #f1f5f9; }
+
+    /* Sections */
+    .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .section { background: rgba(30,30,50,0.6); border: 1px solid rgba(255,255,255,0.08);
+               border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #cbd5e1; }
+
+    /* Bar charts */
+    .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .bar-label { width: 110px; font-size: 12px; color: #a0aec0; text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 22px; background: rgba(255,255,255,0.04); border-radius: 5px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 5px; display: flex; align-items: center; padding-left: 8px;
+                font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.9); min-width: fit-content; transition: width 0.4s ease; }
+    .bar-value { width: 55px; text-align: right; font-size: 13px; font-weight: 600; color: #e2e8f0; flex-shrink: 0; }
+    .bg-indigo { background: linear-gradient(90deg, #6366f1, #818cf8); }
+    .bg-green { background: linear-gradient(90deg, #10b981, #34d399); }
+    .bg-blue { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .bg-amber { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .bg-purple { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .bg-pink { background: linear-gradient(90deg, #ec4899, #f472b6); }
+    .bg-red { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .bg-cyan { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+
+    /* Daily chart (vertical bars) */
+    .daily-chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; padding-top: 8px; }
+    .daily-bar { flex: 1; min-width: 4px; border-radius: 2px 2px 0 0;
+                 background: linear-gradient(to top, #6366f1, #818cf8); transition: height 0.3s ease; }
+    .daily-bar:hover { background: linear-gradient(to top, #818cf8, #a5b4fc); }
+    .daily-labels { display: flex; justify-content: space-between; font-size: 10px; color: #475569; margin-top: 4px; }
+
+    /* RFC list */
+    .rfc-row { display: flex; justify-content: space-between; align-items: center;
+               padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+    .rfc-row:last-child { border: none; }
+    .rfc-code { font-family: 'SF Mono', 'Fira Code', monospace; color: #818cf8; }
+    .rfc-monto { font-weight: 600; }
+
+    /* Badges */
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-amber { background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
+    .badge-red { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .badge-blue { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.2); }
+    .badge-green { background: rgba(52,211,153,0.12); color: #34d399; border: 1px solid rgba(52,211,153,0.2); }
+
+    /* IVA Flow */
+    .iva-flow { display: flex; align-items: center; justify-content: center; gap: 12px;
+                margin-bottom: 24px; flex-wrap: wrap; }
+    .iva-box { background: rgba(30,30,50,0.6); border: 1px solid rgba(255,255,255,0.1);
+               border-radius: 12px; padding: 16px 24px; text-align: center; min-width: 160px; }
+    .iva-box-label { font-size: 11px; color: #718096; text-transform: uppercase; }
+    .iva-box-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    .iva-arrow { color: #475569; font-size: 20px; font-weight: 700; }
+
+    /* Deducibilidad bar */
+    .deducibilidad-bar { height: 28px; border-radius: 6px; overflow: hidden; display: flex; margin: 8px 0; }
+    .deducibilidad-fill { display: flex; align-items: center; justify-content: center;
+                          font-size: 12px; font-weight: 600; transition: width 0.4s ease; }
+
+    /* Footer */
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);
+              font-size: 11px; color: #718096; text-align: center; }
+
+    /* Print */
+    @media print {
+      body { background: white !important; color: #1a1a1a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
+      .container { padding: 0; max-width: 100%; }
+      .card, .section { border: 1px solid #ddd; background: #f8f9fa !important; }
+      .header { border-color: #ddd; }
+      .green { color: #059669 !important; }
+      .blue { color: #2563eb !important; }
+      .amber { color: #d97706 !important; }
+      .red { color: #dc2626 !important; }
+      .teal { color: #0d9488 !important; }
+      .purple { color: #7c3aed !important; }
+      .footer { color: #999; border-color: #ddd; }
+      .bar-track { background: #eee !important; }
+      .daily-bar { background: #6366f1 !important; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .cards-4 { grid-template-columns: repeat(2, 1fr); }
+      .cards-3 { grid-template-columns: repeat(2, 1fr); }
+      .two-cols { grid-template-columns: 1fr; }
+      .iva-flow { flex-direction: column; }
+      .iva-arrow { transform: rotate(90deg); }
+      .header { flex-direction: column; gap: 12px; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1 class="header-title">{{ titulo }}</h1>
+        <p class="header-sub">
+          {{ empresa.rfc }} — {{ empresa.nombre }} — {{ periodo }}
+        </p>
+      </div>
+      <div class="actions no-print">
+        <a href="/app/cfdis/?empresa={{ empresa.id }}&year={{ year }}&month={{ month }}" class="btn">← Volver a CFDIs</a>
+        <button onclick="window.print()" class="btn">🖨️ Imprimir</button>
+      </div>
+    </div>
+
+    {% block content %}{% endblock %}
+
+    <div class="footer">
+      Generado: {{ now|date:"d/m/Y H:i" }} — Fuente: CFDI SAT — Con fines informativos, no sustituye asesoría fiscal
+      <br>cirrus.nubex.me
+    </div>
+  </div>
+</body>
+</html>

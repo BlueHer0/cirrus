@@ -1,0 +1,74 @@
+{% extends "app/analysis_base.html" %}
+
+{% block content %}
+<!-- Row 1: Main fiscal cards -->
+<div class="cards cards-3">
+  <div class="card">
+    <div class="card-label">Ingresos</div>
+    <div class="card-value green">${{ data.ingresos_fmt }}</div>
+    {% if data.delta_ingresos %}<div class="card-delta {% if data.delta_ingresos > 0 %}delta-up{% else %}delta-down{% endif %}">{{ data.delta_ingresos }}% vs mes anterior</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-label">Gastos Deducibles</div>
+    <div class="card-value blue">${{ data.gastos_ded_fmt }}</div>
+    {% if data.delta_gastos %}<div class="card-delta {% if data.delta_gastos > 0 %}delta-up{% else %}delta-down{% endif %}">{{ data.delta_gastos }}%</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-label">Utilidad Fiscal</div>
+    <div class="card-value {% if data.utilidad >= 0 %}green{% else %}red{% endif %}">${{ data.utilidad_fmt }}</div>
+  </div>
+</div>
+
+<!-- Row 2: Tax cards -->
+<div class="cards cards-4">
+  <div class="card">
+    <div class="card-label">ISR Provisional (30%)</div>
+    <div class="card-value amber">${{ data.isr_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Ret. ISR</div>
+    <div class="card-value cyan">${{ data.ret_isr_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Ret. IVA</div>
+    <div class="card-value cyan">${{ data.ret_iva_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">No Deducible</div>
+    <div class="card-value red">${{ data.no_ded_fmt }}</div>
+  </div>
+</div>
+
+<!-- Row 3: Deducibilidad -->
+<div class="two-cols">
+  <div class="section">
+    <div class="section-title">Deducibilidad</div>
+    <div class="deducibilidad-bar">
+      <div class="deducibilidad-fill bg-green" style="width: {{ data.ded_pct }}%;">{{ data.ded_pct }}% Deducible</div>
+      {% if data.no_ded_pct > 3 %}
+      <div class="deducibilidad-fill bg-red" style="width: {{ data.no_ded_pct }}%;">{{ data.no_ded_pct }}%</div>
+      {% elif data.no_ded_pct > 0 %}
+      <div class="deducibilidad-fill bg-red" style="width: {{ data.no_ded_pct }}%;"></div>
+      {% endif %}
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #718096; margin-top: 6px;">
+      <span>Deducible: ${{ data.gastos_ded_fmt }}</span>
+      <span>No deducible: ${{ data.no_ded_fmt }}</span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Motivos No Deducibles</div>
+    {% for m in data.motivos %}
+    <div class="bar-row">
+      <div class="bar-label" style="width: 170px; font-size: 11px;">{{ m.motivo }}</div>
+      <div class="bar-track">
+        <div class="bar-fill bg-red" style="width: {{ m.pct }}%;">{{ m.count }}</div>
+      </div>
+      <div class="bar-value">${{ m.monto_fmt }}</div>
+    </div>
+    {% empty %}
+    <div style="color: #475569; font-size: 13px;">Sin motivos de no deducibilidad</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
