@@ -71,7 +71,8 @@ def descargar_cfdis(self, empresa_id: str, params: dict | None = None,
             triggered_by=triggered_by,
             iniciado_at=datetime.now(timezone.utc),
         )
-        send_telegram(f"📥 Descarga iniciada: *{empresa.rfc}* ({year}-{month_start} a {month_end})")
+        # Removed: "descarga iniciada" telegram — too noisy
+        logger.info("📥 Descarga iniciada: %s (%s-%s a %s)", empresa.rfc, year, month_start, month_end)
     else:
         # Update for retry
         log.estado = "ejecutando"
@@ -101,10 +102,7 @@ def descargar_cfdis(self, empresa_id: str, params: dict | None = None,
             log.completado_at = datetime.now(timezone.utc)
             log.duracion_segundos = 0
             log.save()
-            send_telegram(
-                f"⏭️ Descarga omitida: *{empresa.rfc}* ({year}-{month_start} a {month_end})\n"
-                f"Ya existen datos descargados. {cfdi_count} CFDIs disponibles.",
-            )
+            # Removed: "descarga omitida" telegram — too noisy
             logger.info("⏭️ Download skipped for %s — data already exists", empresa.rfc)
             return {"skipped": True, "existing_cfdis": cfdi_count}
 
@@ -183,12 +181,8 @@ def descargar_cfdis(self, empresa_id: str, params: dict | None = None,
             _send_client_email_failure(empresa, log)
             return {"error": "max retries exhausted"}
         else:
-            send_telegram(
-                f"⚠️ Reintento {retry_num + 1}/10: *{empresa.rfc}*\n"
-                f"Error: `{str(exc)[:200]}`\n"
-                f"Próximo intento en {delay // 60} min",
-                "warning",
-            )
+            # Removed: individual retry telegrams — too noisy, reported in hourly summary
+            logger.warning("⚠️ Reintento %d/10: %s — %s", retry_num + 1, empresa.rfc, str(exc)[:200])
             # Retry with same log ID
             raise self.retry(
                 exc=exc,
@@ -386,6 +380,18 @@ def agente_sincronizacion():
 
         year, month = next_month
 
+        # Pre-check: skip if already completed for this RFC+period
+        ya_completado = DescargaLog.objects.filter(
+            empresa__rfc=empresa.rfc,
+            year=year,
+            month_start=month,
+            month_end=month,
+            estado="completado",
+        ).exists()
+        if ya_completado:
+            logger.info("⏭️ Agente skip: %s %d-%02d — ya completado", empresa.rfc, year, month)
+            continue
+
         # Queue both recibidos + emitidos for this month
         for tipo in ["recibidos", "emitidos"]:
             descargar_cfdis.delay(
@@ -553,19 +559,31 @@ def benchmark_hourly_report():
         estado="completado", completado_at__gte=last_hour).count()
     errores = DescargaLog.objects.filter(
         estado="error", completado_at__gte=last_hour).count()
+    omitidos = DescargaLog.objects.filter(
+        estado="completado", cfdis_nuevos=0, completado_at__gte=last_hour).count()
     pendientes = DescargaLog.objects.filter(estado="pendiente").count()
     ejecutando = DescargaLog.objects.filter(estado="ejecutando").count()
     total_cfdis = CFDI.objects.count()
+    empresas_count = Empresa.objects.filter(fiel_verificada=True).count()
 
-    por_empresa = ""
-    for e in Empresa.objects.filter(fiel_verificada=True):
-        por_empresa += f"\n  {e.rfc}: {e.cfdis.count()}"
+    # Next scheduled download
+    proximo = ""
+    next_emp = Empresa.objects.filter(
+        sync_activa=True, sync_completada=False, fiel_verificada=True
+    ).order_by("ultimo_scrape").first()
+    if next_emp:
+        proximo = f"\nSiguiente: {next_emp.rfc}"
+
+    # Suppress report if nothing happened
+    if completados == 0 and errores == 0 and ejecutando == 0:
+        return "Nada que reportar"
 
     send_telegram(
-        f"📊 *Reporte horario*\n"
-        f"Última hora: {completados} OK, {errores} errores\n"
-        f"En cola: {pendientes} pendientes, {ejecutando} ejecutando\n"
-        f"Total CFDIs: {total_cfdis}{por_empresa}",
+        f"📊 *Reporte horario CIRRUS*\n"
+        f"Última hora: {completados} completadas, {errores} errores, {omitidos} omitidas\n"
+        f"Total acumulado: {total_cfdis:,} CFDIs en {empresas_count} empresas\n"
+        f"Workers: {ejecutando} activos, {pendientes} en cola"
+        f"{proximo}",
         "info"
     )
 

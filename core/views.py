@@ -921,11 +921,11 @@ def monitor_view(request):
     except Exception:
         pass
 
-    # 2. Get active downloads from DB (instant)
+    # 2. Get active downloads from DB (instant) — cap to 3 workers
     running_downloads = list(
         DescargaLog.objects.filter(estado="ejecutando")
         .select_related("empresa")
-        .order_by("-iniciado_at")
+        .order_by("-iniciado_at")[:3]
     )
 
     # 3. Build worker cards: pair running downloads with PIDs
@@ -959,17 +959,19 @@ def monitor_view(request):
             "active": True,
         })
 
-    # 4. Fill idle worker slots
-    for pid in worker_pids:
-        if pid not in used_pids:
-            celery_workers.append({
-                "pid": pid,
-                "task_name": "",
-                "rfc": "",
-                "period": "",
-                "elapsed": "",
-                "active": False,
-            })
+    # 4. Fill idle worker slots (capped to a total of 3)
+    remaining = 3 - len(celery_workers)
+    idle_pids = [p for p in worker_pids if p not in used_pids]
+    for idx in range(remaining):
+        pid = idle_pids[idx] if idx < len(idle_pids) else "—"
+        celery_workers.append({
+            "pid": pid,
+            "task_name": "",
+            "rfc": "",
+            "period": "",
+            "elapsed": "",
+            "active": False,
+        })
 
     # 5. Pending downloads from DB
     reserved_count = DescargaLog.objects.filter(estado="pendiente").count()
