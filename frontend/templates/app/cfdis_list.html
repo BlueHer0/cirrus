@@ -1,10 +1,13 @@
 {% extends "app/base_app.html" %}
+{% load static %}
 
 {% block title %}CFDIs{% endblock %}
 {% block page_title %}Mis CFDIs{% endblock %}
 {% block page_subtitle %}{{ total_cfdis }} comprobantes{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{% static 'app/css/analysis.css' %}">
+
 <!-- Filters -->
 <div class="glass rounded-xl p-4 mb-4">
     <form method="get" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 items-end">
@@ -77,6 +80,22 @@
     </form>
 </div>
 
+{% if filters.empresa and filters.year and filters.month %}
+<!-- Analysis Toolbar -->
+<div class="analysis-toolbar" id="analysis-toolbar">
+    <div class="analysis-toolbar-info">
+        Filtro: <strong>{{ selected_empresa_rfc|default:"—" }}</strong> — <strong>{{ filters.month_name|default:"" }} {{ filters.year }}</strong> — {{ total_cfdis }} comprobantes
+    </div>
+    <button class="analysis-btn" onclick="loadAnalysis('summary')">📊 Resumen</button>
+    <button class="analysis-btn" onclick="loadAnalysis('fiscal')">💰 Fiscal</button>
+    <button class="analysis-btn" onclick="loadAnalysis('iva')">🧾 IVA</button>
+    <button class="analysis-btn disabled" title="Próximamente">📋 Estado Res.</button>
+    <button class="analysis-btn disabled" title="Próximamente">🏢 Top RFC</button>
+    <button class="analysis-btn disabled" title="Próximamente">⚠️ Riesgos</button>
+    <span class="analysis-score">FISCSCORE 85</span>
+</div>
+{% endif %}
+
 <!-- Results Table -->
 <div class="glass rounded-xl p-5">
     <table class="glass-table w-full text-sm">
@@ -123,4 +142,5 @@
     </div>
     {% endif %}
 </div>
+<script src="{% static 'app/js/analysis.js' %}"></script>
 {% endblock %}

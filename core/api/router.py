@@ -4,6 +4,7 @@ from ninja import NinjaAPI
 
 from core.api.cfdis import router as cfdis_router
 from core.api.empresas import router as empresas_router
+from core.api.analysis import router as analysis_router
 
 api = NinjaAPI(
     title="Cirrus API",
@@ -15,6 +16,7 @@ api = NinjaAPI(
 # Register routers
 api.add_router("/cfdis/", cfdis_router)
 api.add_router("/empresas/", empresas_router)
+api.add_router("/analysis/", analysis_router)
 
 
 @api.get("/health/", tags=["system"])

@@ -620,6 +620,18 @@ def app_cfdis_list(request):
         uploaded_by=request.user, empresa__isnull=True
     ).count()
 
+    # Analysis toolbar context
+    MONTH_NAMES = [
+        "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    ]
+    selected_empresa_rfc = ""
+    if empresa_id and empresa_id != "__none__":
+        emp = Empresa.objects.filter(id=empresa_id).first()
+        selected_empresa_rfc = emp.rfc if emp else ""
+    if filters.get("month"):
+        filters["month_name"] = MONTH_NAMES[filters["month"]]
+
     now = datetime.now()
     return render(request, "app/cfdis_list.html", {
         "current_page": "cfdis",
@@ -627,6 +639,7 @@ def app_cfdis_list(request):
         "total_cfdis": total,
         "empresas": empresas,
         "filters": filters,
+        "selected_empresa_rfc": selected_empresa_rfc,
         "unassigned_count": unassigned_count,
         "years": [2026, 2025],
         "months": [
