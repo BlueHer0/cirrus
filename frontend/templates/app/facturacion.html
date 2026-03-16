@@ -1,0 +1,61 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Facturación{% endblock %}
+{% block page_title %}Datos de Facturación{% endblock %}
+{% block page_subtitle %}Tus datos fiscales para que te facturemos{% endblock %}
+
+{% block content %}
+<div class="glass rounded-xl p-6 max-w-2xl">
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">RFC</label>
+                <input type="text" name="rfc_facturacion" value="{{ profile.rfc_facturacion }}" maxlength="13" placeholder="XAXX010101000"
+                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm font-mono uppercase">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Razón Social</label>
+                <input type="text" name="razon_social" value="{{ profile.razon_social }}" placeholder="Nombre fiscal"
+                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Régimen Fiscal</label>
+                <select name="regimen_fiscal" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                    <option value="">— Seleccionar —</option>
+                    <option value="601" {% if profile.regimen_fiscal == "601" %}selected{% endif %}>601 — General de Ley PM</option>
+                    <option value="603" {% if profile.regimen_fiscal == "603" %}selected{% endif %}>603 — Personas Morales sin fines de lucro</option>
+                    <option value="605" {% if profile.regimen_fiscal == "605" %}selected{% endif %}>605 — Sueldos y Salarios</option>
+                    <option value="606" {% if profile.regimen_fiscal == "606" %}selected{% endif %}>606 — Arrendamiento</option>
+                    <option value="612" {% if profile.regimen_fiscal == "612" %}selected{% endif %}>612 — Actividades Empresariales PF</option>
+                    <option value="616" {% if profile.regimen_fiscal == "616" %}selected{% endif %}>616 — Sin obligaciones fiscales</option>
+                    <option value="621" {% if profile.regimen_fiscal == "621" %}selected{% endif %}>621 — Incorporación Fiscal</option>
+                    <option value="625" {% if profile.regimen_fiscal == "625" %}selected{% endif %}>625 — RESICO</option>
+                    <option value="626" {% if profile.regimen_fiscal == "626" %}selected{% endif %}>626 — RESICO PM</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Código Postal</label>
+                <input type="text" name="codigo_postal" value="{{ profile.codigo_postal }}" maxlength="5" placeholder="64000"
+                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Uso CFDI</label>
+                <select name="uso_cfdi" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                    <option value="G01" {% if profile.uso_cfdi == "G01" %}selected{% endif %}>G01 — Adquisición de mercancías</option>
+                    <option value="G03" {% if profile.uso_cfdi == "G03" %}selected{% endif %}>G03 — Gastos en general</option>
+                    <option value="I01" {% if profile.uso_cfdi == "I01" %}selected{% endif %}>I01 — Construcciones</option>
+                    <option value="P01" {% if profile.uso_cfdi == "P01" %}selected{% endif %}>P01 — Por definir</option>
+                    <option value="S01" {% if profile.uso_cfdi == "S01" %}selected{% endif %}>S01 — Sin efectos fiscales</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Email para factura</label>
+                <input type="email" name="email_facturacion" value="{{ profile.email_facturacion }}" placeholder="facturacion@empresa.com"
+                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+            </div>
+        </div>
+        <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm text-white font-medium">Guardar Datos Fiscales</button>
+    </form>
+</div>
+{% endblock %}

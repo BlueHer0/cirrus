@@ -1,0 +1,29 @@
+# Django & API
+django>=5.0,<6.0
+django-ninja>=1.3
+django-celery-beat>=2.6
+
+# Database
+psycopg2-binary>=2.9
+dj-database-url>=2.1
+
+# Cache / Queue
+redis>=5.0
+celery[redis]>=5.3
+
+# Object Storage (MinIO S3-compatible)
+boto3>=1.34
+
+# Security / Encryption
+cryptography>=42.0
+
+# Browser Automation (SAT RPA)
+playwright>=1.40
+playwright-stealth>=1.0.6
+lxml>=5.1
+
+# Environment
+python-decouple>=3.8
+
+# Server
+gunicorn>=22.0

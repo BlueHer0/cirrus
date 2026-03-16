@@ -1,0 +1,277 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Monitor{% endblock %}
+{% block page_title %}Monitor del Sistema{% endblock %}
+{% block page_subtitle %}Estado en tiempo real{% endblock %}
+
+{% block page_actions %}
+<button onclick="location.reload()" class="btn-ghost px-3 py-2 rounded-lg text-xs">🔄 Refresh</button>
+{% endblock %}
+
+{% block content %}
+<!-- Services Status -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+    {% for svc, active in workers.items %}
+    <div class="glass rounded-xl p-4 text-center">
+        <div class="text-lg mb-1">{% if active %}🟢{% else %}🔴{% endif %}</div>
+        <div class="text-xs text-gray-400 font-mono">{{ svc }}</div>
+        <div class="text-[10px] {% if active %}text-green-400{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">
+            {% if active %}active{% else %}down{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    <!-- Playwright -->
+    <div class="glass rounded-xl p-4 text-center">
+        <div class="text-lg mb-1">{% if playwright_health.ok %}🟢{% elif playwright_health.ok == None %}⚪{% else %}🔴{% endif %}</div>
+        <div class="text-xs text-gray-400 font-mono">Playwright</div>
+        <div class="text-[10px] {% if playwright_health.ok %}text-green-400{% elif playwright_health.ok == None %}text-gray-500{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">
+            {% if playwright_health.ok %}ok{% elif playwright_health.ok == None %}pending{% else %}fail{% endif %}
+        </div>
+    </div>
+    <!-- Telegram -->
+    <div class="glass rounded-xl p-4 text-center">
+        <div class="text-lg mb-1">📱</div>
+        <div class="text-xs text-gray-400 font-mono">Telegram</div>
+        <div class="text-[10px] text-indigo-400 font-semibold uppercase mt-1">active</div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Errores 1h</div>
+        <div class="text-2xl font-bold {% if stats.errors_1h > 0 %}text-red-400{% else %}text-green-400{% endif %} mt-1">{{ stats.errors_1h }}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Warnings 1h</div>
+        <div class="text-2xl font-bold {% if stats.warnings_1h > 0 %}text-amber-400{% else %}text-gray-400{% endif %} mt-1">{{ stats.warnings_1h }}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Emails Hoy</div>
+        <div class="text-2xl font-bold text-blue-400 mt-1">{{ stats.emails_today }}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Conversiones Hoy</div>
+        <div class="text-2xl font-bold text-purple-400 mt-1">{{ stats.conversions_today }}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Total Logs</div>
+        <div class="text-2xl font-bold text-white mt-1">{{ stats.total }}</div>
+    </div>
+</div>
+
+<!-- Jobs 24h -->
+<div class="glass rounded-xl p-5 mb-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Jobs Últimas 24h</h3>
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Total</div>
+            <div class="text-xl font-bold text-white">{{ jobs_stats.total }}</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Exitosos</div>
+            <div class="text-xl font-bold text-green-400">{{ jobs_stats.ok }}</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Fallidos</div>
+            <div class="text-xl font-bold {% if jobs_stats.fail > 0 %}text-red-400{% else %}text-gray-500{% endif %}">{{ jobs_stats.fail }}</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">% Éxito</div>
+            <div class="text-xl font-bold {% if jobs_stats.pct_ok >= 90 %}text-green-400{% elif jobs_stats.pct_ok >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ jobs_stats.pct_ok }}%</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Duración Prom</div>
+            <div class="text-xl font-bold text-gray-300">{{ jobs_stats.avg_duration }}s</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Más Largo</div>
+            <div class="text-xl font-bold text-gray-300">{{ jobs_stats.max_duration }}s</div>
+        </div>
+    </div>
+</div>
+
+<!-- Download History -->
+
+<!-- Workers -->
+<div class="glass rounded-xl p-5 mb-5">
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Workers (Celery)</h3>
+        <div class="flex items-center gap-4 text-xs">
+            {% if reserved_count > 0 %}
+            <span class="text-amber-400">📋 {{ reserved_count }} en cola</span>
+            {% else %}
+            <span class="text-gray-600">📋 0 en cola</span>
+            {% endif %}
+            {% if worker_memory %}
+            <span class="text-gray-500 font-mono">{{ worker_memory }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% if celery_workers %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {% for w in celery_workers %}
+        <div class="rounded-xl p-4 {% if w.active %}bg-green-500/5 border border-green-500/20{% else %}bg-white/5 border border-white/10{% endif %}">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-gray-500 font-mono">Worker (pid {{ w.pid }})</span>
+                {% if w.active %}
+                <span class="text-[10px] text-green-400 font-semibold uppercase">🟢 Activo</span>
+                {% else %}
+                <span class="text-[10px] text-gray-600 font-semibold uppercase">💤 Esperando</span>
+                {% endif %}
+            </div>
+            {% if w.active %}
+            <div class="text-sm text-white font-medium">{{ w.task_name }}</div>
+            {% if w.rfc %}<div class="text-xs text-indigo-300 font-mono mt-1">{{ w.rfc }}{% if w.period %} · {{ w.period }}{% endif %}</div>{% endif %}
+            {% if w.elapsed %}<div class="text-[10px] text-gray-500 mt-1">{{ w.elapsed }}</div>{% endif %}
+            {% else %}
+            <div class="text-sm text-gray-600">Sin task asignado</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center text-gray-600 text-sm py-4">No se pudo conectar con el worker</div>
+    {% endif %}
+</div>
+
+<!-- Download History -->
+{% if recent_downloads %}
+<div class="glass rounded-xl p-5 mb-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Historial de Descargas</h3>
+    <div class="overflow-x-auto">
+        <table class="glass-table w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="pb-3 font-semibold">Empresa</th>
+                    <th class="pb-3 font-semibold">Periodo</th>
+                    <th class="pb-3 font-semibold">Estado</th>
+                    <th class="pb-3 font-semibold text-right">CFDIs</th>
+                    <th class="pb-3 font-semibold text-right">Duración</th>
+                    <th class="pb-3 font-semibold">Trigger</th>
+                    <th class="pb-3 font-semibold">Iniciado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in recent_downloads %}
+                <tr>
+                    <td class="py-2 font-mono text-xs text-indigo-300">{{ d.empresa.rfc }}</td>
+                    <td class="py-2 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
+                    <td class="py-2">
+                        {% if d.estado == 'completado' %}
+                        <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✓ OK</span>
+                        {% elif d.estado == 'ejecutando' %}
+                        <span class="badge-warning px-2 py-0.5 rounded-full text-[10px]">⏳ running</span>
+                        {% else %}
+                        <span class="badge-error px-2 py-0.5 rounded-full text-[10px]">✗ error</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-2 text-right text-white font-medium">{{ d.cfdis_nuevos|default:"—" }}</td>
+                    <td class="py-2 text-right text-gray-400 text-xs">{{ d.duracion_segundos|default:"—" }}s</td>
+                    <td class="py-2 text-xs text-gray-500">{{ d.triggered_by }}</td>
+                    <td class="py-2 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Playwright Health -->
+<div class="glass rounded-xl p-5 mb-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Playwright Health Check</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Estado</div>
+            <div class="mt-1">
+                {% if playwright_health.ok %}
+                <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ OK</span>
+                {% elif playwright_health.ok == None %}
+                <span class="px-2.5 py-1 rounded-full text-xs text-gray-500 bg-white/5">⏳ Pendiente</span>
+                {% else %}
+                <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ FAIL</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Último Check</div>
+            <div class="text-gray-300 text-sm mt-1">{{ playwright_health.last_check|date:"d/m/Y H:i"|default:"—" }}</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Mensaje</div>
+            <div class="text-gray-400 text-xs mt-1 font-mono">{{ playwright_health.message|truncatechars:80 }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Filters -->
+<div class="glass rounded-xl p-5 mb-5">
+    <form method="get" class="flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Nivel</label>
+            <select name="level" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todos</option>
+                {% for code, label in levels %}
+                <option value="{{ code }}" {% if filters.level == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Categoría</label>
+            <select name="category" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todas</option>
+                {% for code, label in categories %}
+                <option value="{{ code }}" {% if filters.category == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm text-white">Filtrar</button>
+        {% if filters.level or filters.category %}
+        <a href="{% url 'panel:monitor' %}" class="text-xs text-gray-500 hover:text-gray-400">Limpiar</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Log Table -->
+<div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">System Logs (últimos 100)</h3>
+    <div class="overflow-x-auto">
+        <table class="glass-table w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="pb-3 font-semibold">Nivel</th>
+                    <th class="pb-3 font-semibold">Cat.</th>
+                    <th class="pb-3 font-semibold">Mensaje</th>
+                    <th class="pb-3 font-semibold">Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="py-2">
+                        {% if log.level == 'critical' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/20 text-red-400 font-bold">🚨 CRIT</span>
+                        {% elif log.level == 'error' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/10 text-red-400">ERROR</span>
+                        {% elif log.level == 'warning' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">WARN</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400">INFO</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-2 text-xs text-gray-500 font-mono">{{ log.category }}</td>
+                    <td class="py-2 text-gray-300 text-xs">{{ log.message|truncatechars:120 }}</td>
+                    <td class="py-2 text-xs text-gray-500 whitespace-nowrap">{{ log.created_at|date:"d/m H:i:s" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="py-6 text-center text-gray-600">Sin logs</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Auto-refresh every 30s -->
+<script>setTimeout(() => location.reload(), 30000);</script>
+{% endblock %}

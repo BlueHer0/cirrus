@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background:#f1f5f9; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f1f5f9; padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#1e1b4b,#312e81); padding:24px 32px; text-align:center;">
+              <div style="font-size:28px; font-weight:800; color:#ffffff; letter-spacing:0.06em;">☁ CIRRUS</div>
+              <div style="color:#c7d2fe; font-size:12px; margin-top:6px; letter-spacing:0.04em;">cirrus.nubex.me</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px;">
+              <p style="font-size:16px; color:#1e293b; margin:0 0 12px; font-weight:600;">Hola, aquí está tu CFDI convertido.</p>
+              <p style="font-size:14px; color:#475569; line-height:1.6; margin:0 0 20px;">Encontrarás tu archivo {{ formato_display }} adjunto a este correo.</p>
+              {% if uuid_cfdi %}
+              <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:20px;">
+                <tr><td style="padding:14px 16px;">
+                  <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Datos del CFDI</div>
+                  <table width="100%%" cellpadding="0" cellspacing="0">
+                    <tr><td style="font-size:12px; color:#64748b; padding:2px 0;">UUID</td><td style="font-size:12px; color:#1e293b; font-weight:600; padding:2px 0; text-align:right;">{{ uuid_cfdi }}</td></tr>
+                    {% if rfc_emisor %}<tr><td style="font-size:12px; color:#64748b; padding:2px 0;">Emisor</td><td style="font-size:12px; color:#1e293b; padding:2px 0; text-align:right;">{{ rfc_emisor }}</td></tr>{% endif %}
+                    {% if rfc_receptor %}<tr><td style="font-size:12px; color:#64748b; padding:2px 0;">Receptor</td><td style="font-size:12px; color:#1e293b; padding:2px 0; text-align:right;">{{ rfc_receptor }}</td></tr>{% endif %}
+                    {% if total_cfdi %}<tr><td style="font-size:12px; color:#64748b; padding:2px 0;">Total</td><td style="font-size:14px; color:#1e293b; font-weight:700; padding:2px 0; text-align:right;">{{ total_cfdi }}</td></tr>{% endif %}
+                  </table>
+                </td></tr>
+              </table>
+              {% endif %}
+              <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; margin-bottom:24px;">
+                <tr><td style="padding:12px 16px;"><div style="font-size:13px; color:#15803d; font-weight:600;">📎 Adjunto: {{ filename }}</div></td></tr>
+              </table>
+              <div style="border-top:1px solid #e2e8f0; margin:20px 0;"></div>
+              <p style="font-size:14px; color:#1e293b; font-weight:600; margin:0 0 10px;">¿Sabías que con Cirrus puedes?</p>
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                <tr><td style="font-size:13px; color:#475569; padding:3px 0;">• Descargar automáticamente tus CFDIs del SAT</td></tr>
+                <tr><td style="font-size:13px; color:#475569; padding:3px 0;">• Convertir en lote a PDF y Excel</td></tr>
+                <tr><td style="font-size:13px; color:#475569; padding:3px 0;">• Consultar tus facturas vía API REST</td></tr>
+                <tr><td style="font-size:13px; color:#475569; padding:3px 0;">• Almacenar y organizar por RFC y periodo</td></tr>
+              </table>
+              <table width="100%%" cellpadding="0" cellspacing="0"><tr><td align="center">
+                <a href="https://cirrus.nubex.me" style="display:inline-block; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-size:14px; font-weight:700; text-decoration:none; padding:12px 32px; border-radius:8px;">Conoce más → cirrus.nubex.me</a>
+              </td></tr></table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; padding:18px 32px; border-top:1px solid #e2e8f0;">
+              <p style="font-size:10px; color:#94a3b8; margin:0; text-align:center; line-height:1.5;">Este correo fue enviado porque solicitaste una conversión en cirrus.nubex.me<br>Si no solicitaste esto, puedes ignorar este mensaje.</p>
+              <p style="font-size:10px; color:#cbd5e1; margin:8px 0 0; text-align:center;">© 2026 Cirrus — Nubex</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

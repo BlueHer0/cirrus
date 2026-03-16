@@ -1,0 +1,137 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}CFDIs{% endblock %}
+{% block page_title %}CFDIs{% endblock %}
+{% block page_subtitle %}{{ total_cfdis }} comprobantes fiscales{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="glass rounded-xl p-4 mb-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">RFC</label>
+            <select name="rfc" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                <option value="">Todas</option>
+                {% for e in empresas %}
+                <option value="{{ e.rfc }}" {% if filters.rfc == e.rfc %}selected{% endif %}>{{ e.rfc }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Año</label>
+            <select name="year" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                <option value="">Todos</option>
+                {% for y in years %}
+                <option value="{{ y }}" {% if filters.year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Mes</label>
+            <select name="month" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                <option value="">Todos</option>
+                {% for m in months %}
+                <option value="{{ m.0 }}" {% if filters.month == m.0 %}selected{% endif %}>{{ m.1 }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Dirección</label>
+            <select name="tipo" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                <option value="">Todos</option>
+                <option value="recibido" {% if filters.tipo == "recibido" %}selected{% endif %}>Recibido</option>
+                <option value="emitido" {% if filters.tipo == "emitido" %}selected{% endif %}>Emitido</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Tipo Comp.</label>
+            <select name="tipo_comp" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                <option value="">Todos</option>
+                <option value="I" {% if filters.tipo_comp == "I" %}selected{% endif %}>I — Ingreso</option>
+                <option value="E" {% if filters.tipo_comp == "E" %}selected{% endif %}>E — Egreso</option>
+                <option value="T" {% if filters.tipo_comp == "T" %}selected{% endif %}>T — Traslado</option>
+                <option value="N" {% if filters.tipo_comp == "N" %}selected{% endif %}>N — Nómina</option>
+                <option value="P" {% if filters.tipo_comp == "P" %}selected{% endif %}>P — Pago</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Estado</label>
+            <select name="estado" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                <option value="">Todos</option>
+                <option value="vigente" {% if filters.estado == "vigente" %}selected{% endif %}>Vigente</option>
+                <option value="cancelado" {% if filters.estado == "cancelado" %}selected{% endif %}>Cancelado</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">Filtrar</button>
+        <a href="{% url 'panel:cfdis' %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">Limpiar</a>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="glass rounded-xl p-5">
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">UUID</th>
+                <th class="pb-3 font-semibold">Fecha</th>
+                <th class="pb-3 font-semibold">Emisor</th>
+                <th class="pb-3 font-semibold">Receptor</th>
+                <th class="pb-3 font-semibold">Tipo</th>
+                <th class="pb-3 font-semibold">Dir</th>
+                <th class="pb-3 font-semibold">Estado</th>
+                <th class="pb-3 font-semibold text-right">Total</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cfdis %}
+            <tr>
+                <td class="py-2.5">
+                    <a href="{% url 'panel:cfdi_detail' c.uuid %}" class="font-mono text-xs text-indigo-300 hover:text-indigo-200">{{ c.uuid|truncatechars:13 }}</a>
+                </td>
+                <td class="py-2.5 text-gray-400 text-xs">{{ c.fecha|date:"d/m/Y" }}</td>
+                <td class="py-2.5 text-gray-300 text-xs">{{ c.rfc_emisor }}</td>
+                <td class="py-2.5 text-gray-300 text-xs">{{ c.rfc_receptor }}</td>
+                <td class="py-2.5"><span class="badge-info px-1.5 py-0.5 rounded text-[10px]">{{ c.tipo_comprobante }}</span></td>
+                <td class="py-2.5">
+                    {% if c.tipo_relacion == "recibido" %}
+                    <span class="text-blue-400 text-[10px]">↓ Rec</span>
+                    {% else %}
+                    <span class="text-purple-400 text-[10px]">↑ Emi</span>
+                    {% endif %}
+                </td>
+                <td class="py-2.5">
+                    {% if c.estado_sat == "vigente" %}
+                    <span class="text-green-400 text-[10px]">✓</span>
+                    {% else %}
+                    <span class="text-red-400 text-[10px]">✗</span>
+                    {% endif %}
+                </td>
+                <td class="py-2.5 text-right text-white font-medium">${{ c.total|floatformat:2 }}</td>
+                <td class="py-2.5 text-right whitespace-nowrap">
+                    <a href="{% url 'panel:cfdi_pdf' c.uuid %}" target="_blank" class="text-indigo-400 hover:text-indigo-300 text-xs mr-1" title="Ver PDF">📄</a>
+                    <a href="{% url 'panel:cfdi_xml' c.uuid %}" class="text-gray-400 hover:text-gray-300 text-xs mr-1" title="Descargar XML">📋</a>
+                    <a href="{% url 'panel:cfdi_excel' c.uuid %}" class="text-green-400 hover:text-green-300 text-xs" title="Descargar Excel">📊</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9" class="py-8 text-center text-gray-600">No hay CFDIs con estos filtros</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if cfdis %}
+    <div class="mt-4 pt-3 border-t border-white/5 flex justify-between items-center text-xs text-gray-500">
+        <span>Mostrando {{ cfdis|length }} de {{ total_cfdis }} — Página {{ page }}</span>
+        <div class="flex gap-2">
+            {% if has_prev %}
+            <a href="?page={{ page|add:"-1" }}{% if filters.rfc %}&rfc={{ filters.rfc }}{% endif %}{% if filters.year %}&year={{ filters.year }}{% endif %}{% if filters.month %}&month={{ filters.month }}{% endif %}{% if filters.tipo %}&tipo={{ filters.tipo }}{% endif %}{% if filters.tipo_comp %}&tipo_comp={{ filters.tipo_comp }}{% endif %}{% if filters.estado %}&estado={{ filters.estado }}{% endif %}" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">← Anterior</a>
+            {% endif %}
+            {% if has_next %}
+            <a href="?page={{ page|add:"1" }}{% if filters.rfc %}&rfc={{ filters.rfc }}{% endif %}{% if filters.year %}&year={{ filters.year }}{% endif %}{% if filters.month %}&month={{ filters.month }}{% endif %}{% if filters.tipo %}&tipo={{ filters.tipo }}{% endif %}{% if filters.tipo_comp %}&tipo_comp={{ filters.tipo_comp }}{% endif %}{% if filters.estado %}&estado={{ filters.estado }}{% endif %}" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">Siguiente →</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

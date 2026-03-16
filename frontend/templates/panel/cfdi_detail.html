@@ -1,0 +1,187 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}CFDI {{ cfdi.uuid }}{% endblock %}
+{% block page_title %}CFDI{% endblock %}
+{% block page_subtitle %}{{ cfdi.uuid }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'panel:cfdi_pdf' cfdi.uuid %}" target="_blank" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">📄 Ver PDF</a>
+<a href="{% url 'panel:cfdi_xml' cfdi.uuid %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-300">📋 XML</a>
+<a href="{% url 'panel:cfdi_excel' cfdi.uuid %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-300">📊 Excel</a>
+{% endblock %}
+
+{% block content %}
+<!-- Messages -->
+{% if messages %}
+<div class="mb-4 space-y-2">
+    {% for msg in messages %}
+    <div class="px-4 py-2.5 rounded-lg text-sm
+        {% if msg.tags == 'error' %}bg-red-500/10 text-red-400 border border-red-500/20
+        {% else %}bg-indigo-500/10 text-indigo-300 border border-indigo-500/20{% endif %}">
+        {{ msg }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <!-- Comprobante Info -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Comprobante</h3>
+        <div class="grid grid-cols-2 gap-y-3 gap-x-6">
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">UUID</div>
+                <div class="text-white font-mono text-xs break-all">{{ cfdi.uuid }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Empresa</div>
+                <div><a href="{% url 'panel:empresa_detalle' cfdi.empresa.id %}" class="text-indigo-300 hover:text-indigo-200 text-sm">{{ cfdi.empresa.rfc }}</a></div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Fecha</div>
+                <div class="text-white text-sm">{{ cfdi.fecha|date:"d/m/Y H:i" }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Versión</div>
+                <div class="text-white text-sm">{{ cfdi.version }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Serie / Folio</div>
+                <div class="text-white text-sm">{{ cfdi.serie|default:"—" }} / {{ cfdi.folio|default:"—" }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Dirección</div>
+                <div>
+                    {% if cfdi.tipo_relacion == "recibido" %}
+                    <span class="text-blue-400 text-sm">↓ Recibido</span>
+                    {% else %}
+                    <span class="text-purple-400 text-sm">↑ Emitido</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Tipo Comprobante</div>
+                <div class="text-white text-sm">{{ cfdi.tipo_comprobante }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Estado SAT</div>
+                <div>
+                    {% if cfdi.estado_sat == "vigente" %}
+                    <span class="badge-success px-2 py-0.5 rounded-full text-xs">Vigente</span>
+                    {% else %}
+                    <span class="badge-error px-2 py-0.5 rounded-full text-xs">Cancelado</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Forma Pago</div>
+                <div class="text-white text-sm">{{ cfdi.forma_pago|default:"—" }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Método Pago</div>
+                <div class="text-white text-sm">{{ cfdi.metodo_pago|default:"—" }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Moneda</div>
+                <div class="text-white text-sm">{{ cfdi.moneda }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Tipo Cambio</div>
+                <div class="text-white text-sm">{{ cfdi.tipo_cambio }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Amounts -->
+    <div class="space-y-4">
+        <!-- Emisor / Receptor -->
+        <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Participantes</h3>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase mb-1">Emisor</div>
+                    <div class="text-white font-mono text-sm">{{ cfdi.rfc_emisor }}</div>
+                    <div class="text-gray-400 text-xs mt-0.5">{{ cfdi.nombre_emisor|default:"" }}</div>
+                    {% if cfdi.regimen_fiscal_emisor %}
+                    <div class="text-gray-500 text-[11px] mt-0.5">Régimen: {{ cfdi.regimen_fiscal_emisor }}</div>
+                    {% endif %}
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase mb-1">Receptor</div>
+                    <div class="text-white font-mono text-sm">{{ cfdi.rfc_receptor }}</div>
+                    <div class="text-gray-400 text-xs mt-0.5">{{ cfdi.nombre_receptor|default:"" }}</div>
+                    {% if cfdi.uso_cfdi %}
+                    <div class="text-gray-500 text-[11px] mt-0.5">Uso: {{ cfdi.uso_cfdi }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Montos -->
+        <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Montos</h3>
+            <div class="space-y-2">
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">Subtotal</span>
+                    <span class="text-white">${{ cfdi.subtotal|floatformat:2 }}</span>
+                </div>
+                {% if cfdi.total_impuestos_trasladados %}
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">IVA Trasladado</span>
+                    <span class="text-gray-300">${{ cfdi.iva|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+                {% if cfdi.isr_retenido %}
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">ISR Retenido</span>
+                    <span class="text-red-400">-${{ cfdi.isr_retenido|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+                {% if cfdi.iva_retenido %}
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">IVA Retenido</span>
+                    <span class="text-red-400">-${{ cfdi.iva_retenido|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+                <div class="flex justify-between pt-2 border-t border-white/10">
+                    <span class="text-white font-semibold">Total</span>
+                    <span class="text-green-400 font-bold text-lg">${{ cfdi.total|floatformat:2 }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Metadata -->
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Metadata de Ingesta</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Descargado</div>
+            <div class="text-gray-400">{{ cfdi.descargado_at|timesince }} atrás</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Fuente</div>
+            <div class="text-gray-400">{{ cfdi.fuente }}</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">MinIO Key</div>
+            <div class="text-gray-500 font-mono text-[11px] break-all">{{ cfdi.xml_minio_key }}</div>
+        </div>
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">XML Size</div>
+            <div class="text-gray-400">{{ cfdi.xml_size_bytes|filesizeformat }}</div>
+        </div>
+    </div>
+</div>
+
+{% if xml_preview %}
+<!-- XML Preview -->
+<div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">XML Preview</h3>
+    <div class="bg-black/30 rounded-lg p-4 overflow-x-auto">
+        <pre class="text-xs text-gray-400 font-mono whitespace-pre-wrap break-all" style="max-height: 400px; overflow-y: auto;">{{ xml_preview }}</pre>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

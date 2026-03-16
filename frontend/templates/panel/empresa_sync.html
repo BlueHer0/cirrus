@@ -1,0 +1,82 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Configurar Sincronización{% endblock %}
+{% block page_title %}Configurar Sincronización{% endblock %}
+{% block page_subtitle %}{{ empresa.rfc }} — {{ empresa.nombre }}{% endblock %}
+
+{% block content %}
+<div class="glass rounded-xl p-6 max-w-xl">
+    <h3 class="text-white font-semibold mb-1">¿Desde cuándo quieres sincronizar tus CFDIs?</h3>
+    <p class="text-gray-400 text-sm mb-5">Cirrus descargará automáticamente todos los CFDIs desde la fecha que elijas hasta hoy.</p>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="space-y-3 mb-6">
+            <label class="flex items-center gap-3 bg-white/5 rounded-lg p-3 cursor-pointer hover:bg-white/10 transition-colors border border-transparent has-[:checked]:border-indigo-500/50">
+                <input type="radio" name="sync_option" value="this_month" class="accent-indigo-500">
+                <div>
+                    <div class="text-white text-sm font-medium">Solo desde este mes</div>
+                    <div class="text-gray-500 text-xs">Marzo {{ current_year }}</div>
+                </div>
+            </label>
+
+            <label class="flex items-center gap-3 bg-white/5 rounded-lg p-3 cursor-pointer hover:bg-white/10 transition-colors border border-transparent has-[:checked]:border-indigo-500/50">
+                <input type="radio" name="sync_option" value="this_year" class="accent-indigo-500">
+                <div>
+                    <div class="text-white text-sm font-medium">Desde enero {{ current_year }}</div>
+                    <div class="text-gray-500 text-xs">{{ current_month }} meses de datos</div>
+                </div>
+            </label>
+
+            <label class="flex items-center gap-3 bg-white/5 rounded-lg p-3 cursor-pointer hover:bg-white/10 transition-colors border border-transparent has-[:checked]:border-indigo-500/50">
+                <input type="radio" name="sync_option" value="last_year" checked class="accent-indigo-500">
+                <div>
+                    <div class="text-white text-sm font-medium">Desde enero {{ current_year|add:"-1" }}</div>
+                    <div class="text-gray-500 text-xs">{{ current_month|add:"12" }} meses de datos</div>
+                </div>
+            </label>
+
+            <label class="flex items-center gap-3 bg-white/5 rounded-lg p-3 cursor-pointer hover:bg-white/10 transition-colors border border-transparent has-[:checked]:border-indigo-500/50">
+                <input type="radio" name="sync_option" value="custom" id="radio_custom" class="accent-indigo-500">
+                <div class="flex-1">
+                    <div class="text-white text-sm font-medium mb-2">Personalizado</div>
+                    <div class="flex gap-2">
+                        <select name="custom_year" onclick="document.getElementById('radio_custom').checked=true"
+                                class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                            {% for y in years %}
+                            <option value="{{ y }}" {% if empresa.sync_desde_year == y %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="custom_month" onclick="document.getElementById('radio_custom').checked=true"
+                                class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                            {% for num, name in months %}
+                            <option value="{{ num }}" {% if empresa.sync_desde_month == num %}selected{% endif %}>{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </label>
+        </div>
+
+        <div class="flex gap-3">
+            <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm text-white font-medium">
+                Iniciar Sincronización
+            </button>
+            <a href="{% url 'panel:empresa_detalle' empresa.id %}" class="btn-ghost px-4 py-2.5 rounded-lg text-sm text-gray-400">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+
+{% if empresa.sync_activa %}
+<div class="glass rounded-xl p-4 mt-4 max-w-xl">
+    <div class="flex items-center gap-2 text-xs text-gray-400">
+        <span class="text-green-400">●</span>
+        Sincronización activa desde {{ empresa.sync_desde_month|stringformat:"02d" }}/{{ empresa.sync_desde_year }}
+        — cambiar la fecha reiniciará el proceso.
+    </div>
+</div>
+{% endif %}
+{% endblock %}

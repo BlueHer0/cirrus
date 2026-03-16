@@ -1,0 +1,169 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Telemetría — {{ descarga.empresa.rfc }}{% endblock %}
+{% block page_title %}Telemetría de Descarga{% endblock %}
+{% block page_subtitle %}{{ descarga.empresa.rfc }} — {{ descarga.year }}/{{ descarga.month_start }}-{{ descarga.month_end }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'panel:descargas' %}" class="btn-ghost px-3 py-2 rounded-lg text-xs">← Descargas</a>
+{% endblock %}
+
+{% block content %}
+<style>
+    .bar-cirrus  { background: linear-gradient(90deg, #22c55e, #16a34a); }
+    .bar-sat     { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .bar-minio   { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+    .bar-red     { background: linear-gradient(90deg, #6b7280, #4b5563); }
+    .bar-track   { background: rgba(255,255,255,0.05); height: 24px; border-radius: 6px; overflow: hidden; }
+    .bar-fill    { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: 10px; color: white; font-weight: 600; min-width: 2px; transition: width 0.5s; }
+</style>
+
+<!-- Summary cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="glass rounded-xl p-4 stat-card" style="--glow-color: {% if descarga.estado == 'completado' %}#22c55e{% elif descarga.estado == 'error' %}#ef4444{% else %}#eab308{% endif %};">
+        <div class="text-[11px] text-gray-500 uppercase">Estado</div>
+        <div class="text-lg font-bold mt-1 {% if descarga.estado == 'completado' %}text-green-400{% elif descarga.estado == 'error' %}text-red-400{% else %}text-amber-400{% endif %}">
+            {{ descarga.estado|upper }}
+        </div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase">Duración total</div>
+        <div class="text-lg font-bold text-white mt-1">
+            {% if summary %}{{ summary.total_s }}s{% else %}{{ descarga.duracion_segundos }}s{% endif %}
+        </div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase">CFDIs nuevos</div>
+        <div class="text-lg font-bold text-indigo-400 mt-1">{{ descarga.cfdis_nuevos }}</div>
+    </div>
+    <div class="glass rounded-xl p-4">
+        <div class="text-[11px] text-gray-500 uppercase">Iniciado</div>
+        <div class="text-sm font-medium text-gray-300 mt-1">{{ descarga.iniciado_at|date:"d/m/Y H:i:s" }}</div>
+    </div>
+</div>
+
+{% if summary %}
+<!-- Phase breakdown chart -->
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Fases de la descarga</h3>
+    <div class="space-y-3">
+        {% for p in summary.phases %}
+        <div>
+            <div class="flex justify-between items-center mb-1">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-300 font-medium">{{ p.label }}</span>
+                    {% if not p.ok %}<span class="badge-error px-1.5 py-0.5 rounded text-[10px]">ERROR</span>{% endif %}
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                    <span class="text-gray-500">
+                        {% if p.attr == 'cirrus' %}🟢 Cirrus{% elif p.attr == 'sat' %}🟠 SAT{% elif p.attr == 'minio' %}🔵 MinIO{% else %}⚪ Red{% endif %}
+                    </span>
+                    <span class="text-white font-mono font-semibold">{{ p.ms }}ms</span>
+                    <span class="text-gray-600">({{ p.pct }}%)</span>
+                </div>
+            </div>
+            <div class="bar-track">
+                <div class="bar-fill bar-{{ p.attr }}" style="width: {{ p.pct }}%;">
+                    {% if p.pct > 8 %}{{ p.ms }}ms{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Attribution breakdown -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    {% for b in summary.breakdown %}
+    <div class="glass rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-1">
+            <div class="w-3 h-3 rounded-full bar-{{ b.attr }}"></div>
+            <span class="text-[11px] text-gray-500 uppercase">
+                {% if b.attr == 'cirrus' %}Nuestro Servidor{% elif b.attr == 'sat' %}Portal SAT{% elif b.attr == 'minio' %}MinIO Storage{% else %}Red{% endif %}
+            </span>
+        </div>
+        <div class="text-xl font-bold text-white">{{ b.pct }}%</div>
+        <div class="text-xs text-gray-500">{{ b.ms }}ms</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="glass rounded-xl p-8 mb-6 text-center">
+    <div class="text-4xl mb-3">📊</div>
+    <h3 class="text-white text-lg font-semibold mb-2">Sin telemetría</h3>
+    <p class="text-gray-400 text-sm">
+        {% if descarga.estado == 'ejecutando' %}La descarga está en progreso. La telemetría se registra al completar cada fase.
+        {% elif descarga.estado == 'error' %}La descarga falló antes de registrar telemetría completa.
+        {% else %}Esta descarga se realizó antes de activar la telemetría.
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+<!-- Historical Averages -->
+{% if historical %}
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Promedios históricos (últimas 20 descargas)</h3>
+    <div class="overflow-x-auto">
+        <table class="glass-table w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="pb-2 font-semibold">Fase</th>
+                    <th class="pb-2 font-semibold text-right">Promedio</th>
+                    {% if summary %}<th class="pb-2 font-semibold text-right">Esta descarga</th>
+                    <th class="pb-2 font-semibold text-right">Δ</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for fase, avg_ms in historical.items %}
+                <tr>
+                    <td class="py-2 text-gray-300 text-xs">{{ fase }}</td>
+                    <td class="py-2 text-right text-gray-400 font-mono text-xs">{{ avg_ms }}ms</td>
+                    {% if summary %}
+                    {% for p in summary.phases %}{% if p.fase == fase %}
+                    <td class="py-2 text-right text-white font-mono text-xs">{{ p.ms }}ms</td>
+                    <td class="py-2 text-right text-xs font-mono {% if p.ms > avg_ms %}text-red-400{% else %}text-green-400{% endif %}">
+                        {% if p.ms > avg_ms %}+{% endif %}{{ p.ms|add:avg_ms|floatformat:0 }}ms
+                    </td>
+                    {% endif %}{% endfor %}
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Best/worst hour -->
+{% if best_hour or worst_hour %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    {% if best_hour %}
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-green-400 mb-2">🏆 Mejor hora para descargar</h3>
+        <div class="text-2xl font-bold text-white">{{ best_hour.hora }}:00 - {{ best_hour.hora|add:1 }}:00</div>
+        <div class="text-xs text-gray-500 mt-1">Promedio: {{ best_hour.avg_dur|floatformat:0 }}s ({{ best_hour.count }} descargas)</div>
+    </div>
+    {% endif %}
+    {% if worst_hour %}
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-red-400 mb-2">🐢 Peor hora para descargar</h3>
+        <div class="text-2xl font-bold text-white">{{ worst_hour.hora }}:00 - {{ worst_hour.hora|add:1 }}:00</div>
+        <div class="text-xs text-gray-500 mt-1">Promedio: {{ worst_hour.avg_dur|floatformat:0 }}s ({{ worst_hour.count }} descargas)</div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Errors -->
+{% if descarga.errores %}
+<div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-red-400 mb-3">Errores</h3>
+    <ul class="text-xs text-gray-400 space-y-1 font-mono">
+        {% for err in descarga.errores %}
+        <li>• {{ err|truncatechars:300 }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

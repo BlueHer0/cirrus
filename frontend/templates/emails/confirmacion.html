@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Confirma tu cuenta — Cirrus</title>
+</head>
+<body style="margin:0; padding:0; font-family: Inter, Arial, sans-serif; background: #0c0e14;">
+    <div style="max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+        <div style="background: linear-gradient(135deg, #1a1d2e, #0f1117); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px 32px; text-align: center;">
+            <!-- Logo -->
+            <div style="width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); margin: 0 auto 24px; display: flex; align-items: center; justify-content: center;">
+                <span style="color: white; font-size: 28px;">☁</span>
+            </div>
+
+            <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 8px;">Confirma tu cuenta</h1>
+            <p style="color: #9ca3af; font-size: 14px; margin: 0 0 28px;">Hola {{ user.first_name }}, haz click para activar tu cuenta en Cirrus.</p>
+
+            <a href="{{ confirm_url }}" style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; text-decoration: none; border-radius: 10px; font-size: 15px; font-weight: 600;">
+                Confirmar Email
+            </a>
+
+            <p style="color: #6b7280; font-size: 12px; margin-top: 28px;">
+                Si no solicitaste esta cuenta, ignora este mensaje.
+            </p>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.06); margin-top: 24px; padding-top: 16px;">
+                <p style="color: #4b5563; font-size: 11px; margin: 0;">
+                    Cirrus — Plataforma de CFDIs del SAT<br>
+                    <a href="https://cirrus.nubex.me" style="color: #6366f1; text-decoration: none;">cirrus.nubex.me</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

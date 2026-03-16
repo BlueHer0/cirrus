@@ -1,0 +1,175 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Subir XMLs{% endblock %}
+{% block page_title %}Subir XMLs{% endblock %}
+{% block page_subtitle %}Sube CFDIs en formato XML o ZIP para almacenarlos en tu cuenta{% endblock %}
+
+{% block content %}
+<div class="glass rounded-xl p-6 mb-6">
+    <div id="drop-zone" class="border-2 border-dashed border-white/15 rounded-xl p-12 text-center cursor-pointer transition hover:border-indigo-500/40 hover:bg-white/3">
+        <div class="text-4xl mb-3">📤</div>
+        <h3 class="text-lg font-semibold text-white mb-1">Arrastra tus archivos aquí</h3>
+        <p class="text-sm text-gray-500 mb-1">Archivos .xml individuales (hasta 50) o un .zip con XMLs</p>
+        <p class="text-xs text-gray-600 mb-4">Los duplicados se detectan automáticamente por UUID</p>
+        <input type="file" id="file-input" multiple accept=".xml,.zip" class="hidden">
+        <button onclick="document.getElementById('file-input').click()" class="btn-primary px-6 py-2.5 rounded-lg text-sm text-white font-medium">
+            Seleccionar archivos
+        </button>
+    </div>
+</div>
+
+<!-- File List Preview -->
+<div id="file-preview" class="hidden glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase mb-3">Archivos seleccionados</h3>
+    <ul id="file-list" class="text-xs text-gray-400 space-y-1 mb-4"></ul>
+    <button onclick="processFiles()" class="btn-primary px-5 py-2 rounded-lg text-sm text-white font-medium">📤 Procesar</button>
+    <button onclick="cancelUpload()" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400 ml-2">Cancelar</button>
+</div>
+
+<div id="progress-section" class="hidden mb-6">
+    <div class="glass rounded-xl p-5">
+        <div class="flex items-center gap-3 mb-3">
+            <div class="animate-spin w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+            <span class="text-white font-medium">Procesando...</span>
+        </div>
+        <div class="w-full bg-white/10 rounded-full h-2">
+            <div id="progress-bar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+
+<div id="results-section" class="hidden">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="glass rounded-xl p-4 stat-card" style="--glow-color: #22c55e;">
+            <div class="text-[11px] text-gray-500 uppercase">Subidos</div>
+            <div class="text-3xl font-bold text-green-400 mt-1" id="res-uploaded">0</div>
+        </div>
+        <div class="glass rounded-xl p-4 stat-card" style="--glow-color: #eab308;">
+            <div class="text-[11px] text-gray-500 uppercase">Duplicados</div>
+            <div class="text-3xl font-bold text-amber-400 mt-1" id="res-duplicated">0</div>
+        </div>
+        <div class="glass rounded-xl p-4 stat-card" style="--glow-color: #f97316;">
+            <div class="text-[11px] text-gray-500 uppercase">Sin empresa</div>
+            <div class="text-3xl font-bold text-orange-400 mt-1" id="res-unassigned">0</div>
+        </div>
+        <div class="glass rounded-xl p-4 stat-card" style="--glow-color: #ef4444;">
+            <div class="text-[11px] text-gray-500 uppercase">Errores</div>
+            <div class="text-3xl font-bold text-red-400 mt-1" id="res-errors">0</div>
+        </div>
+    </div>
+    <!-- Assignment summary -->
+    <div id="assigned-section" class="hidden glass rounded-xl p-5 mb-4">
+        <h3 class="text-sm font-semibold text-green-400 mb-2">✅ CFDIs asignados:</h3>
+        <ul id="assigned-items" class="text-xs text-gray-400 space-y-1"></ul>
+    </div>
+    <div id="error-list" class="hidden glass rounded-xl p-5 mb-4">
+        <h3 class="text-sm font-semibold text-red-400 mb-2">Errores:</h3>
+        <ul id="error-items" class="text-xs text-gray-400 space-y-1"></ul>
+    </div>
+    <div class="text-center">
+        <button onclick="location.reload()" class="btn-ghost px-4 py-2 rounded-lg text-xs text-gray-400">Subir más archivos</button>
+        <a href="{% url 'app:cfdis' %}" class="btn-primary px-4 py-2 rounded-lg text-xs text-white ml-2">Ver CFDIs →</a>
+    </div>
+</div>
+
+<div class="glass rounded-xl p-5 mt-6">
+    <h3 class="text-sm font-semibold text-white mb-2">ℹ️ Cómo funciona</h3>
+    <ul class="text-xs text-gray-400 space-y-1.5">
+        <li>• Sube archivos <strong class="text-gray-300">.xml</strong> individuales o un <strong class="text-gray-300">.zip</strong> con XMLs dentro</li>
+        <li>• Los XMLs se parsean automáticamente para extraer UUID, RFC emisor y receptor</li>
+        <li>• Si el RFC coincide con una de tus empresas, el CFDI se asigna automáticamente</li>
+        <li>• Si no coincide, se guarda como "Sin empresa asignada"</li>
+        <li>• Los CFDIs duplicados (mismo UUID) se omiten automáticamente</li>
+        <li>• Tus archivos se almacenan de forma segura y encriptada</li>
+    </ul>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const progressSection = document.getElementById('progress-section');
+const resultsSection = document.getElementById('results-section');
+const progressBar = document.getElementById('progress-bar');
+const filePreview = document.getElementById('file-preview');
+const fileList = document.getElementById('file-list');
+let selectedFiles = null;
+
+['dragover', 'dragenter'].forEach(e => {
+    dropZone.addEventListener(e, (ev) => { ev.preventDefault(); dropZone.classList.add('border-indigo-500/50', 'bg-indigo-500/5'); });
+});
+['dragleave', 'drop'].forEach(e => {
+    dropZone.addEventListener(e, (ev) => { ev.preventDefault(); dropZone.classList.remove('border-indigo-500/50', 'bg-indigo-500/5'); });
+});
+
+dropZone.addEventListener('drop', (ev) => { showPreview(ev.dataTransfer.files); });
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (ev) => { showPreview(ev.target.files); });
+
+function showPreview(files) {
+    if (!files.length) return;
+    const valid = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.xml') || f.name.toLowerCase().endsWith('.zip'));
+    if (!valid.length) { alert('Solo se aceptan archivos .xml o .zip'); return; }
+    selectedFiles = valid;
+    fileList.innerHTML = valid.map(f => {
+        const icon = f.name.toLowerCase().endsWith('.zip') ? '📦' : '📄';
+        const size = (f.size / 1024).toFixed(1);
+        return `<li>${icon} ${f.name} <span class="text-gray-600">(${size} KB)</span></li>`;
+    }).join('');
+    filePreview.classList.remove('hidden');
+    resultsSection.classList.add('hidden');
+}
+
+function cancelUpload() {
+    selectedFiles = null;
+    filePreview.classList.add('hidden');
+    fileInput.value = '';
+}
+
+async function processFiles() {
+    if (!selectedFiles || !selectedFiles.length) return;
+    filePreview.classList.add('hidden');
+    progressSection.classList.remove('hidden');
+    resultsSection.classList.add('hidden');
+    progressBar.style.width = '30%';
+
+    const formData = new FormData();
+    selectedFiles.forEach(f => formData.append('xmls', f));
+
+    try {
+        progressBar.style.width = '60%';
+        const resp = await fetch('{% url "app:upload" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            body: formData,
+        });
+        progressBar.style.width = '100%';
+
+        const data = await resp.json();
+        setTimeout(() => {
+            progressSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+            document.getElementById('res-uploaded').textContent = data.uploaded || 0;
+            document.getElementById('res-duplicated').textContent = data.duplicated || 0;
+            document.getElementById('res-unassigned').textContent = data.unassigned || 0;
+            document.getElementById('res-errors').textContent = (data.errors || []).length;
+
+            // Show assignment summary
+            if (data.assigned && Object.keys(data.assigned).length) {
+                document.getElementById('assigned-section').classList.remove('hidden');
+                document.getElementById('assigned-items').innerHTML = Object.entries(data.assigned)
+                    .map(([rfc, count]) => `<li>• ${count} CFDI(s) asignados a <strong class="text-indigo-300">${rfc}</strong></li>`).join('');
+            }
+
+            if (data.errors && data.errors.length) {
+                document.getElementById('error-list').classList.remove('hidden');
+                document.getElementById('error-items').innerHTML = data.errors.map(e => `<li>• ${e}</li>`).join('');
+            }
+        }, 500);
+    } catch (err) {
+        progressSection.classList.add('hidden');
+        alert('Error al subir archivos: ' + err.message);
+    }
+    selectedFiles = null;
+}
+</script>
+{% endblock %}

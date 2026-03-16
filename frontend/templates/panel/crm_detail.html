@@ -1,0 +1,131 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}CRM — {{ lead.email }}{% endblock %}
+{% block page_title %}{{ lead.email }}{% endblock %}
+{% block page_subtitle %}Lead del conversor público{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'panel:crm' %}" class="btn-ghost px-4 py-2 rounded-lg text-sm text-gray-300">← Volver a CRM</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Lead info + edit form -->
+    <div class="lg:col-span-1">
+        <form method="post" class="glass rounded-xl p-6 space-y-5">
+            {% csrf_token %}
+            <!-- Stats -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="glass-light rounded-lg p-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider">Conversiones</div>
+                    <div class="text-xl font-bold text-white mt-0.5">{{ lead.conversiones }}</div>
+                </div>
+                <div class="glass-light rounded-lg p-3">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider">PDFs / Excels</div>
+                    <div class="text-xl font-bold text-white mt-0.5">{{ lead.total_pdfs }} / {{ lead.total_excels }}</div>
+                </div>
+            </div>
+
+            <!-- Info fields -->
+            <div class="space-y-3">
+                <div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Email</div>
+                    <div class="text-sm text-white">{{ lead.email }}</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Primera conversión</div>
+                    <div class="text-sm text-gray-300">{{ lead.primera_conversion|date:"d/m/Y H:i" }}</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Última conversión</div>
+                    <div class="text-sm text-gray-300">{{ lead.ultima_conversion|date:"d/m/Y H:i" }}</div>
+                </div>
+                {% if lead.ip %}
+                <div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">IP</div>
+                    <div class="text-sm text-gray-400 font-mono">{{ lead.ip }}</div>
+                </div>
+                {% endif %}
+                {% if lead.user_agent %}
+                <div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">User Agent</div>
+                    <div class="text-xs text-gray-500 break-all">{{ lead.user_agent|truncatechars:120 }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Editable fields -->
+            <div class="border-t border-white/5 pt-4 space-y-3">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="contactado" {% if lead.contactado %}checked{% endif %}
+                           class="w-4 h-4 rounded bg-glass-100 border-glass-border text-accent focus:ring-accent">
+                    <span class="text-sm text-gray-300">Contactado</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="es_cliente" {% if lead.es_cliente %}checked{% endif %}
+                           class="w-4 h-4 rounded bg-glass-100 border-glass-border text-accent focus:ring-accent">
+                    <span class="text-sm text-gray-300">Es cliente</span>
+                </label>
+                <div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Notas</div>
+                    <textarea name="notas" rows="4"
+                              class="w-full px-3 py-2 rounded-lg text-sm text-white bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent resize-none">{{ lead.notas }}</textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary w-full px-4 py-2.5 rounded-lg text-sm text-white font-medium">
+                Guardar cambios
+            </button>
+        </form>
+    </div>
+
+    <!-- Conversion history -->
+    <div class="lg:col-span-2">
+        <div class="glass rounded-xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-white/5">
+                <h3 class="text-sm font-semibold text-white">Historial de conversiones</h3>
+            </div>
+            <table class="w-full glass-table">
+                <thead>
+                    <tr class="text-xs uppercase text-gray-500 tracking-wider">
+                        <th class="text-left px-4 py-3">Fecha</th>
+                        <th class="text-center px-3 py-3">Formato</th>
+                        <th class="text-left px-3 py-3">UUID CFDI</th>
+                        <th class="text-left px-3 py-3">Emisor</th>
+                        <th class="text-left px-3 py-3">Receptor</th>
+                        <th class="text-right px-3 py-3">Total</th>
+                        <th class="text-center px-3 py-3">Enviado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="px-4 py-3 text-xs text-gray-400">{{ log.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="px-3 py-3 text-center">
+                            <span class="{% if log.formato == 'pdf' %}badge-error{% else %}badge-success{% endif %} px-2 py-0.5 rounded-full text-[11px] uppercase">{{ log.formato }}</span>
+                        </td>
+                        <td class="px-3 py-3 text-xs text-gray-400 font-mono">{{ log.uuid_cfdi|truncatechars:20|default:"—" }}</td>
+                        <td class="px-3 py-3 text-xs text-gray-400">{{ log.rfc_emisor|default:"—" }}</td>
+                        <td class="px-3 py-3 text-xs text-gray-400">{{ log.rfc_receptor|default:"—" }}</td>
+                        <td class="px-3 py-3 text-sm text-right text-gray-300">{% if log.total %}${{ log.total|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td class="px-3 py-3 text-center">
+                            {% if log.enviado %}
+                            <span class="text-green-400">✓</span>
+                            {% elif log.error %}
+                            <span class="text-red-400" title="{{ log.error }}">✕</span>
+                            {% else %}
+                            <span class="text-gray-600">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-6 text-center text-gray-600 text-sm">Sin conversiones registradas</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

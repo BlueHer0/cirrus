@@ -1,0 +1,113 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Empresas{% endblock %}
+{% block page_title %}Empresas{% endblock %}
+{% block page_subtitle %}Gestión de empresas y credenciales FIEL{% endblock %}
+
+{% block page_actions %}
+<button onclick="document.getElementById('new-empresa-form').classList.toggle('hidden')" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">
+    + Nueva Empresa
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Messages -->
+{% if messages %}
+<div class="mb-4 space-y-2">
+    {% for msg in messages %}
+    <div class="px-4 py-2.5 rounded-lg text-sm
+        {% if msg.tags == 'success' %}bg-green-500/10 text-green-400 border border-green-500/20
+        {% elif msg.tags == 'error' %}bg-red-500/10 text-red-400 border border-red-500/20
+        {% elif msg.tags == 'warning' %}bg-amber-500/10 text-amber-400 border border-amber-500/20
+        {% else %}bg-indigo-500/10 text-indigo-300 border border-indigo-500/20{% endif %}">
+        {{ msg }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- New Empresa Form (hidden by default) -->
+<div id="new-empresa-form" class="hidden glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Nueva Empresa</h3>
+    <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">RFC *</label>
+            <input type="text" name="rfc" required maxlength="13" placeholder="XAXX010101000"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm font-mono uppercase">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Nombre *</label>
+            <input type="text" name="nombre" required placeholder="Mi Empresa SA de CV"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Notas</label>
+            <input type="text" name="notas" placeholder="Opcional"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <div class="md:col-span-3">
+            <button type="submit" class="btn-primary px-6 py-2 rounded-lg text-sm text-white font-medium">Crear Empresa</button>
+            <button type="button" onclick="document.getElementById('new-empresa-form').classList.add('hidden')" class="btn-ghost px-4 py-2 rounded-lg text-sm text-gray-400 ml-2">Cancelar</button>
+        </div>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="glass rounded-xl p-5">
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">RFC</th>
+                <th class="pb-3 font-semibold">Nombre</th>
+                <th class="pb-3 font-semibold">Estado FIEL</th>
+                <th class="pb-3 font-semibold">CFDIs</th>
+                <th class="pb-3 font-semibold">Última Descarga</th>
+                <th class="pb-3 font-semibold">Descarga</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in empresas %}
+            <tr>
+                <td class="py-3">
+                    <a href="{% url 'panel:empresa_detalle' e.id %}" class="font-mono text-indigo-300 hover:text-indigo-200 font-medium">{{ e.rfc }}</a>
+                </td>
+                <td class="py-3 text-white">{{ e.nombre }}</td>
+                <td class="py-3">
+                    {% if e.fiel_verificada %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot"></span> Verificada
+                    </span>
+                    {% elif e.fiel_cer_key %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-warning">Pendiente</span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">Sin FIEL</span>
+                    {% endif %}
+                </td>
+                <td class="py-3 text-gray-400">{{ e.cfdi_count }}</td>
+                <td class="py-3 text-gray-400">
+                    {% if e.ultimo_scrape %}
+                    {{ e.ultimo_scrape|timesince }} atrás
+                    {% else %}
+                    <span class="text-gray-600">Nunca</span>
+                    {% endif %}
+                </td>
+                <td class="py-3">
+                    {% if e.descarga_activa %}
+                    <span class="text-xs badge-success px-2 py-0.5 rounded-full">Activa</span>
+                    {% else %}
+                    <span class="text-xs badge-error px-2 py-0.5 rounded-full">Inactiva</span>
+                    {% endif %}
+                </td>
+                <td class="py-3 text-right">
+                    <a href="{% url 'panel:empresa_detalle' e.id %}" class="btn-ghost px-3 py-1.5 rounded-lg text-xs text-gray-300 hover:text-white">Ver →</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="py-8 text-center text-gray-600">No hay empresas — crea una con el botón de arriba</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

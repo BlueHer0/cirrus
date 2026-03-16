@@ -1,0 +1,85 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Mis Empresas{% endblock %}
+{% block page_title %}Mis Empresas{% endblock %}
+{% block page_subtitle %}Gestiona tus empresas y credenciales FIEL{% endblock %}
+
+{% block page_actions %}
+<button onclick="document.getElementById('new-empresa').classList.toggle('hidden')" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">+ Nueva Empresa</button>
+{% endblock %}
+
+{% block content %}
+<!-- New Empresa Form -->
+<div id="new-empresa" class="hidden glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Agregar Empresa</h3>
+    <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">RFC *</label>
+            <input type="text" name="rfc" required maxlength="13" placeholder="XAXX010101000"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm font-mono uppercase">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Nombre *</label>
+            <input type="text" name="nombre" required placeholder="Mi Empresa SA de CV"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Notas</label>
+            <input type="text" name="notas" placeholder="Opcional"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <div class="md:col-span-3">
+            <button type="submit" class="btn-primary px-6 py-2 rounded-lg text-sm text-white font-medium">Crear Empresa</button>
+            <button type="button" onclick="document.getElementById('new-empresa').classList.add('hidden')" class="btn-ghost px-4 py-2 rounded-lg text-sm text-gray-400 ml-2">Cancelar</button>
+        </div>
+    </form>
+</div>
+
+<!-- Plan Limits -->
+{% if profile.max_empresas <= empresas|length %}
+<div class="glass rounded-xl p-4 mb-4 badge-warning border border-amber-500/20">
+    <p class="text-sm">Has alcanzado el límite de {{ profile.max_empresas }} empresa(s) en tu plan <strong>{{ profile.get_plan_display }}</strong>.</p>
+</div>
+{% endif %}
+
+<!-- Table -->
+<div class="glass rounded-xl p-5">
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">RFC</th>
+                <th class="pb-3 font-semibold">Nombre</th>
+                <th class="pb-3 font-semibold">FIEL</th>
+                <th class="pb-3 font-semibold">CFDIs</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in empresas %}
+            <tr>
+                <td class="py-3">
+                    <a href="{% url 'app:empresa_detail' e.id %}" class="font-mono text-indigo-300 hover:text-indigo-200 font-medium">{{ e.rfc }}</a>
+                </td>
+                <td class="py-3 text-white">{{ e.nombre }}</td>
+                <td class="py-3">
+                    {% if e.fiel_verificada %}
+                    <span class="badge-success px-2 py-0.5 rounded-full text-xs">✓ Verificada</span>
+                    {% elif e.fiel_cer_key %}
+                    <span class="badge-warning px-2 py-0.5 rounded-full text-xs">Pendiente</span>
+                    {% else %}
+                    <span class="badge-error px-2 py-0.5 rounded-full text-xs">Sin FIEL</span>
+                    {% endif %}
+                </td>
+                <td class="py-3 text-gray-400">{{ e.cfdi_count }}</td>
+                <td class="py-3 text-right">
+                    <a href="{% url 'app:empresa_detail' e.id %}" class="btn-ghost px-3 py-1.5 rounded-lg text-xs text-gray-300 hover:text-white">Ver →</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="py-8 text-center text-gray-600">No tienes empresas — agrega una con el botón de arriba</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

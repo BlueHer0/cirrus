@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Cirrus{% endblock %} — Gestión de CFDIs</title>
+    <meta name="description" content="Cirrus — Plataforma centralizada de gestión de CFDIs del SAT">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/cirrus.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+    <script src="{% static 'js/cirrus.js' %}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

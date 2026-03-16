@@ -1,0 +1,156 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Descargas{% endblock %}
+{% block page_title %}Descargas del SAT{% endblock %}
+{% block page_subtitle %}Descarga CFDIs directamente del portal del SAT{% endblock %}
+
+{% block content %}
+<!-- Download Form -->
+{% if has_fiel %}
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Nueva Descarga</h3>
+    <form method="post" action="" id="descarga-form">
+        {% csrf_token %}
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Empresa</label>
+                <select name="empresa_id" id="sel-empresa" required class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                    {% for e in empresas_fiel %}
+                    <option value="{{ e.id }}">{{ e.rfc }} — {{ e.nombre|truncatechars:25 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Año</label>
+                <select name="year" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                    {% for y in years %}<option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Mes Inicio</label>
+                <select name="month_start" id="sel-ms" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                    {% for m in months %}<option value="{{ m.0 }}" {% if m.0 == 1 %}selected{% endif %}>{{ m.1 }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Mes Fin</label>
+                <select name="month_end" id="sel-me" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                    {% for m in months %}<option value="{{ m.0 }}" {% if m.0 == current_month %}selected{% endif %}>{{ m.1 }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Tipos</label>
+                <div class="flex flex-col gap-1 mt-1">
+                    <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" name="tipos" value="recibidos" checked class="rounded border-gray-600 bg-white/5 text-indigo-500"> Recibidos</label>
+                    <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" name="tipos" value="emitidos" checked class="rounded border-gray-600 bg-white/5 text-indigo-500"> Emitidos</label>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 flex items-center gap-3">
+            <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm text-white font-medium">📥 Iniciar Descarga</button>
+            <span id="validation-msg" class="text-xs text-red-400 hidden"></span>
+        </div>
+    </form>
+</div>
+{% elif has_empresas %}
+<div class="glass rounded-xl p-8 mb-6 text-center">
+    <div class="text-4xl mb-3">🔐</div>
+    <h3 class="text-white text-lg font-semibold mb-2">Configura tu FIEL primero</h3>
+    <p class="text-gray-400 text-sm mb-4">Para descargar CFDIs del SAT necesitas subir y verificar la FIEL de tu empresa.</p>
+    <a href="{% url 'app:empresas' %}" class="btn-primary px-5 py-2 rounded-lg text-sm text-white inline-block">Ir a Empresas →</a>
+</div>
+{% else %}
+<div class="glass rounded-xl p-8 mb-6 text-center">
+    <div class="text-4xl mb-3">🏢</div>
+    <h3 class="text-white text-lg font-semibold mb-2">Registra una empresa</h3>
+    <p class="text-gray-400 text-sm mb-4">Primero necesitas registrar una empresa y configurar su FIEL.</p>
+    <a href="{% url 'app:empresas' %}" class="btn-primary px-5 py-2 rounded-lg text-sm text-white inline-block">Ir a Empresas →</a>
+</div>
+{% endif %}
+
+<!-- Download History -->
+<div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        Historial de Descargas
+        {% if has_running %}<span class="ml-2 inline-flex items-center"><span class="animate-pulse w-2 h-2 bg-green-400 rounded-full mr-1"></span><span class="text-[10px] text-green-400 font-normal uppercase">en progreso</span></span>{% endif %}
+    </h3>
+    {% if recent_downloads %}
+    <div class="overflow-x-auto">
+        <table class="glass-table w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="pb-3 font-semibold">Empresa</th>
+                    <th class="pb-3 font-semibold">Periodo</th>
+                    <th class="pb-3 font-semibold">Tipos</th>
+                    <th class="pb-3 font-semibold">Estado</th>
+                    <th class="pb-3 font-semibold text-right">CFDIs</th>
+                    <th class="pb-3 font-semibold text-right">Duración</th>
+                    <th class="pb-3 font-semibold">Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in recent_downloads %}
+                <tr>
+                    <td class="py-2.5 font-mono text-xs text-indigo-300">{{ d.empresa.rfc }}</td>
+                    <td class="py-2.5 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
+                    <td class="py-2.5 text-xs text-gray-400">{{ d.tipos|join:", " }}</td>
+                    <td class="py-2.5">
+                        {% if d.estado == 'completado' %}
+                        <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ {{ d.cfdis_nuevos }} CFDIs descargados</span>
+                        {% elif d.estado == 'ejecutando' or d.estado == 'pendiente' %}
+                        <span class="badge-warning px-2 py-0.5 rounded-full text-[10px] animate-pulse">⏳ En proceso...</span>
+                        {% elif d.estado == 'error' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] text-amber-400 bg-amber-500/10">⚠️ No completada</span>
+                        {% elif d.estado == 'cancelado' %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">Cancelado</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ d.estado }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-2.5 text-right text-white font-medium">
+                        {% if d.estado == 'completado' %}{{ d.cfdis_nuevos|default:"0" }}{% else %}—{% endif %}
+                    </td>
+                    <td class="py-2.5 text-right text-gray-400 text-xs">
+                        {% if d.duracion_segundos %}{{ d.duracion_segundos }}s{% else %}—{% endif %}
+                    </td>
+                    <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-[11px] text-gray-600 mt-3 px-1">
+        ℹ️ Las descargas se procesan en segundo plano y dependen de la disponibilidad del portal del SAT. 
+        En horarios de alta demanda (11AM–3PM) pueden tardar más.
+        Te notificaremos por email cuando tu descarga esté lista.
+    </p>
+    {% else %}
+    <div class="text-center py-8 text-gray-600">
+        <div class="text-3xl mb-2">📭</div>
+        Sin descargas aún. Inicia una descarga arriba.
+    </div>
+    {% endif %}
+</div>
+
+{% if has_running %}
+<script>setTimeout(() => location.reload(), 10000);</script>
+{% endif %}
+
+<script>
+// Dynamic form action based on selected empresa
+document.getElementById('descarga-form')?.addEventListener('submit', function(e) {
+    const empresaId = document.getElementById('sel-empresa')?.value;
+    if (empresaId) {
+        this.action = '/app/empresas/' + empresaId + '/descargar/';
+    }
+    const ms = parseInt(document.getElementById('sel-ms')?.value || 1);
+    const me = parseInt(document.getElementById('sel-me')?.value || 1);
+    const msg = document.getElementById('validation-msg');
+    if (me < ms) {
+        e.preventDefault();
+        msg.textContent = 'Mes fin debe ser ≥ mes inicio';
+        msg.classList.remove('hidden');
+    }
+});
+</script>
+{% endblock %}

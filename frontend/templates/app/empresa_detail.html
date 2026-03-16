@@ -1,0 +1,140 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}{{ empresa.rfc }}{% endblock %}
+{% block page_title %}{{ empresa.nombre }}{% endblock %}
+{% block page_subtitle %}{{ empresa.rfc }}{% endblock %}
+
+{% block page_actions %}
+{% if empresa.fiel_status == 'verificando' %}
+<span class="px-3 py-2 rounded-lg text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 animate-pulse">⏳ Verificando FIEL...</span>
+{% elif empresa.fiel_status == 'rechazada' %}
+<span class="px-3 py-2 rounded-lg text-xs text-red-400 bg-red-500/10 border border-red-500/20">❌ FIEL rechazada</span>
+{% endif %}
+<button onclick="document.getElementById('edit-form').classList.toggle('hidden')" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">✏️</button>
+{% endblock %}
+
+{% block content %}
+<!-- Edit Form -->
+<div id="edit-form" class="hidden glass rounded-xl p-5 mb-6">
+    <form method="post" class="flex items-end gap-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit">
+        <div class="flex-1">
+            <label class="block text-sm font-medium text-gray-300 mb-1">Nombre</label>
+            <input type="text" name="nombre" value="{{ empresa.nombre }}" required
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <div class="flex-1">
+            <label class="block text-sm font-medium text-gray-300 mb-1">Notas</label>
+            <input type="text" name="notas" value="{{ empresa.notas }}"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm text-white">Guardar</button>
+    </form>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <!-- Info -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Información</h3>
+        <div class="space-y-3">
+            <div><div class="text-[11px] text-gray-500 uppercase">RFC</div><div class="text-white font-mono font-semibold">{{ empresa.rfc }}</div></div>
+            <div><div class="text-[11px] text-gray-500 uppercase">Nombre</div><div class="text-white">{{ empresa.nombre }}</div></div>
+            <div><div class="text-[11px] text-gray-500 uppercase">Notas</div><div class="text-gray-400 text-sm">{{ empresa.notas|default:"—" }}</div></div>
+        </div>
+    </div>
+
+    <!-- FIEL -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Credenciales FIEL</h3>
+        <div class="space-y-3">
+            <div>
+                {% if empresa.fiel_status == 'verificada' %}
+                <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Verificada</span>
+                {% elif empresa.fiel_status == 'verificando' %}
+                <span class="badge-warning px-2.5 py-1 rounded-full text-xs animate-pulse">⏳ Verificando contra el SAT...</span>
+                {% elif empresa.fiel_status == 'rechazada' %}
+                <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ Rechazada — intenta subir de nuevo</span>
+                {% else %}
+                <span class="badge-error px-2.5 py-1 rounded-full text-xs">📤 Sube tu FIEL</span>
+                {% endif %}
+            </div>
+            {% if empresa.fiel_verificada_at %}
+            <div><div class="text-[11px] text-gray-500 uppercase">Verificada</div><div class="text-gray-400 text-sm">{{ empresa.fiel_verificada_at|date:"d/M/Y H:i" }}</div></div>
+            {% endif %}
+            {% if empresa.fiel_expira %}
+            <div><div class="text-[11px] text-gray-500 uppercase">Expira</div><div class="text-gray-400 text-sm">{{ empresa.fiel_expira|date:"d/M/Y" }}</div></div>
+            {% endif %}
+            <p class="text-[10px] text-gray-600 mt-2">🔒 Tus credenciales se encriptan y almacenan de forma segura.</p>
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/5">
+            <a href="{% url 'app:empresa_fiel' empresa.id %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-300 block text-center">
+                {% if empresa.fiel_status == 'sin_fiel' %}📤 Configurar FIEL{% else %}🔄 Actualizar FIEL{% endif %}
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Estadísticas</h3>
+        <div class="space-y-2">
+            <div class="flex justify-between"><span class="text-gray-500 text-sm">Total CFDIs</span><span class="text-white font-semibold">{{ cfdi_count }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500 text-sm">Recibidos</span><span class="text-blue-400 font-semibold">{{ recibidos }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500 text-sm">Emitidos</span><span class="text-purple-400 font-semibold">{{ emitidos }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500 text-sm">Monto Total</span><span class="text-green-400 font-semibold">${{ monto_total|floatformat:2|default:"0" }}</span></div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/5 space-y-2">
+            <a href="{% url 'app:cfdis' %}?empresa={{ empresa.id }}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-indigo-300 block text-center">📄 Ver CFDIs de esta empresa</a>
+            {% if empresa.fiel_status == 'verificada' %}
+            <a href="{% url 'app:descargas' %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-indigo-300 block text-center">📥 Ir a Descargas</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Recent Downloads for this empresa -->
+{% if recent_downloads %}
+<div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        Descargas Recientes
+        {% if has_running %}<span class="ml-2 inline-flex items-center"><span class="animate-pulse w-2 h-2 bg-green-400 rounded-full mr-1"></span><span class="text-[10px] text-green-400 font-normal uppercase">en progreso</span></span>{% endif %}
+    </h3>
+    <div class="overflow-x-auto">
+        <table class="glass-table w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="pb-3 font-semibold">Estado</th>
+                    <th class="pb-3 font-semibold">Periodo</th>
+                    <th class="pb-3 font-semibold text-right">CFDIs</th>
+                    <th class="pb-3 font-semibold text-right">Duración</th>
+                    <th class="pb-3 font-semibold">Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in recent_downloads %}
+                <tr>
+                    <td class="py-2.5">
+                        {% if d.estado == 'completado' %}
+                        <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ OK</span>
+                        {% elif d.estado == 'ejecutando' %}
+                        <span class="badge-warning px-2 py-0.5 rounded-full text-[10px] animate-pulse">⏳</span>
+                        {% elif d.estado == 'error' %}
+                        <span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-2.5 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
+                    <td class="py-2.5 text-right text-white font-medium">{% if d.estado == 'completado' %}{{ d.cfdis_nuevos|default:"0" }}{% else %}—{% endif %}</td>
+                    <td class="py-2.5 text-right text-gray-400 text-xs">{% if d.duracion_segundos %}{{ d.duracion_segundos }}s{% else %}—{% endif %}</td>
+                    <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if has_running %}
+<script>setTimeout(() => location.reload(), 10000);</script>
+{% endif %}
+{% endblock %}

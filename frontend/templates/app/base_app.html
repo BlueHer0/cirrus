@@ -1,0 +1,169 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mi Cuenta{% endblock %} — Cirrus</title>
+    <meta name="description" content="Cirrus — Gestiona tus CFDIs del SAT">
+
+    <!-- Tailwind CSS v4 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                colors: {
+                    glass: {
+                        50: 'rgba(255,255,255,0.03)',
+                        100: 'rgba(255,255,255,0.06)',
+                        200: 'rgba(255,255,255,0.10)',
+                        border: 'rgba(255,255,255,0.08)',
+                    },
+                    accent: { DEFAULT: '#6366f1', hover: '#818cf8', soft: 'rgba(99,102,241,0.12)' },
+                    surface: { DEFAULT: '#0c0e14', card: 'rgba(15,17,26,0.80)' },
+                },
+            },
+        },
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #0c0e14;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 20% 40%, rgba(99,102,241,0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 20%, rgba(139,92,246,0.06), transparent),
+                radial-gradient(ellipse 50% 60% at 50% 80%, rgba(59,130,246,0.04), transparent);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(15, 17, 26, 0.75);
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .sidebar {
+            background: rgba(10, 12, 18, 0.90);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .sidebar-link { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sidebar-link:hover { background: rgba(99, 102, 241, 0.10); color: #a5b4fc; }
+        .sidebar-link.active { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border-left: 3px solid #6366f1; }
+        .glass-table tr { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
+        .glass-table tbody tr:hover { background: rgba(99,102,241,0.06); }
+        .stat-card { position: relative; overflow: hidden; }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--glow-color, #6366f1), transparent); opacity: 0.6; }
+        .badge-success { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .badge-warning { background: rgba(234,179,8,0.15); color: #facc15; }
+        .badge-error   { background: rgba(239,68,68,0.15); color: #f87171; }
+        .badge-info    { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+        .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); transition: all 0.2s; }
+        .btn-primary:hover { background: linear-gradient(135deg, #818cf8, #a78bfa); box-shadow: 0 4px 15px rgba(99,102,241,0.3); transform: translateY(-1px); }
+        .btn-ghost { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); transition: all 0.2s; }
+        .btn-ghost:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+    </style>
+</head>
+<body class="text-gray-300 antialiased">
+
+    <div class="flex min-h-screen">
+        <!-- SIDEBAR -->
+        <aside class="sidebar fixed left-0 top-0 bottom-0 w-56 flex flex-col z-30">
+            <div class="px-5 py-5 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <span class="text-white text-lg font-bold">☁</span>
+                </div>
+                <div>
+                    <h1 class="text-white font-bold text-lg tracking-tight leading-none">CIRRUS</h1>
+                    <span class="text-[10px] text-gray-500 uppercase tracking-widest">Mi Cuenta</span>
+                </div>
+            </div>
+
+            <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+                {% with current_page=current_page|default:"dashboard" %}
+                <a href="{% url 'app:dashboard' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'dashboard' %}active{% endif %}">
+                    <span class="text-base">📊</span><span>Dashboard</span>
+                </a>
+                <a href="{% url 'app:empresas' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'empresas' %}active{% endif %}">
+                    <span class="text-base">🏢</span><span>Empresas</span>
+                </a>
+                <a href="{% url 'app:descargas' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'descargas' %}active{% endif %}">
+                    <span class="text-base">📥</span><span>Descargas</span>
+                </a>
+                <a href="{% url 'app:cfdis' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'cfdis' %}active{% endif %}">
+                    <span class="text-base">📄</span><span>CFDIs</span>
+                </a>
+                <a href="{% url 'app:upload' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'upload' %}active{% endif %}">
+                    <span class="text-base">📤</span><span>Subir XMLs</span>
+                </a>
+                <a href="{% url 'app:api_keys' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'api_keys' %}active{% endif %}">
+                    <span class="text-base">🔑</span><span>API Keys</span>
+                </a>
+
+                <div class="pt-4 mt-4 border-t border-white/5">
+                    <a href="{% url 'app:perfil' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'perfil' %}active{% endif %}">
+                        <span class="text-base">👤</span><span>Mi Cuenta</span>
+                    </a>
+                    <a href="{% url 'app:facturacion' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'facturacion' %}active{% endif %}">
+                        <span class="text-base">🧾</span><span>Facturación</span>
+                    </a>
+                </div>
+                {% endwith %}
+            </nav>
+
+            <div class="px-4 py-4 border-t border-white/5">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                        {{ user.first_name|default:user.username|truncatechars:2|upper }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm text-white font-medium truncate">{{ user.get_full_name|default:user.username }}</div>
+                        <div class="text-[11px] text-gray-500 truncate">{{ user.email }}</div>
+                    </div>
+                    <a href="{% url 'app:logout' %}" class="text-gray-500 hover:text-red-400 transition" title="Cerrar sesión">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 ml-56 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white">{% block page_title %}Dashboard{% endblock %}</h2>
+                    <p class="text-sm text-gray-500 mt-0.5">{% block page_subtitle %}{% endblock %}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    {% block page_actions %}{% endblock %}
+                </div>
+            </div>
+
+            {% if messages %}
+            <div class="mb-4 space-y-2">
+                {% for message in messages %}
+                <div class="glass rounded-lg px-4 py-3 text-sm flex items-center gap-2 {% if message.tags == 'success' %}badge-success{% elif message.tags == 'error' %}badge-error{% elif message.tags == 'warning' %}badge-warning{% else %}badge-info{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

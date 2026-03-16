@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>CFDI {{ timbre.uuid }}</title>
+  <style>
+    @page {
+      size: letter;
+      margin: 18mm 15mm 15mm 15mm;
+    }
+
+    :root {
+      --bg-section: #ffffff;
+      --bg-header: #1e293b;
+      --bg-panel: #f1f5f9;
+      --border: #cbd5e1;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --text: #0f172a;
+      --font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      color: var(--text);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    /* --- Header --- */
+    .header {
+      background: var(--bg-header);
+      color: white;
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .header .tipo-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      background: rgba(255,255,255,0.15);
+      margin-top: 4px;
+    }
+    .header .meta {
+      text-align: right;
+      font-size: 10px;
+      line-height: 1.6;
+    }
+    .header .meta strong {
+      font-size: 11px;
+    }
+
+    /* --- Sections --- */
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: var(--bg-section);
+    }
+    .section-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    /* --- Grid de personas --- */
+    .personas-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .field { margin-bottom: 4px; }
+    .field-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .field-value {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    /* --- Tabla conceptos --- */
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+    .table th {
+      padding: 5px 6px;
+      text-align: left;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+      border-bottom: 2px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--muted);
+    }
+    .table th.r { text-align: right; }
+    .table td {
+      padding: 5px 6px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+      font-size: 10px;
+    }
+    .table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+    .table td.desc { max-width: 240px; }
+    .table tbody tr:last-child td { border-bottom: none; }
+
+    .concept-tax {
+      margin-top: 3px;
+      padding-top: 3px;
+      border-top: 1px dashed #e2e8f0;
+      color: var(--muted);
+      font-size: 9px;
+    }
+
+    /* --- Summary (totales) --- */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      gap: 12px;
+      align-items: start;
+    }
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .summary-table td {
+      padding: 4px 0;
+      font-size: 10px;
+    }
+    .summary-table td.lbl {
+      color: var(--muted);
+      font-size: 9px;
+      padding-right: 12px;
+    }
+    .summary-table td.val {
+      text-align: right;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .summary-table tr.total-row td {
+      border-top: 2px solid var(--text);
+      padding-top: 6px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .total-letra {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 4px;
+      padding: 6px 8px;
+      background: var(--bg-panel);
+      border-radius: 4px;
+    }
+
+    /* --- Timbre / QR --- */
+    .timbre-grid {
+      display: grid;
+      grid-template-columns: 1fr 110px;
+      gap: 12px;
+      align-items: start;
+    }
+    .qr-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .qr-box img { width: 94px; height: 94px; }
+
+    .sello-text {
+      font-size: 7px;
+      color: var(--muted);
+      word-break: break-all;
+      line-height: 1.3;
+      margin-top: 4px;
+    }
+
+    /* --- Footer: Branded (free tier) --- */
+    .footer-branded {
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 6px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+    .footer-branded img { max-height: 35px; }
+    .footer-branded .text {
+      font-size: 9pt;
+      color: #4338ca;
+      font-weight: 600;
+    }
+    .footer-branded a {
+      color: #4338ca;
+      text-decoration: underline;
+    }
+    .footer-branded .sub {
+      font-size: 7pt;
+      color: #6366f1;
+      font-weight: 400;
+    }
+
+    /* --- Footer: Subtle (paid tier) --- */
+    .footer-subtle {
+      margin-top: 6px;
+      padding-top: 4px;
+      border-top: 0.5px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      font-size: 6pt;
+      color: #94a3b8;
+    }
+
+    .break-all { word-break: break-all; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div style="display:flex; align-items:center; gap:12px;">
+      {% if logo_data_uri %}
+      <img src="{{ logo_data_uri }}" alt="Logo" style="max-height:40px; max-width:80px; border-radius:4px;" />
+      {% endif %}
+      <div>
+        <h1>Comprobante Fiscal Digital</h1>
+        <div class="tipo-badge">{{ comprobante.tipo_comprobante_desc | default("CFDI") }} ({{ comprobante.tipo_comprobante }})</div>
+      </div>
+    </div>
+    <div class="meta">
+      {% if comprobante.serie or comprobante.folio %}
+      <strong>Serie {{ comprobante.serie | default("-") }} / Folio {{ comprobante.folio | default("-") }}</strong><br/>
+      {% endif %}
+      {{ comprobante.fecha | datefmt }}<br/>
+      C.P. {{ comprobante.lugar_expedicion }}
+      {% if comprobante.moneda and comprobante.moneda != "MXN" %}
+      <br/>Moneda: {{ comprobante.moneda }} {% if comprobante.tipo_cambio %}TC: {{ comprobante.tipo_cambio }}{% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- EMISOR / RECEPTOR -->
+  <div class="personas-grid">
+    <div class="section">
+      <div class="section-title">Emisor</div>
+      <div class="field">
+        <div class="field-label">RFC</div>
+        <div class="field-value">{{ emisor.rfc }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Razon social</div>
+        <div class="field-value">{{ emisor.nombre }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Regimen fiscal</div>
+        <div class="field-value">{{ emisor.regimen_fiscal }}{% if emisor.regimen_fiscal_desc %} — {{ emisor.regimen_fiscal_desc }}{% endif %}</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Receptor</div>
+      <div class="field">
+        <div class="field-label">RFC</div>
+        <div class="field-value">{{ receptor.rfc }}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Razon social</div>
+        <div class="field-value">{{ receptor.nombre }}</div>
+      </div>
+      {% if receptor.regimen_fiscal_receptor %}
+      <div class="field">
+        <div class="field-label">Regimen fiscal</div>
+        <div class="field-value">{{ receptor.regimen_fiscal_receptor }}{% if receptor.regimen_fiscal_receptor_desc %} — {{ receptor.regimen_fiscal_receptor_desc }}{% endif %}</div>
+      </div>
+      {% endif %}
+      {% if receptor.uso_cfdi %}
+      <div class="field">
+        <div class="field-label">Uso CFDI</div>
+        <div class="field-value">{{ receptor.uso_cfdi }}{% if receptor.uso_cfdi_desc %} — {{ receptor.uso_cfdi_desc }}{% endif %}</div>
+      </div>
+      {% endif %}
+      {% if comprobante.exportacion %}
+      <div class="field">
+        <div class="field-label">Exportacion</div>
+        <div class="field-value">{{ comprobante.exportacion }}{% if comprobante.exportacion_desc %} — {{ comprobante.exportacion_desc }}{% endif %}</div>
+      </div>
+      {% endif %}
+      {% if receptor.domicilio_fiscal %}
+      <div class="field">
+        <div class="field-label">Domicilio fiscal</div>
+        <div class="field-value">{{ receptor.domicilio_fiscal }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- CONCEPTOS -->
+  <div class="section">
+    <div class="section-title">Conceptos</div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:70px">Clave SAT</th>
+          <th style="width:50px">Unidad</th>
+          <th>Descripcion</th>
+          <th class="r" style="width:55px">Cant.</th>
+          <th class="r" style="width:75px">P. Unitario</th>
+          <th class="r" style="width:75px">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in conceptos %}
+        <tr>
+          <td>{{ c.clave_prod_serv }}</td>
+          <td>{{ c.clave_unidad }}{% if c.unidad %}<br/>{{ c.unidad }}{% endif %}</td>
+          <td class="desc">
+            {{ c.descripcion }}
+            {% if c.objeto_impuesto %}
+            <div style="color: var(--muted); font-size: 9px; margin-top: 2px;">Obj. imp: {{ c.objeto_impuesto }} — {{ c.objeto_impuesto_desc }}</div>
+            {% endif %}
+            {% if c.descuento %}
+            <div style="color: var(--muted); font-size: 9px; margin-top: 2px;">Desc: ${{ c.descuento | monto }}</div>
+            {% endif %}
+            {% if c.traslados or c.retenciones %}
+            <div class="concept-tax">
+              {% for t in c.traslados %}
+              IVA {{ t.tasa | tasa_pct }} — ${{ t.importe | monto }}<br/>
+              {% endfor %}
+              {% for r in c.retenciones %}
+              Ret. {{ r.impuesto }} — ${{ r.importe | monto }}<br/>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
+          <td class="r">{{ c.cantidad | monto }}</td>
+          <td class="r">${{ c.valor_unitario | monto }}</td>
+          <td class="r">${{ c.importe | monto }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TOTALES -->
+  <div class="section">
+    <div class="summary-grid">
+      <div>
+        <div class="field">
+          <div class="field-label">Forma de pago</div>
+          <div class="field-value">{{ comprobante.forma_pago }}{% if comprobante.forma_pago_desc %} — {{ comprobante.forma_pago_desc }}{% endif %}</div>
+        </div>
+        <div class="field" style="margin-top:4px">
+          <div class="field-label">Metodo de pago</div>
+          <div class="field-value">{{ comprobante.metodo_pago }}{% if comprobante.metodo_pago_desc %} — {{ comprobante.metodo_pago_desc }}{% endif %}</div>
+        </div>
+        {% if comprobante.condiciones_pago %}
+        <div class="field" style="margin-top:4px">
+          <div class="field-label">Condiciones de pago</div>
+          <div class="field-value">{{ comprobante.condiciones_pago }}</div>
+        </div>
+        {% endif %}
+        <div class="total-letra">{{ total_letra }}</div>
+      </div>
+      <div>
+        <table class="summary-table">
+          <tbody>
+            <tr>
+              <td class="lbl">Subtotal</td>
+              <td class="val">${{ comprobante.sub_total | monto }}</td>
+            </tr>
+            {% if comprobante.descuento %}
+            <tr>
+              <td class="lbl">Descuento</td>
+              <td class="val">-${{ comprobante.descuento | monto }}</td>
+            </tr>
+            {% endif %}
+            {% for t in impuestos.traslados %}
+            <tr>
+              <td class="lbl">IVA {{ t.tasa | tasa_pct }}</td>
+              <td class="val">${{ t.importe | monto }}</td>
+            </tr>
+            {% endfor %}
+            {% for r in impuestos.retenciones %}
+            <tr>
+              <td class="lbl">Ret. {{ r.impuesto }}</td>
+              <td class="val">-${{ r.importe | monto }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+              <td class="lbl">Total</td>
+              <td class="val">${{ comprobante.total | monto }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMBRE FISCAL DIGITAL -->
+  <div class="section">
+    <div class="section-title">Timbre Fiscal Digital</div>
+    <div class="timbre-grid">
+      <div>
+        <div class="field">
+          <div class="field-label">UUID</div>
+          <div class="field-value" style="font-size:11px; font-weight:700; color:var(--accent);">{{ timbre.uuid }}</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;">
+          <div class="field">
+            <div class="field-label">Fecha timbrado</div>
+            <div class="field-value">{{ timbre.fecha_timbrado | datefmt }}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">PAC</div>
+            <div class="field-value">{{ timbre.rfc_prov_certif }}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">No. certificado SAT</div>
+            <div class="field-value">{{ timbre.no_certificado_sat }}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">No. certificado emisor</div>
+            <div class="field-value">{{ comprobante.no_certificado }}</div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:6px;">
+          <div class="field-label">Cadena original del timbre</div>
+          <div class="sello-text">{{ cadena_tfd }}</div>
+        </div>
+        <div class="field" style="margin-top:4px;">
+          <div class="field-label">Sello CFDI</div>
+          <div class="sello-text">{{ timbre.sello_cfd }}</div>
+        </div>
+        <div class="field" style="margin-top:4px;">
+          <div class="field-label">Sello SAT</div>
+          <div class="sello-text">{{ timbre.sello_sat }}</div>
+        </div>
+      </div>
+      <div class="qr-box">
+        <img src="{{ qr_data_uri }}" alt="QR SAT" />
+      </div>
+    </div>
+  </div>
+
+  {% if relacionados %}
+  <div class="section">
+    <div class="section-title">CFDIs Relacionados</div>
+    {% for rel in relacionados %}
+    <div class="field">
+      <div class="field-value">{{ rel.tipo_relacion }} — {{ rel.uuid }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if branded %}
+  <div class="footer-branded">
+    <img src="cirrus_logo.png" alt="Cirrus">
+    <div>
+      <div class="text">PDF generado con CIRRUS — <a href="https://cirrus.nubex.me">cirrus.nubex.me</a></div>
+      <div class="sub">Convierte tus CFDIs gratis en cirrus.nubex.me</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="footer-subtle">
+    <span>Representación impresa de un CFDI versión {{ comprobante.version }}</span>
+    <span>Generado con cirrus.nubex.me</span>
+  </div>
+  {% endif %}
+
+</body>
+</html>

@@ -1,0 +1,87 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Resumen general de todas las empresas{% endblock %}
+
+{% block content %}
+<!-- Stats Row -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #6366f1;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Empresas</div>
+        <div class="text-3xl font-bold text-white">{{ stats.total_empresas }}</div>
+        <div class="text-xs text-gray-500 mt-1">{{ stats.empresas_activas }} activas</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #22c55e;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">CFDIs Totales</div>
+        <div class="text-3xl font-bold text-white">{{ stats.total_cfdis|floatformat:0 }}</div>
+        <div class="text-xs text-gray-500 mt-1">{{ stats.cfdis_este_mes }} este mes</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #3b82f6;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Monto Total</div>
+        <div class="text-3xl font-bold text-white">${{ stats.monto_total|floatformat:0|default:"0" }}</div>
+        <div class="text-xs text-gray-500 mt-1">Todas las empresas</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #f59e0b;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Descargas Hoy</div>
+        <div class="text-3xl font-bold text-white">{{ stats.descargas_hoy }}</div>
+        <div class="text-xs text-gray-500 mt-1">{{ stats.descargas_error }} con error</div>
+    </div>
+</div>
+
+<!-- Empresas Grid -->
+<div class="glass rounded-xl p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white">Empresas</h3>
+        <span class="text-xs text-gray-500">Última actualización en tiempo real</span>
+    </div>
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">RFC</th>
+                <th class="pb-3 font-semibold">Nombre</th>
+                <th class="pb-3 font-semibold">FIEL</th>
+                <th class="pb-3 font-semibold">CFDIs</th>
+                <th class="pb-3 font-semibold">Último Scrape</th>
+                <th class="pb-3 font-semibold">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in empresas %}
+            <tr class="cursor-pointer" onclick="location.href='{% url 'panel:empresa_detalle' e.id %}'">
+                <td class="py-3 font-mono text-indigo-300 font-medium">{{ e.rfc }}</td>
+                <td class="py-3 text-white">{{ e.nombre }}</td>
+                <td class="py-3">
+                    {% if e.fiel_verificada %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot"></span> Verificada
+                    </span>
+                    {% elif e.fiel_cer_key %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-warning">Pendiente</span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">Sin FIEL</span>
+                    {% endif %}
+                </td>
+                <td class="py-3 text-gray-400">{{ e.cfdi_count }}</td>
+                <td class="py-3 text-gray-400">
+                    {% if e.ultimo_scrape %}
+                    {{ e.ultimo_scrape|timesince }} atrás
+                    {% else %}
+                    <span class="text-gray-600">—</span>
+                    {% endif %}
+                </td>
+                <td class="py-3">
+                    {% if e.descarga_activa %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">Activa</span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">Inactiva</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="py-8 text-center text-gray-600">No hay empresas registradas</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

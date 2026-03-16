@@ -1,0 +1,31 @@
+# Cirrus Web — Gunicorn WSGI Server
+# Deploy: sudo cp /var/www/cirrus/systemd/cirrus-web.service /etc/systemd/system/
+#         sudo systemctl daemon-reload && sudo systemctl enable cirrus-web
+
+[Unit]
+Description=Cirrus Web (Gunicorn)
+After=network.target postgresql.service redis.service
+Wants=cirrus-worker.service cirrus-beat.service
+
+[Service]
+Type=notify
+User=farizpe
+Group=farizpe
+WorkingDirectory=/var/www/cirrus
+Environment="PATH=/var/www/cirrus/venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/var/www/cirrus/.env
+ExecStart=/var/www/cirrus/venv/bin/gunicorn -c gunicorn.conf.py cirrus.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=30
+
+# Security hardening
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/cirrus/logs /var/www/cirrus/staticfiles /tmp
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

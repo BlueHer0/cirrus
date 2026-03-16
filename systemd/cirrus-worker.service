@@ -1,0 +1,44 @@
+# Cirrus Worker — Celery Worker (Playwright-compatible)
+# Deploy: sudo cp /var/www/cirrus/systemd/cirrus-worker.service /etc/systemd/system/
+#         sudo systemctl daemon-reload && sudo systemctl enable cirrus-worker
+
+[Unit]
+Description=Cirrus Celery Worker
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=farizpe
+Group=farizpe
+WorkingDirectory=/var/www/cirrus
+Environment="PATH=/var/www/cirrus/venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/var/www/cirrus/.env
+
+# concurrency=3 for parallel SAT downloads.
+# Each SAT scraping session can use 500MB+ RAM.
+# -Q celery,scheduler handles both default and scheduler queues.
+ExecStart=/var/www/cirrus/venv/bin/celery \
+    -A cirrus worker \
+    -l info \
+    --concurrency=3 \
+    -Q celery,scheduler,descarga,verificacion,sistema \
+    --max-tasks-per-child=10 \
+    -n cirrus-worker@%%h
+
+Restart=on-failure
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=600
+
+# Playwright needs /tmp and access to browser binaries
+PrivateTmp=false
+ProtectSystem=strict
+ReadWritePaths=/var/www/cirrus/logs /var/www/cirrus/.browsers /var/www/cirrus/downloads /var/www/cirrus/screenshots /tmp
+NoNewPrivileges=true
+
+# Memory limit: kill worker if it exceeds 4GB (3 concurrent Playwright sessions)
+MemoryMax=4G
+MemoryHigh=3G
+
+[Install]
+WantedBy=multi-user.target

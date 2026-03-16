@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sat-scrapper-core"
+version = "1.0.0"
+description = "Librería reutilizable para descarga masiva de CFDIs del SAT usando FIEL (e.firma)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Fernando Arizpe"}]
+
+dependencies = [
+    "playwright>=1.50",
+    "playwright-stealth>=2.0",
+    "lxml>=5.0",
+    "cryptography>=42.0",
+    "click>=8.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+django = ["djangorestframework>=3.14"]
+
+[project.scripts]
+sat-scrapper = "sat_scrapper_core.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["sat_scrapper_core*"]

@@ -1,0 +1,77 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}API Keys{% endblock %}
+{% block page_title %}API Keys{% endblock %}
+{% block page_subtitle %}Llaves de acceso para integrar con tus sistemas{% endblock %}
+
+{% block content %}
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Mis Keys</h3>
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">Nombre</th>
+                <th class="pb-3 font-semibold">Key</th>
+                <th class="pb-3 font-semibold">Empresas</th>
+                <th class="pb-3 font-semibold">Permisos</th>
+                <th class="pb-3 font-semibold">Estado</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for k in api_keys %}
+            <tr>
+                <td class="py-3 text-white font-medium">{{ k.nombre }}</td>
+                <td class="py-3 font-mono text-xs text-gray-500">{{ k.key|truncatechars:16 }}…</td>
+                <td class="py-3 text-xs">
+                    {% for e in k.empresas.all %}<span class="badge-info px-1.5 py-0.5 rounded text-[10px] mr-1">{{ e.rfc }}</span>{% empty %}<span class="text-gray-600">Ninguna</span>{% endfor %}
+                </td>
+                <td class="py-3 text-xs">
+                    {% if k.puede_leer %}<span class="badge-success px-1.5 py-0.5 rounded text-[10px] mr-1">Leer</span>{% endif %}
+                    {% if k.puede_trigger_descarga %}<span class="badge-warning px-1.5 py-0.5 rounded text-[10px]">Descargar</span>{% endif %}
+                </td>
+                <td class="py-3">
+                    {% if k.activa %}<span class="badge-success px-2 py-0.5 rounded-full text-xs">Activa</span>{% else %}<span class="badge-error px-2 py-0.5 rounded-full text-xs">Revocada</span>{% endif %}
+                </td>
+                <td class="py-3 text-right">
+                    {% if k.activa %}
+                    <form method="post" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="revoke">
+                        <input type="hidden" name="key_id" value="{{ k.id }}">
+                        <button type="submit" class="text-red-400/60 hover:text-red-400 text-xs" onclick="return confirm('¿Revocar esta key?')">Revocar</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="py-8 text-center text-gray-600">No tienes API keys</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="glass rounded-xl p-5 max-w-lg">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Crear Nueva Key</h3>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Nombre</label>
+            <input type="text" name="nombre" required placeholder="Ej: Mi App"
+                class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Empresas</label>
+            <select name="empresas" multiple class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-sm" size="3">
+                {% for e in empresas %}<option value="{{ e.id }}">{{ e.rfc }} — {{ e.nombre }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" name="puede_leer" checked class="rounded border-gray-600 bg-white/5 text-indigo-500"> Leer</label>
+            <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" name="puede_trigger_descarga" class="rounded border-gray-600 bg-white/5 text-indigo-500"> Descargar</label>
+        </div>
+        <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm text-white font-medium">🔑 Crear Key</button>
+    </form>
+</div>
+{% endblock %}

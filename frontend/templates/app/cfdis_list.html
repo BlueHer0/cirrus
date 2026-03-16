@@ -1,0 +1,126 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}CFDIs{% endblock %}
+{% block page_title %}Mis CFDIs{% endblock %}
+{% block page_subtitle %}{{ total_cfdis }} comprobantes{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="glass rounded-xl p-4 mb-4">
+    <form method="get" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 items-end">
+        <!-- Search -->
+        <div class="col-span-2">
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Buscar</label>
+            <input type="text" name="q" value="{{ filters.q|default:'' }}" placeholder="Nombre emisor/receptor, RFC..."
+                class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Empresa</label>
+            <select name="empresa" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todas</option>
+                {% for e in empresas %}<option value="{{ e.id }}" {% if filters.empresa == e.id|slugify %}selected{% endif %}>{{ e.rfc }}</option>{% endfor %}
+                {% if unassigned_count %}<option value="__none__" {% if filters.empresa == "__none__" %}selected{% endif %}>Sin asignar ({{ unassigned_count }})</option>{% endif %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Año</label>
+            <select name="year" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todos</option>
+                {% for y in years %}<option value="{{ y }}" {% if filters.year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Mes</label>
+            <select name="month" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todos</option>
+                {% for m in months %}<option value="{{ m.0 }}" {% if filters.month == m.0 %}selected{% endif %}>{{ m.1 }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Dirección</label>
+            <select name="tipo" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todos</option>
+                <option value="recibido" {% if filters.tipo == "recibido" %}selected{% endif %}>Recibido</option>
+                <option value="emitido" {% if filters.tipo == "emitido" %}selected{% endif %}>Emitido</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Tipo Comp.</label>
+            <select name="tipo_comp" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">Todos</option>
+                <option value="I" {% if filters.tipo_comp == "I" %}selected{% endif %}>I — Ingreso</option>
+                <option value="E" {% if filters.tipo_comp == "E" %}selected{% endif %}>E — Egreso</option>
+                <option value="N" {% if filters.tipo_comp == "N" %}selected{% endif %}>N — Nómina</option>
+                <option value="P" {% if filters.tipo_comp == "P" %}selected{% endif %}>P — Pago</option>
+                <option value="T" {% if filters.tipo_comp == "T" %}selected{% endif %}>T — Traslado</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">RFC Contraparte</label>
+            <input type="text" name="rfc_contra" value="{{ filters.rfc_contra|default:'' }}" placeholder="RFC..."
+                class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Monto Mín</label>
+            <input type="number" name="monto_min" value="{{ filters.monto_min|default:'' }}" step="0.01" placeholder="$0"
+                class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+        </div>
+        <div>
+            <label class="block text-[11px] text-gray-500 uppercase mb-1">Monto Máx</label>
+            <input type="number" name="monto_max" value="{{ filters.monto_max|default:'' }}" step="0.01" placeholder="$999,999"
+                class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+        </div>
+        <div class="flex gap-2 items-end">
+            <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">Filtrar</button>
+            <a href="{% url 'app:cfdis' %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">Limpiar</a>
+        </div>
+    </form>
+</div>
+
+<!-- Results Table -->
+<div class="glass rounded-xl p-5">
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">UUID</th>
+                <th class="pb-3 font-semibold">Fecha</th>
+                <th class="pb-3 font-semibold">Emisor</th>
+                <th class="pb-3 font-semibold">Receptor</th>
+                <th class="pb-3 font-semibold">Tipo</th>
+                <th class="pb-3 font-semibold text-right">Total</th>
+                <th class="pb-3 font-semibold text-right"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cfdis %}
+            <tr>
+                <td class="py-2.5 font-mono text-xs text-indigo-300">{{ c.uuid|truncatechars:13 }}</td>
+                <td class="py-2.5 text-gray-400 text-xs">{{ c.fecha|date:"d/m/Y" }}</td>
+                <td class="py-2.5 text-gray-300 text-xs" title="{{ c.nombre_emisor }}">{{ c.rfc_emisor }}</td>
+                <td class="py-2.5 text-gray-300 text-xs" title="{{ c.nombre_receptor }}">{{ c.rfc_receptor }}</td>
+                <td class="py-2.5"><span class="badge-info px-1.5 py-0.5 rounded text-[10px]">{{ c.tipo_comprobante }}</span></td>
+                <td class="py-2.5 text-right text-white font-medium">${{ c.total|floatformat:2 }}</td>
+                <td class="py-2.5 text-right whitespace-nowrap">
+                    <a href="{% url 'app:cfdi_pdf' c.uuid %}" target="_blank" class="text-indigo-400 hover:text-indigo-300 text-xs mr-1" title="PDF">📄</a>
+                    <a href="{% url 'app:cfdi_xml' c.uuid %}" class="text-gray-400 hover:text-gray-300 text-xs" title="XML">📋</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="py-8 text-center text-gray-600">
+                {% if filters %}Sin resultados con estos filtros{% else %}Aún no tienes CFDIs. <a href="{% url 'app:descargas' %}" class="text-indigo-400">Descarga del SAT</a> o <a href="{% url 'app:upload' %}" class="text-indigo-400">sube XMLs</a>.{% endif %}
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if cfdis %}
+    <div class="mt-4 pt-3 border-t border-white/5 flex justify-between items-center text-xs text-gray-500">
+        <span>{{ total_cfdis }} resultados — Página {{ page }} de {{ total_pages }}</span>
+        <div class="flex gap-2">
+            {% if has_prev %}<a href="?page={{ page|add:"-1" }}{% for k, v in filters.items %}&{{ k }}={{ v }}{% endfor %}" class="btn-ghost px-3 py-1 rounded-lg text-xs">← Anterior</a>{% endif %}
+            {% if has_next %}<a href="?page={{ page|add:"1" }}{% for k, v in filters.items %}&{{ k }}={{ v }}{% endfor %}" class="btn-ghost px-3 py-1 rounded-lg text-xs">Siguiente →</a>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

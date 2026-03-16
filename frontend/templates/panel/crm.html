@@ -1,0 +1,97 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}CRM — Leads{% endblock %}
+{% block page_title %}CRM{% endblock %}
+{% block page_subtitle %}Leads capturados del conversor público{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #6366f1;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total leads</div>
+        <div class="text-2xl font-bold text-white">{{ stats.total_leads }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #8b5cf6;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Esta semana</div>
+        <div class="text-2xl font-bold text-white">{{ stats.leads_semana }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #06b6d4;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Conversiones totales</div>
+        <div class="text-2xl font-bold text-white">{{ stats.total_conversiones }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #f59e0b;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">No contactados</div>
+        <div class="text-2xl font-bold text-white">{{ stats.no_contactados }}</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="glass rounded-xl p-4 mb-4">
+    <form method="get" class="flex flex-wrap items-center gap-3">
+        <input type="text" name="q" value="{{ filters.q }}" placeholder="🔍 Buscar email…"
+               class="px-3 py-2 rounded-lg text-sm text-white placeholder-gray-500 bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent w-64">
+        <select name="contactado" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Contactado: Todos</option>
+            <option value="si" {% if filters.contactado == "si" %}selected{% endif %}>Sí contactados</option>
+            <option value="no" {% if filters.contactado == "no" %}selected{% endif %}>No contactados</option>
+        </select>
+        <select name="cliente" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Cliente: Todos</option>
+            <option value="si" {% if filters.cliente == "si" %}selected{% endif %}>Sí clientes</option>
+            <option value="no" {% if filters.cliente == "no" %}selected{% endif %}>No clientes</option>
+        </select>
+        <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">Filtrar</button>
+        {% if filters.q or filters.contactado or filters.cliente %}
+        <a href="{% url 'panel:crm' %}" class="text-sm text-gray-500 hover:text-gray-300">✕ Limpiar</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Leads table -->
+<div class="glass rounded-xl overflow-hidden">
+    <table class="w-full glass-table">
+        <thead>
+            <tr class="text-xs uppercase text-gray-500 tracking-wider">
+                <th class="text-left px-4 py-3">Email</th>
+                <th class="text-center px-3 py-3">Conv.</th>
+                <th class="text-center px-3 py-3">PDFs</th>
+                <th class="text-center px-3 py-3">Excels</th>
+                <th class="text-left px-3 py-3">Primera vez</th>
+                <th class="text-left px-3 py-3">Última vez</th>
+                <th class="text-center px-3 py-3">Contactado</th>
+                <th class="text-center px-3 py-3">Cliente</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lead in leads %}
+            <tr class="cursor-pointer" onclick="window.location='{% url 'panel:crm_detail' lead.id %}'">
+                <td class="px-4 py-3 text-sm text-white font-medium">{{ lead.email }}</td>
+                <td class="px-3 py-3 text-sm text-center text-gray-300">{{ lead.conversiones }}</td>
+                <td class="px-3 py-3 text-sm text-center text-gray-400">{{ lead.total_pdfs }}</td>
+                <td class="px-3 py-3 text-sm text-center text-gray-400">{{ lead.total_excels }}</td>
+                <td class="px-3 py-3 text-xs text-gray-500">{{ lead.primera_conversion|date:"d/m/Y H:i" }}</td>
+                <td class="px-3 py-3 text-xs text-gray-500">{{ lead.ultima_conversion|date:"d/m/Y H:i" }}</td>
+                <td class="px-3 py-3 text-center">
+                    {% if lead.contactado %}
+                    <span class="badge-success px-2 py-0.5 rounded-full text-[11px]">Sí</span>
+                    {% else %}
+                    <span class="badge-warning px-2 py-0.5 rounded-full text-[11px]">No</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-3 text-center">
+                    {% if lead.es_cliente %}
+                    <span class="badge-success px-2 py-0.5 rounded-full text-[11px]">Sí</span>
+                    {% else %}
+                    <span class="text-gray-600 text-[11px]">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="px-4 py-8 text-center text-gray-600 text-sm">No hay leads todavía</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cirrus — Plataforma de CFDIs del SAT</title>
+    <meta name="description" content="Cirrus automatiza la descarga, almacenamiento y consulta de CFDIs del SAT. Convierte XML a PDF y Excel gratis.">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+
+        .bg-dark {
+            background: #06080f;
+            background-image:
+                radial-gradient(ellipse 100% 60% at 50% 0%, rgba(99,102,241,0.12), transparent 70%),
+                radial-gradient(ellipse 60% 50% at 80% 80%, rgba(139,92,246,0.06), transparent),
+                radial-gradient(ellipse 50% 40% at 10% 60%, rgba(59,130,246,0.05), transparent);
+        }
+
+        .glass-hero {
+            background: rgba(15, 17, 26, 0.60);
+            backdrop-filter: blur(30px) saturate(160%);
+            -webkit-backdrop-filter: blur(30px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .glass-card {
+            background: rgba(15, 17, 26, 0.70);
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: rgba(99, 102, 241, 0.20);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.08);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #a5b4fc, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .gradient-text-warm {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b, #ef4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .btn-glow {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            box-shadow: 0 4px 15px rgba(99,102,241,0.25);
+            transition: all 0.3s;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 6px 25px rgba(99,102,241,0.40);
+            transform: translateY(-1px);
+        }
+
+        .feature-icon {
+            width: 48px; height: 48px;
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+        .float-anim { animation: float 4s ease-in-out infinite; }
+
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fade-up 0.8s ease-out forwards; }
+        .fade-up-delay-1 { animation-delay: 0.15s; opacity: 0; }
+        .fade-up-delay-2 { animation-delay: 0.3s; opacity: 0; }
+        .fade-up-delay-3 { animation-delay: 0.45s; opacity: 0; }
+
+        /* Upload zone */
+        .drop-zone {
+            border: 2px dashed rgba(99,102,241,0.25);
+            transition: all 0.3s;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: rgba(99,102,241,0.50);
+            background: rgba(99,102,241,0.05);
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-dark text-gray-300 antialiased">
+
+    <!-- ═══ NAVBAR ═══ -->
+    <nav class="fixed top-0 w-full z-50" style="background: rgba(6,8,15,0.80); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <a href="/" class="flex items-center gap-2">
+                <img src="{{ logo_b64 }}" alt="Cirrus" style="max-height:36px;">
+            </a>
+            <div class="flex items-center gap-6">
+                <a href="#features" class="text-sm text-gray-400 hover:text-white transition">Features</a>
+                <a href="#precios" class="text-sm text-gray-400 hover:text-white transition">Precios</a>
+                <a href="#converter" class="text-sm text-gray-400 hover:text-white transition">Conversor</a>
+                <a href="/app/login/" class="text-sm text-gray-400 hover:text-white transition">Iniciar Sesión</a>
+                <a href="/app/registro/" class="btn-glow px-4 py-2 rounded-lg text-sm text-white font-medium">Registrarse</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ═══ HERO ═══ -->
+    <section class="min-h-screen flex items-center pt-20">
+        <div class="max-w-6xl mx-auto px-6 text-center">
+            <div class="fade-up">
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6" style="background: rgba(99,102,241,0.12); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.15);">
+                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-400" style="animation: pulse 2s infinite;"></span>
+                    Plataforma SaaS para CFDIs del SAT
+                </div>
+            </div>
+
+            <h1 class="text-5xl md:text-7xl font-black text-white leading-tight mb-6 fade-up fade-up-delay-1">
+                Tus CFDIs en la <span class="gradient-text">nube</span>,<br>
+                siempre <span class="gradient-text-warm">disponibles</span>.
+            </h1>
+
+            <p class="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed fade-up fade-up-delay-2">
+                Cirrus descarga automáticamente tus comprobantes fiscales del SAT,
+                los almacena de forma segura, y te permite consultarlos y exportarlos en cualquier momento.
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-4 justify-center fade-up fade-up-delay-3">
+                <a href="#converter" class="btn-glow px-8 py-3.5 rounded-xl text-white font-semibold text-sm">
+                    Convertir XML a PDF — Gratis
+                </a>
+                <a href="{% url 'panel:login' %}" class="px-8 py-3.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white border border-white/10 hover:border-white/20 transition">
+                    Acceder al Panel →
+                </a>
+            </div>
+
+            <!-- Stats strip -->
+            <div class="mt-20 grid grid-cols-3 gap-8 max-w-md mx-auto">
+                <div>
+                    <div class="text-2xl font-bold text-white">{{ stats.total_empresas|default:"∞" }}</div>
+                    <div class="text-xs text-gray-500 mt-0.5">Empresas</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white">{{ stats.total_cfdis|default:"∞" }}</div>
+                    <div class="text-xs text-gray-500 mt-0.5">CFDIs</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white">99.9%</div>
+                    <div class="text-xs text-gray-500 mt-0.5">Uptime</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ FEATURES ═══ -->
+    <section id="features" class="py-24">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Todo lo que necesitas</h2>
+                <p class="text-gray-500 max-w-lg mx-auto">Una plataforma completa para gestionar tus comprobantes fiscales digitales.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-5">
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-blue-500/20 to-blue-600/20 mb-4">📥</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Descarga Automática</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Descarga masiva de CFDIs desde el portal del SAT usando tu e.firma (FIEL). Sin intervención manual.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-purple-500/20 to-purple-600/20 mb-4">🔒</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Almacenamiento Seguro</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">XMLs encriptados en MinIO con redundancia. Tu FIEL se almacena con cifrado Fernet. Nunca en texto plano.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-green-500/20 to-green-600/20 mb-4">📄</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">PDF y Excel</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Genera PDFs profesionales con logo corporativo. Exporta en Excel o CSV con filtros avanzados.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-amber-500/20 to-amber-600/20 mb-4">🏢</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Multi-Empresa</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Gestiona múltiples RFCs desde un solo panel. Cada empresa con su FIEL, logo y configuración independiente.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-rose-500/20 to-rose-600/20 mb-4">🔑</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">API REST</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">API completa con autenticación por API Key. Integra Cirrus con tus sistemas contables y ERPs.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 mb-4">⏰</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Programación</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Programa descargas automáticas diarias, semanales o mensuales con Celery Beat.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ PRECIOS ═══ -->
+    <section id="precios" class="py-24">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Planes y Precios</h2>
+                <p class="text-gray-500 max-w-lg mx-auto">Elige el plan que se adapte a tu negocio. Todos incluyen descarga automática del SAT.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
+                {% for plan in planes %}
+                <div class="glass-card rounded-2xl p-6 flex flex-col {% if plan.destacado %}ring-2 ring-indigo-500/50{% endif %}" style="{% if plan.destacado %}box-shadow: 0 0 30px rgba(99,102,241,0.15);{% endif %}">
+                    {% if plan.destacado %}
+                    <div class="inline-flex self-start items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold mb-3" style="background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.2);">
+                        ⭐ Recomendado
+                    </div>
+                    {% endif %}
+
+                    <h3 class="text-lg font-bold text-white mb-1">{{ plan.nombre }}</h3>
+
+                    <div class="mb-4">
+                        {% if plan.precio_mensual == 0 %}
+                        <span class="text-3xl font-black text-white">Gratis</span>
+                        <div class="text-[10px] text-amber-400 mt-1">Solo para los primeros 100 registros</div>
+                        {% else %}
+                        <span class="text-3xl font-black text-white">${{ plan.precio_mensual|floatformat:0 }}</span>
+                        <span class="text-sm text-gray-500">/mes</span>
+                        {% endif %}
+                    </div>
+
+                    <ul class="space-y-2.5 text-sm text-gray-400 mb-6 flex-1">
+                        <!-- Empresas -->
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            {{ plan.max_empresas }} empresa{{ plan.max_empresas|pluralize:"s" }}
+                        </li>
+                        <!-- Descargas -->
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            {% if plan.slug == 'free' %}1 descarga/mes (mes anterior completo){% elif plan.slug == 'basico' %}2 descargas/mes (día 1 y 15){% elif plan.slug == 'pro' %}4 descargas/mes (1 por semana){% elif plan.slug == 'enterprise' %}12 descargas/mes (cada ~2.5 días){% endif %}
+                        </li>
+                        <!-- CFDIs visibles -->
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            {% if plan.slug == 'basico' %}{{ plan.max_cfdis_visibles|floatformat:0 }} CFDIs visibles (entre todas las empresas){% else %}{{ plan.max_cfdis_visibles|floatformat:0 }} CFDIs visibles{% endif %}
+                        </li>
+                        <!-- PDFs -->
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            PDFs ilimitados (con publicidad Cirrus)
+                        </li>
+                        <!-- Logo en PDFs (solo Pro y Enterprise) -->
+                        {% if plan.logo_en_pdf %}
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            Tu logotipo en los PDFs
+                        </li>
+                        {% endif %}
+                        <!-- API REST (solo Pro y Enterprise) -->
+                        {% if plan.api_rest %}
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            API REST completa
+                        </li>
+                        {% endif %}
+                        <!-- CFDI extra (solo planes de pago) -->
+                        {% if plan.precio_mensual > 0 %}
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            CFDI extra: $0.25 c/u
+                        </li>
+                        {% endif %}
+                        <!-- Historial -->
+                        <li class="flex items-start gap-2">
+                            <span class="text-green-400 mt-0.5">✓</span>
+                            Historial desde enero {{ plan.historial_desde_year }}
+                        </li>
+                        <!-- Prioridad baja (solo free) -->
+                        {% if plan.slug == 'free' %}
+                        <li class="flex items-start gap-2">
+                            <span class="text-gray-600 mt-0.5">◦</span>
+                            <span class="text-gray-600">Prioridad: baja</span>
+                        </li>
+                        {% endif %}
+                    </ul>
+
+                    <a href="/app/registro/"
+                       class="block text-center py-2.5 rounded-xl text-sm font-semibold transition
+                              {% if plan.destacado %}btn-glow text-white{% else %}text-gray-300 hover:text-white{% endif %}"
+                       {% if not plan.destacado %}style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10);"{% endif %}>
+                        {% if plan.precio_mensual == 0 %}Empieza gratis{% else %}Elegir {{ plan.nombre }}{% endif %}
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Notas -->
+            <div class="text-center space-y-1 mb-8">
+                <p class="text-xs text-gray-600">Todos los PDFs incluyen publicidad de cirrus.nubex.me</p>
+                <p class="text-xs text-gray-600">Solo planes Profesional y Enterprise permiten agregar tu logotipo</p>
+                <p class="text-xs text-gray-600">API REST disponible desde plan Profesional</p>
+            </div>
+
+            <!-- Excedentes -->
+            <div class="glass-card rounded-2xl p-6 max-w-2xl mx-auto">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 text-center">¿Necesitas más? Paga solo lo que uses</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-white font-semibold">$29</div>
+                        <div class="text-gray-500 text-xs">Descarga extra</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-white font-semibold">$0.25</div>
+                        <div class="text-gray-500 text-xs">CFDI extra c/u</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-white font-semibold">$49</div>
+                        <div class="text-gray-500 text-xs">RFC extra/mes</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-white font-semibold">$15</div>
+                        <div class="text-gray-500 text-xs">Mes histórico</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ CONVERTER ═══ -->
+    <section id="converter" class="py-24">
+        <div class="max-w-4xl mx-auto px-6">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Conversor Gratuito</h2>
+                <p class="text-gray-500">Convierte tu XML de CFDI a PDF o Excel. Sin registro, sin límites.</p>
+            </div>
+
+            <div class="glass-hero rounded-2xl p-8">
+                <!-- Tab selector -->
+                <div class="flex gap-2 mb-6">
+                    <button onclick="setTab('pdf')" id="tab-pdf" class="px-5 py-2 rounded-lg text-sm font-medium transition btn-glow text-white">XML → PDF</button>
+                    <button onclick="setTab('excel')" id="tab-excel" class="px-5 py-2 rounded-lg text-sm font-medium transition text-gray-400 hover:text-white" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);">XML → Excel</button>
+                </div>
+
+                <!-- Upload zone -->
+                <!-- Upload zone -->
+                <div id="drop-zone" class="drop-zone rounded-xl p-12 text-center cursor-pointer" onclick="document.getElementById('xml-input').click()">
+                    <div id="upload-icon" class="float-anim mb-4">
+                        <span class="text-5xl">📄</span>
+                    </div>
+                    <p class="text-lg text-gray-300 font-medium mb-1" id="upload-text">Arrastra tu XML aquí o haz clic para seleccionar</p>
+                    <p class="text-sm text-gray-600">CFDI versión 3.3 o 4.0</p>
+                    <input type="file" id="xml-input" accept=".xml" class="hidden" onchange="handleFile(this.files[0])">
+                </div>
+
+                <!-- Email form (hidden until file selected) -->
+                <div id="email-form" class="hidden mt-4">
+                    <div class="flex gap-3">
+                        <input type="email" id="email-input" placeholder="Tu email para recibir el archivo"
+                               class="flex-1 px-4 py-3 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);">
+                        <button onclick="sendConversion()" id="send-btn"
+                                class="btn-glow px-6 py-3 rounded-lg text-sm text-white font-semibold whitespace-nowrap">
+                            ✉️ Enviar
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-600 mt-2">Te enviaremos el archivo convertido a tu correo.</p>
+                </div>
+
+                <!-- Progress / Result -->
+                <div id="status-bar" class="hidden mt-4">
+                    <div id="progress-wrapper" class="hidden">
+                        <div class="flex items-center gap-3 text-sm text-gray-300">
+                            <svg class="animate-spin w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <span id="progress-text">Convirtiendo y enviando…</span>
+                        </div>
+                    </div>
+                    <div id="result-wrapper" class="hidden">
+                        <div class="px-4 py-4 rounded-lg text-center" style="background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.15);">
+                            <span class="text-base text-green-400 font-medium" id="result-text">✉️ ¡Listo!</span>
+                        </div>
+                    </div>
+                    <div id="error-wrapper" class="hidden">
+                        <div class="px-4 py-3 rounded-lg" style="background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.15);">
+                            <span class="text-sm text-red-400" id="error-text">Error</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="py-10 border-t border-white/5">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <img src="{{ logo_b64 }}" alt="Cirrus" style="max-height:24px;">
+                <span class="text-sm text-gray-500">— Nubex © {{ year }}</span>
+            </div>
+            <div class="flex gap-6 text-sm text-gray-600">
+                <a href="/api/v1/docs" class="hover:text-gray-400 transition">API Docs</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    let currentTab = 'pdf';
+    let selectedFile = null;
+
+    function setTab(tab) {
+        currentTab = tab;
+        const pdfBtn = document.getElementById('tab-pdf');
+        const xlBtn = document.getElementById('tab-excel');
+        const active = 'btn-glow text-white';
+        const inactive = 'text-gray-400 hover:text-white';
+
+        if (tab === 'pdf') {
+            pdfBtn.className = `px-5 py-2 rounded-lg text-sm font-medium transition ${active}`;
+            pdfBtn.style = '';
+            xlBtn.className = `px-5 py-2 rounded-lg text-sm font-medium transition ${inactive}`;
+            xlBtn.style = 'background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);';
+        } else {
+            xlBtn.className = `px-5 py-2 rounded-lg text-sm font-medium transition ${active}`;
+            xlBtn.style = '';
+            pdfBtn.className = `px-5 py-2 rounded-lg text-sm font-medium transition ${inactive}`;
+            pdfBtn.style = 'background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);';
+        }
+    }
+
+    // Drag & drop
+    const dz = document.getElementById('drop-zone');
+    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dragover'); }));
+    ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dragover'); }));
+    dz.addEventListener('drop', e => {
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+    });
+
+    function handleFile(file) {
+        if (!file || !file.name.toLowerCase().endsWith('.xml')) {
+            showError('Selecciona un archivo .xml válido');
+            return;
+        }
+
+        selectedFile = file;
+
+        // Update upload text to show filename
+        document.getElementById('upload-text').textContent = file.name;
+
+        // Show email form
+        document.getElementById('email-form').classList.remove('hidden');
+
+        // Hide any previous status
+        document.getElementById('status-bar').classList.add('hidden');
+
+        // Focus email input
+        document.getElementById('email-input').focus();
+    }
+
+    async function sendConversion() {
+        const emailInput = document.getElementById('email-input');
+        const email = emailInput.value.trim();
+
+        if (!email || !email.includes('@') || !email.includes('.')) {
+            showError('Ingresa un email válido');
+            return;
+        }
+
+        if (!selectedFile) {
+            showError('Selecciona un archivo XML primero');
+            return;
+        }
+
+        // Show progress
+        const statusBar = document.getElementById('status-bar');
+        const progressW = document.getElementById('progress-wrapper');
+        const resultW = document.getElementById('result-wrapper');
+        const errorW = document.getElementById('error-wrapper');
+        const sendBtn = document.getElementById('send-btn');
+
+        statusBar.classList.remove('hidden');
+        progressW.classList.remove('hidden');
+        resultW.classList.add('hidden');
+        errorW.classList.add('hidden');
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Enviando…';
+
+        const formData = new FormData();
+        formData.append('xml_file', selectedFile);
+        formData.append('email', email);
+        formData.append('format', currentTab);
+
+        try {
+            const resp = await fetch('/api/v1/cfdis/convert/send/', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const data = await resp.json().catch(() => ({}));
+
+            if (!resp.ok) {
+                throw new Error(data.error || `Error ${resp.status}`);
+            }
+
+            // Success
+            progressW.classList.add('hidden');
+            resultW.classList.remove('hidden');
+            document.getElementById('result-text').textContent =
+                `✉️ ¡Listo! Tu CFDI convertido fue enviado a ${email}`;
+
+            // Hide email form
+            document.getElementById('email-form').classList.add('hidden');
+
+            // Reset for next conversion
+            selectedFile = null;
+            emailInput.value = '';
+
+        } catch (err) {
+            showError(err.message || 'Error al convertir');
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = '✉️ Enviar';
+        }
+    }
+
+    function showError(msg) {
+        const statusBar = document.getElementById('status-bar');
+        const progressW = document.getElementById('progress-wrapper');
+        const errorW = document.getElementById('error-wrapper');
+        const resultW = document.getElementById('result-wrapper');
+
+        statusBar.classList.remove('hidden');
+        progressW.classList.add('hidden');
+        resultW.classList.add('hidden');
+        errorW.classList.remove('hidden');
+        document.getElementById('error-text').textContent = '❌ ' + msg;
+    }
+    </script>
+
+</body>
+</html>

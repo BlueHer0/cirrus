@@ -1,0 +1,313 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}{{ empresa.rfc }}{% endblock %}
+{% block page_title %}{{ empresa.nombre }}{% endblock %}
+{% block page_subtitle %}{{ empresa.rfc }}{% endblock %}
+
+{% block page_actions %}
+{% if empresa.fiel_status == 'verificando' %}
+<span class="px-4 py-2 rounded-lg text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 animate-pulse">⏳ Verificando FIEL...</span>
+{% elif empresa.fiel_status == 'rechazada' %}
+<span class="px-4 py-2 rounded-lg text-sm text-red-400 bg-red-500/10 border border-red-500/20">❌ FIEL rechazada</span>
+{% endif %}
+<button onclick="document.getElementById('download-form').classList.toggle('hidden')" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">📥 Descargar CFDIs</button>
+<button onclick="document.getElementById('edit-form').classList.toggle('hidden')" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">✏️ Editar</button>
+{% endblock %}
+
+{% block content %}
+<!-- Messages -->
+{% if messages %}
+<div class="mb-4 space-y-2">
+    {% for msg in messages %}
+    <div class="px-4 py-2.5 rounded-lg text-sm
+        {% if msg.tags == 'success' %}bg-green-500/10 text-green-400 border border-green-500/20
+        {% elif msg.tags == 'error' %}bg-red-500/10 text-red-400 border border-red-500/20
+        {% elif msg.tags == 'warning' %}bg-amber-500/10 text-amber-400 border border-amber-500/20
+        {% else %}bg-indigo-500/10 text-indigo-300 border border-indigo-500/20{% endif %}">
+        {{ msg }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Edit Form (hidden by default) -->
+<div id="edit-form" class="hidden glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Editar Empresa</h3>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Nombre</label>
+                <input type="text" name="nombre" value="{{ empresa.nombre }}" required
+                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Notas</label>
+                <input type="text" name="notas" value="{{ empresa.notas }}"
+                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-sm">
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 text-sm text-gray-300">
+                <input type="checkbox" name="descarga_activa" {% if empresa.descarga_activa %}checked{% endif %}
+                    class="rounded border-gray-600 bg-white/5 text-indigo-500 focus:ring-indigo-500/30">
+                Descarga automática activa
+            </label>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm text-white font-medium">Guardar</button>
+            <button type="button" onclick="document.getElementById('edit-form').classList.add('hidden')" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">Cancelar</button>
+        </div>
+    </form>
+    <div class="mt-4 pt-4 border-t border-white/5">
+        <form method="post" onsubmit="return confirm('¿Estás seguro? Esta acción eliminará todos los CFDIs de esta empresa.')">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <button type="submit" class="text-red-400/60 hover:text-red-400 text-xs">🗑️ Eliminar empresa</button>
+        </form>
+    </div>
+</div>
+
+<!-- Download Form (hidden by default) -->
+<div id="download-form" class="hidden glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Descargar CFDIs del SAT</h3>
+    <form method="post" action="{% url 'panel:empresa_descargar' empresa.id %}" class="space-y-4">
+        {% csrf_token %}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Año</label>
+                <select name="year" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                    {% for y in years %}
+                    <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Mes Inicio</label>
+                <select name="month_start" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                    {% for m in months %}
+                    <option value="{{ m.0 }}" {% if m.0 == current_month %}selected{% endif %}>{{ m.1 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Mes Fin</label>
+                <select name="month_end" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+                    {% for m in months %}
+                    <option value="{{ m.0 }}" {% if m.0 == current_month %}selected{% endif %}>{{ m.1 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Tipos</label>
+                <div class="flex flex-col gap-1.5 mt-1">
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" name="tipos" value="recibidos" checked class="rounded border-gray-600 bg-white/5 text-indigo-500"> Recibidos
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" name="tipos" value="emitidos" checked class="rounded border-gray-600 bg-white/5 text-indigo-500"> Emitidos
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm text-white font-medium">📥 Iniciar Descarga</button>
+            <button type="button" onclick="document.getElementById('download-form').classList.add('hidden')" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">Cancelar</button>
+        </div>
+    </form>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <!-- Info Card -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Información</h3>
+        <div class="space-y-3">
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">RFC</div>
+                <div class="text-white font-mono font-semibold">{{ empresa.rfc }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Nombre</div>
+                <div class="text-white">{{ empresa.nombre }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Descarga</div>
+                <div>
+                    {% if empresa.descarga_activa %}
+                    <span class="text-xs badge-success px-2 py-0.5 rounded-full">Activa</span>
+                    {% else %}
+                    <span class="text-xs badge-error px-2 py-0.5 rounded-full">Inactiva</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Notas</div>
+                <div class="text-gray-400 text-sm">{{ empresa.notas|default:"—" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIEL Card -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">FIEL</h3>
+        <div class="space-y-3">
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Estado</div>
+                {% if empresa.fiel_verificada %}
+                <span class="inline-flex items-center gap-1.5 badge-success px-2.5 py-1 rounded-full text-xs">
+                    <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span> Verificada
+                </span>
+                {% elif empresa.fiel_cer_key %}
+                <span class="badge-warning px-2.5 py-1 rounded-full text-xs">Subida — sin verificar</span>
+                {% else %}
+                <span class="badge-error px-2.5 py-1 rounded-full text-xs">No configurada</span>
+                {% endif %}
+            </div>
+            {% if empresa.fiel_verificada_at %}
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Verificada</div>
+                <div class="text-gray-400 text-sm">{{ empresa.fiel_verificada_at|timesince }} atrás</div>
+            </div>
+            {% endif %}
+            {% if empresa.fiel_expira %}
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Expira</div>
+                <div class="text-gray-400 text-sm">{{ empresa.fiel_expira|date:"d/M/Y" }}</div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/5">
+            <a href="{% url 'panel:empresa_fiel' empresa.id %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-300 block text-center">
+                {% if empresa.fiel_cer_key %}🔄 Actualizar FIEL{% else %}📤 Subir FIEL{% endif %}
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Card -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Estadísticas</h3>
+        <div class="space-y-3">
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Total CFDIs</span>
+                <span class="text-white font-semibold">{{ cfdi_count }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Recibidos</span>
+                <span class="text-blue-400 font-semibold">{{ recibidos }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Emitidos</span>
+                <span class="text-purple-400 font-semibold">{{ emitidos }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Monto Total</span>
+                <span class="text-green-400 font-semibold">${{ monto_total|floatformat:2|default:"0" }}</span>
+            </div>
+            {% if empresa.ultimo_scrape %}
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Último scrape</span>
+                <span class="text-gray-400 text-sm">{{ empresa.ultimo_scrape|timesince }} atrás</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Logo Upload -->
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Logo para PDFs</h3>
+    <form method="post" action="{% url 'panel:empresa_logo' empresa.id %}" enctype="multipart/form-data" class="flex items-center gap-4">
+        {% csrf_token %}
+        {% if empresa.logo_minio_key %}
+        <span class="text-xs text-green-400">✅ Logo configurado</span>
+        {% endif %}
+        <input type="file" name="logo" accept="image/*" class="text-sm text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-500/20 file:text-indigo-300 hover:file:bg-indigo-500/30 cursor-pointer">
+        <button type="submit" class="btn-primary px-4 py-1.5 rounded-lg text-xs text-white">Subir</button>
+    </form>
+</div>
+
+<!-- Sync Status -->
+{% if empresa.fiel_verificada %}
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Sincronización</h3>
+    {% if empresa.sync_desde_year %}
+    <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+            <span class="text-gray-500">Desde</span>
+            <span class="text-white">{{ empresa.sync_desde_month|stringformat:"02d" }}/{{ empresa.sync_desde_year }}</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-gray-500">Estado</span>
+            {% if empresa.sync_completada %}
+            <span class="text-green-400">✓ Completada</span>
+            {% elif empresa.sync_activa %}
+            <span class="text-indigo-400">● Activa</span>
+            {% else %}
+            <span class="text-yellow-400">⏸ Pausada</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="mt-3 flex gap-2">
+        <form method="post" action="{% url 'panel:toggle_sync' empresa.id %}">
+            {% csrf_token %}
+            {% if empresa.sync_activa %}
+            <button type="submit" class="btn-ghost px-3 py-1.5 rounded-lg text-xs text-yellow-400 border border-yellow-500/30">⏸ Pausar</button>
+            {% else %}
+            <button type="submit" class="btn-ghost px-3 py-1.5 rounded-lg text-xs text-green-400 border border-green-500/30">▶ Reanudar</button>
+            {% endif %}
+        </form>
+        <a href="{% url 'panel:empresa_sync' empresa.id %}" class="btn-ghost px-3 py-1.5 rounded-lg text-xs text-gray-400 border border-white/10">⚙ Cambiar fecha</a>
+    </div>
+    {% else %}
+    <a href="{% url 'panel:empresa_sync' empresa.id %}" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium block text-center">
+        🔄 Configurar sincronización automática
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Recent CFDIs -->
+<div class="glass rounded-xl p-5">
+    <div class="flex justify-between items-center mb-3">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Últimos 20 CFDIs</h3>
+        <a href="{% url 'panel:cfdis' %}?rfc={{ empresa.rfc }}" class="text-xs text-indigo-400 hover:text-indigo-300">Ver todos →</a>
+    </div>
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">UUID</th>
+                <th class="pb-3 font-semibold">Fecha</th>
+                <th class="pb-3 font-semibold">Emisor</th>
+                <th class="pb-3 font-semibold">Receptor</th>
+                <th class="pb-3 font-semibold">Tipo</th>
+                <th class="pb-3 font-semibold text-right">Total</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cfdis %}
+            <tr>
+                <td class="py-2.5">
+                    <a href="{% url 'panel:cfdi_detail' c.uuid %}" class="font-mono text-xs text-indigo-300 hover:text-indigo-200">{{ c.uuid|truncatechars:13 }}</a>
+                </td>
+                <td class="py-2.5 text-gray-400">{{ c.fecha|date:"d/m/Y" }}</td>
+                <td class="py-2.5 text-gray-300">{{ c.rfc_emisor }}</td>
+                <td class="py-2.5 text-gray-300">{{ c.rfc_receptor }}</td>
+                <td class="py-2.5">
+                    <span class="badge-info px-2 py-0.5 rounded text-[11px]">{{ c.tipo_comprobante }}</span>
+                </td>
+                <td class="py-2.5 text-right text-white font-medium">${{ c.total|floatformat:2 }}</td>
+                <td class="py-2.5 text-right">
+                    <a href="{% url 'panel:cfdi_pdf' c.uuid %}" class="text-indigo-400 hover:text-indigo-300 text-xs mr-2" title="PDF">📄</a>
+                    <a href="{% url 'panel:cfdi_xml' c.uuid %}" class="text-gray-400 hover:text-gray-300 text-xs mr-2" title="XML">📋</a>
+                    <a href="{% url 'panel:cfdi_excel' c.uuid %}" class="text-green-400 hover:text-green-300 text-xs" title="Excel">📊</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="py-6 text-center text-gray-600">Sin CFDIs</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

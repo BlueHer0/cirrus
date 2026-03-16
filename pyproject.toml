@@ -1,0 +1,5 @@
+[project]
+name = "cirrus"
+version = "0.1.0"
+description = "Multi-tenant SaaS para descarga, almacenamiento y consulta de CFDIs del SAT"
+requires-python = ">=3.11"
