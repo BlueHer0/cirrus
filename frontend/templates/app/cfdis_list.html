@@ -145,7 +145,7 @@
         <tbody>
             {% for c in cfdis %}
             <tr>
-                <td class="py-2.5 font-mono text-xs text-indigo-300">{{ c.uuid|truncatechars:13 }}</td>
+                <td class="py-2.5 font-mono text-xs"><a href="{% url 'app:cfdi_detail' c.uuid %}" style="color: #a78bfa; text-decoration: none;">{{ c.uuid|truncatechars:13 }}</a></td>
                 <td class="py-2.5 text-gray-400 text-xs">{{ c.fecha|date:"d/m/Y" }}</td>
                 <td class="py-2.5 text-gray-300 text-xs" title="{{ c.nombre_emisor }}">{{ c.rfc_emisor }}</td>
                 <td class="py-2.5 text-gray-300 text-xs" title="{{ c.nombre_receptor }}">{{ c.rfc_receptor }}</td>

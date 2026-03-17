@@ -23,6 +23,7 @@ urlpatterns = [
     path("empresas/<uuid:empresa_id>/verificar/", views.app_empresa_verificar, name="empresa_verificar"),
     # CFDIs
     path("cfdis/", views.app_cfdis_list, name="cfdis"),
+    path("cfdis/<str:uuid>/", views.app_cfdi_detail, name="cfdi_detail"),
     path("cfdis/<uuid:cfdi_uuid>/pdf/", views.app_cfdi_pdf, name="cfdi_pdf"),
     path("cfdis/<uuid:cfdi_uuid>/xml/", views.app_cfdi_xml, name="cfdi_xml"),
 

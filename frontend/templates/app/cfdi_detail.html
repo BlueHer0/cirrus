@@ -1,0 +1,256 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}CFDI {{ cfdi.uuid }}{% endblock %}
+{% block page_title %}Detalle de CFDI{% endblock %}
+{% block page_subtitle %}{{ cfdi.uuid }}{% endblock %}
+
+{% block content %}
+<style>
+  .detail-card { background: rgba(30,30,50,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .detail-card h3 { font-size: 13px; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .detail-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .detail-label { font-size: 11px; color: #718096; }
+  .detail-value { font-size: 14px; color: #e2e8f0; font-weight: 500; margin-bottom: 4px; }
+  .detail-value.mono { font-family: 'SF Mono', 'Fira Code', monospace; color: #a78bfa; }
+  .detail-value.money { font-family: 'SF Mono', monospace; }
+  .concept-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .concept-table th { text-align: left; padding: 6px 8px; color: #718096; font-size: 10px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .concept-table td { padding: 6px 8px; color: #e2e8f0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .concept-table td.right { text-align: right; font-family: monospace; }
+</style>
+
+<!-- Header with UUID + type badge + action buttons -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span style="display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+          background: {{ tipo_color }}22; color: {{ tipo_color }}; border: 1px solid {{ tipo_color }}44;">
+      {{ cfdi.tipo_comprobante }} — {{ tipo_name }}
+    </span>
+    {% if cfdi.estado_sat == 'cancelado' %}
+    <span style="padding: 4px 10px; background: rgba(248,113,113,0.15); color: #f87171; border-radius: 6px; font-size: 11px;">Cancelado</span>
+    {% else %}
+    <span style="padding: 4px 10px; background: rgba(52,211,153,0.15); color: #34d399; border-radius: 6px; font-size: 11px;">Vigente</span>
+    {% endif %}
+  </div>
+  <div style="display: flex; gap: 8px;" class="no-print">
+    <a href="{% url 'app:cfdis' %}" style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: #a0aec0; text-decoration: none; font-size: 13px;">← Volver</a>
+    <a href="{% url 'app:cfdi_pdf' cfdi.uuid %}" target="_blank" style="padding: 8px 16px; border-radius: 8px; background: #6366f1; color: white; text-decoration: none; font-size: 13px;">📄 PDF</a>
+    <a href="{% url 'app:cfdi_xml' cfdi.uuid %}" style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: #a0aec0; text-decoration: none; font-size: 13px;">📥 XML</a>
+  </div>
+</div>
+
+<!-- Emisor -->
+<div class="detail-card">
+  <h3>Emisor</h3>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-label">RFC</div>
+      <div class="detail-value mono">{% if xml %}{{ xml.emisor.rfc }}{% else %}{{ cfdi.rfc_emisor }}{% endif %}</div>
+    </div>
+    <div>
+      <div class="detail-label">Razón Social</div>
+      <div class="detail-value">{% if xml %}{{ xml.emisor.nombre }}{% else %}{{ cfdi.nombre_emisor }}{% endif %}</div>
+    </div>
+    <div style="grid-column: span 2;">
+      <div class="detail-label">Régimen Fiscal</div>
+      <div class="detail-value">{% if xml %}{{ xml.emisor.regimen_fiscal }} — {{ xml.emisor.regimen_fiscal_desc }}{% else %}{{ cfdi.regimen_fiscal_emisor }}{% endif %}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Receptor -->
+<div class="detail-card">
+  <h3>Receptor</h3>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-label">RFC</div>
+      <div class="detail-value mono">{% if xml %}{{ xml.receptor.rfc }}{% else %}{{ cfdi.rfc_receptor }}{% endif %}</div>
+    </div>
+    <div>
+      <div class="detail-label">Razón Social</div>
+      <div class="detail-value">{% if xml %}{{ xml.receptor.nombre }}{% else %}{{ cfdi.nombre_receptor }}{% endif %}</div>
+    </div>
+    {% if xml %}
+    <div>
+      <div class="detail-label">Régimen Fiscal</div>
+      <div class="detail-value">{{ xml.receptor.regimen_fiscal_receptor }} — {{ xml.receptor.regimen_fiscal_receptor_desc }}</div>
+    </div>
+    <div>
+      <div class="detail-label">Uso CFDI</div>
+      <div class="detail-value">{{ xml.receptor.uso_cfdi }} — {{ xml.receptor.uso_cfdi_desc }}</div>
+    </div>
+    <div>
+      <div class="detail-label">Domicilio Fiscal</div>
+      <div class="detail-value">{{ xml.receptor.domicilio_fiscal|default:"-" }}</div>
+    </div>
+    {% else %}
+    <div>
+      <div class="detail-label">Uso CFDI</div>
+      <div class="detail-value">{{ cfdi.uso_cfdi }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Montos -->
+<div class="detail-card">
+  <h3>Montos</h3>
+  <div class="detail-grid three">
+    <div>
+      <div class="detail-label">Subtotal</div>
+      <div class="detail-value money">${{ cfdi.subtotal|floatformat:2 }}</div>
+    </div>
+    {% if xml and xml.comprobante.descuento %}
+    <div>
+      <div class="detail-label">Descuento</div>
+      <div class="detail-value money" style="color: #f87171;">−${{ xml.comprobante.descuento|floatformat:2 }}</div>
+    </div>
+    {% endif %}
+    <div>
+      <div class="detail-label">IVA Trasladado</div>
+      <div class="detail-value money">${{ cfdi.total_impuestos_trasladados|floatformat:2 }}</div>
+    </div>
+    {% if cfdi.isr_retenido %}
+    <div>
+      <div class="detail-label">ISR Retenido</div>
+      <div class="detail-value money" style="color: #f87171;">−${{ cfdi.isr_retenido|floatformat:2 }}</div>
+    </div>
+    {% endif %}
+    {% if cfdi.iva_retenido %}
+    <div>
+      <div class="detail-label">IVA Retenido</div>
+      <div class="detail-value money" style="color: #f87171;">−${{ cfdi.iva_retenido|floatformat:2 }}</div>
+    </div>
+    {% endif %}
+    <div>
+      <div class="detail-label">TOTAL</div>
+      <div class="detail-value money" style="font-size: 22px; {% if cfdi.tipo_comprobante == 'I' %}color: #34d399;{% elif cfdi.tipo_comprobante == 'E' %}color: #f87171;{% else %}color: #e2e8f0;{% endif %}">
+        ${{ cfdi.total|floatformat:2 }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Conceptos -->
+{% if xml and xml.conceptos %}
+<div class="detail-card">
+  <h3>Conceptos ({{ xml.conceptos|length }})</h3>
+  <div style="overflow-x: auto;">
+    <table class="concept-table">
+      <thead>
+        <tr>
+          <th>Clave SAT</th>
+          <th>Descripción</th>
+          <th style="text-align: center;">Cantidad</th>
+          <th style="text-align: right;">P. Unitario</th>
+          <th style="text-align: right;">Importe</th>
+          <th>Obj. Imp.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in xml.conceptos %}
+        <tr>
+          <td style="font-family: monospace; font-size: 11px; color: #818cf8;">{{ c.clave_prod_serv }}</td>
+          <td>{{ c.descripcion|truncatechars:80 }}</td>
+          <td class="right">{{ c.cantidad }}</td>
+          <td class="right">${{ c.valor_unitario|floatformat:2 }}</td>
+          <td class="right">${{ c.importe|floatformat:2 }}</td>
+          <td style="font-size: 11px; color: #718096;">{{ c.objeto_impuesto_desc|default:c.objeto_impuesto }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Pago -->
+<div class="detail-card">
+  <h3>Datos de Pago</h3>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-label">Forma de Pago</div>
+      <div class="detail-value">{% if xml %}{{ xml.comprobante.forma_pago }} — {{ xml.comprobante.forma_pago_desc }}{% else %}{{ cfdi.forma_pago }}{% endif %}</div>
+    </div>
+    <div>
+      <div class="detail-label">Método de Pago</div>
+      <div class="detail-value">{% if xml %}{{ xml.comprobante.metodo_pago }} — {{ xml.comprobante.metodo_pago_desc }}{% else %}{{ cfdi.metodo_pago }}{% endif %}</div>
+    </div>
+    <div>
+      <div class="detail-label">Moneda</div>
+      <div class="detail-value">{{ cfdi.moneda }}</div>
+    </div>
+    {% if cfdi.tipo_cambio and cfdi.tipo_cambio != 1 %}
+    <div>
+      <div class="detail-label">Tipo Cambio</div>
+      <div class="detail-value">{{ cfdi.tipo_cambio }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Timbre -->
+{% if xml %}
+<div class="detail-card">
+  <h3>Timbre Fiscal Digital</h3>
+  <div style="font-size: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px;">
+    <div>
+      <span class="detail-label">UUID: </span>
+      <span style="color: #a78bfa; font-family: monospace; font-size: 11px;">{{ xml.timbre.uuid }}</span>
+    </div>
+    <div>
+      <span class="detail-label">Fecha timbrado: </span>
+      <span style="color: #e2e8f0;">{{ xml.timbre.fecha_timbrado|date:"d/m/Y H:i:s" }}</span>
+    </div>
+    <div>
+      <span class="detail-label">PAC: </span>
+      <span style="color: #e2e8f0;">{{ xml.timbre.rfc_prov_certif }}</span>
+    </div>
+    <div>
+      <span class="detail-label">No. Certificado SAT: </span>
+      <span style="color: #e2e8f0;">{{ xml.timbre.no_certificado_sat }}</span>
+    </div>
+    <div style="grid-column: span 2;">
+      <span class="detail-label">No. Certificado Emisor: </span>
+      <span style="color: #e2e8f0;">{{ xml.comprobante.no_certificado }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Metadata -->
+<div class="detail-card" style="opacity: 0.7;">
+  <h3>Metadata</h3>
+  <div class="detail-grid">
+    <div>
+      <div class="detail-label">Serie / Folio</div>
+      <div class="detail-value">{{ cfdi.serie|default:"-" }} / {{ cfdi.folio|default:"-" }}</div>
+    </div>
+    {% if xml %}
+    <div>
+      <div class="detail-label">Lugar Expedición</div>
+      <div class="detail-value">{{ xml.comprobante.lugar_expedicion|default:"-" }}</div>
+    </div>
+    {% endif %}
+    <div>
+      <div class="detail-label">Estado SAT</div>
+      <div class="detail-value" style="{% if cfdi.estado_sat == 'cancelado' %}color: #f87171;{% else %}color: #34d399;{% endif %}">
+        {{ cfdi.estado_sat|title }}
+      </div>
+    </div>
+    <div>
+      <div class="detail-label">Descargado</div>
+      <div class="detail-value">{{ cfdi.descargado_at|date:"d/m/Y H:i" }}</div>
+    </div>
+    <div>
+      <div class="detail-label">Fuente</div>
+      <div class="detail-value">{{ cfdi.fuente|upper }}</div>
+    </div>
+    <div>
+      <div class="detail-label">Versión CFDI</div>
+      <div class="detail-value">{{ cfdi.version }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -775,6 +775,52 @@ def app_cfdis_list(request):
     })
 
 
+# ── CFDI Detail ───────────────────────────────────────────────────────
+
+@login_required(login_url=APP_LOGIN_URL)
+def app_cfdi_detail(request, uuid):
+    """Full CFDI detail page — parses original XML from MinIO."""
+    from core.models import CFDI
+    from django.shortcuts import get_object_or_404
+
+    cfdi = get_object_or_404(CFDI, uuid=uuid)
+    # Access check
+    if cfdi.empresa and cfdi.empresa.owner != request.user and not request.user.is_staff:
+        if cfdi.uploaded_by != request.user:
+            return redirect("app:cfdis")
+    elif not cfdi.empresa and cfdi.uploaded_by != request.user and not request.user.is_staff:
+        return redirect("app:cfdis")
+
+    # Parse original XML for full details
+    xml_data = None
+    if cfdi.xml_minio_key:
+        try:
+            from core.services.storage_minio import download_bytes
+            from sat_scrapper_core.cfdi_pdf.xml_parse import parse_cfdi_xml
+            xml_bytes = download_bytes(cfdi.xml_minio_key)
+            xml_data = parse_cfdi_xml(xml_bytes)
+        except Exception as e:
+            import logging
+            logging.getLogger("accounts.views").warning("XML parse failed for %s: %s", uuid, e)
+
+    # Type badge color
+    tipo_colors = {
+        "I": "#34d399", "E": "#f87171", "T": "#60a5fa",
+        "N": "#fbbf24", "P": "#a78bfa",
+    }
+    tipo_color = tipo_colors.get(cfdi.tipo_comprobante, "#718096")
+    tipo_names = {"I": "Ingreso", "E": "Egreso", "T": "Traslado", "N": "Nómina", "P": "Pago"}
+    tipo_name = tipo_names.get(cfdi.tipo_comprobante, cfdi.tipo_comprobante)
+
+    return render(request, "app/cfdi_detail.html", {
+        "current_page": "cfdis",
+        "cfdi": cfdi,
+        "xml": xml_data,
+        "tipo_color": tipo_color,
+        "tipo_name": tipo_name,
+    })
+
+
 @login_required(login_url=APP_LOGIN_URL)
 def app_cfdi_pdf(request, cfdi_uuid):
     from core.models import CFDI

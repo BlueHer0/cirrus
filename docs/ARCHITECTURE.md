@@ -47,3 +47,18 @@
 - Benchmark monitor cada 5 min → logs/benchmark.log
 - Reporte horario Telegram (si hubo actividad)
 - /panel/monitor/ — servicios, workers, jobs, telemetría
+
+## Backups
+- Script: /var/www/cirrus/scripts/backup.sh
+- Cron: diario 4AM UTC
+- Contenido: pg_dump (gzip), metadata JSON, .env, settings.py
+- Retención: 30 días
+- Alerta Telegram al completar
+- Directorio: /var/www/cirrus/backups/
+
+## Vista Detalle CFDI
+- URL: /app/cfdis/{uuid}/
+- Parsea XML original de MinIO para datos completos (emisor, receptor, conceptos, impuestos, timbre)
+- Botones: PDF (genera con WeasyPrint), XML (descarga raw), Excel (3 hojas: comprobante, conceptos, impuestos)
+- Fallback: si XML no disponible, muestra datos del modelo Django
+
