@@ -51,4 +51,11 @@ urlpatterns = [
 
     # Purchase
     path("comprar-historico/", views.app_comprar_historico, name="comprar_historico"),
+
+    # Payments (Stripe)
+    path("mejorar-plan/", views.mejorar_plan, name="mejorar_plan"),
+    path("checkout/", views.crear_checkout, name="crear_checkout"),
+    path("pago-exitoso/", views.pago_exitoso, name="pago_exitoso"),
+    path("comprar-historico/checkout/", views.comprar_historico_checkout, name="comprar_historico_checkout"),
+    path("cancelar-plan/", views.cancelar_plan, name="cancelar_plan"),
 ]

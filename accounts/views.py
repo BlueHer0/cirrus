@@ -1613,3 +1613,108 @@ def app_comprar_historico(request):
         "existing": existing,
     })
 
+
+# ── Stripe Payment Views ────────────────────────────────────────────
+
+
+@login_required
+def mejorar_plan(request):
+    """Page to choose and upgrade plan."""
+    from core.models import Plan
+
+    planes = Plan.objects.filter(activo=True, precio_mensual__gt=0).order_by("orden")
+    plan_actual = request.user.perfil.get_plan()
+
+    return render(request, "app/mejorar_plan.html", {
+        "current_page": "mejorar_plan",
+        "planes": planes,
+        "plan_actual": plan_actual,
+        "stripe_key": settings.STRIPE_PUBLISHABLE_KEY,
+        "stripe_test_mode": settings.STRIPE_TEST_MODE,
+    })
+
+
+@login_required
+def crear_checkout(request):
+    """Create Stripe Checkout session and redirect."""
+    if request.method != "POST":
+        return redirect("app:mejorar_plan")
+
+    plan_slug = request.POST.get("plan")
+    if not plan_slug:
+        messages.error(request, "No se especificó un plan.")
+        return redirect("app:mejorar_plan")
+
+    try:
+        from core.services.stripe_service import create_checkout_session
+
+        session = create_checkout_session(
+            user=request.user,
+            plan_slug=plan_slug,
+            success_url=request.build_absolute_uri("/app/pago-exitoso/"),
+            cancel_url=request.build_absolute_uri("/app/mejorar-plan/"),
+        )
+        return redirect(session.url)
+    except Exception as e:
+        messages.error(request, f"Error al crear sesión de pago: {e}")
+        return redirect("app:mejorar_plan")
+
+
+@login_required
+def pago_exitoso(request):
+    """Payment success confirmation page."""
+    return render(request, "app/pago_exitoso.html", {
+        "current_page": "mejorar_plan",
+    })
+
+
+@login_required
+def comprar_historico_checkout(request):
+    """Stripe Checkout for one-time historical year purchase."""
+    if request.method != "POST":
+        return redirect("app:descargas")
+
+    empresa_id = request.POST.get("empresa")
+    year = request.POST.get("year")
+
+    if not empresa_id or not year:
+        messages.error(request, "Faltan datos para la compra.")
+        return redirect("app:descargas")
+
+    try:
+        from core.services.stripe_service import create_onetime_checkout
+
+        session = create_onetime_checkout(
+            user=request.user,
+            concept=f"Año histórico {year}",
+            amount_cents=50000,
+            success_url=request.build_absolute_uri("/app/pago-exitoso/"),
+            cancel_url=request.build_absolute_uri("/app/descargas/"),
+            metadata={
+                "cirrus_user_id": str(request.user.id),
+                "empresa_id": empresa_id,
+                "year": year,
+                "type": "historico",
+            },
+        )
+        return redirect(session.url)
+    except Exception as e:
+        messages.error(request, f"Error al crear sesión de pago: {e}")
+        return redirect("app:descargas")
+
+
+@login_required
+def cancelar_plan(request):
+    """Cancel subscription at end of billing period."""
+    if request.method == "POST":
+        try:
+            from core.services.stripe_service import cancel_subscription
+
+            cancel_subscription(request.user)
+            messages.info(
+                request,
+                "Tu suscripción se cancelará al final del periodo actual.",
+            )
+        except Exception as e:
+            messages.error(request, f"Error al cancelar: {e}")
+    return redirect("app:perfil")

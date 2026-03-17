@@ -1,0 +1,151 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Mejorar Plan{% endblock %}
+{% block page_title %}Mejorar Plan{% endblock %}
+{% block page_subtitle %}Elige el plan que mejor se adapte a tu negocio{% endblock %}
+
+{% block content %}
+<style>
+    .plan-card {
+        background: rgba(15, 17, 26, 0.75);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        padding: 2rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+    .plan-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(99, 102, 241, 0.15);
+    }
+    .plan-card.destacado {
+        border-color: rgba(99, 102, 241, 0.4);
+        background: rgba(99, 102, 241, 0.08);
+    }
+    .plan-card.destacado::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1);
+    }
+    .plan-card.current {
+        border-color: rgba(34, 197, 94, 0.4);
+    }
+    .plan-price {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ffffff, #a5b4fc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1;
+    }
+    .plan-price .currency { font-size: 1rem; font-weight: 600; }
+    .plan-price .period { font-size: 0.875rem; font-weight: 400; color: #6b7280; -webkit-text-fill-color: #6b7280; }
+    .feature-list li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .feature-list li::before {
+        content: '✓';
+        color: #4ade80;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+    .badge-current {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-popular {
+        background: rgba(99, 102, 241, 0.15);
+        color: #a5b4fc;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+</style>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+    {% for plan in planes %}
+    <div class="plan-card {% if plan.destacado %}destacado{% endif %} {% if plan_actual and plan_actual.slug == plan.slug %}current{% endif %}">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-white">{{ plan.nombre }}</h3>
+            {% if plan_actual and plan_actual.slug == plan.slug %}
+                <span class="badge-current">Tu plan</span>
+            {% elif plan.destacado %}
+                <span class="badge-popular">Popular</span>
+            {% endif %}
+        </div>
+
+        <div class="mb-6">
+            <span class="plan-price">
+                <span class="currency">$</span>{{ plan.precio_mensual|floatformat:0 }}
+                <span class="period">/mes</span>
+            </span>
+        </div>
+
+        <ul class="feature-list mb-6">
+            <li>{{ plan.max_empresas }} empresa{{ plan.max_empresas|pluralize:"s" }}</li>
+            <li>{{ plan.max_descargas_mes }} descarga{{ plan.max_descargas_mes|pluralize:"s" }}/mes</li>
+            <li>{{ plan.max_cfdis_visibles|default:"∞" }} CFDIs</li>
+            <li>{{ plan.max_conversiones_pdf }} PDF{{ plan.max_conversiones_pdf|pluralize:"s" }}/mes</li>
+            {% if plan.api_rest %}<li>API REST {{ plan.get_api_nivel_display }}</li>{% endif %}
+            {% if plan.logo_en_pdf %}<li>Logo en PDFs</li>{% endif %}
+            <li>Historial desde {{ plan.historial_desde_year }}</li>
+        </ul>
+
+        {% if plan_actual and plan_actual.slug == plan.slug %}
+            <button disabled class="w-full py-3 px-4 rounded-xl text-sm font-semibold bg-white/5 text-gray-500 cursor-not-allowed">
+                Plan actual
+            </button>
+        {% elif plan.precio_mensual > 0 %}
+            <form method="POST" action="{% url 'app:crear_checkout' %}">
+                {% csrf_token %}
+                <input type="hidden" name="plan" value="{{ plan.slug }}">
+                <button type="submit" class="w-full py-3 px-4 rounded-xl text-sm font-semibold btn-primary text-white cursor-pointer">
+                    {% if plan_actual and plan_actual.precio_mensual > 0 %}Cambiar plan{% else %}Elegir plan{% endif %}
+                </button>
+            </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{% if plan_actual and plan_actual.precio_mensual > 0 %}
+<div class="max-w-5xl mx-auto mt-8">
+    <div class="glass rounded-xl p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h4 class="text-white font-semibold">¿Deseas cancelar tu suscripción?</h4>
+                <p class="text-sm text-gray-400 mt-1">Tu plan seguirá activo hasta el final del periodo de facturación.</p>
+            </div>
+            <form method="POST" action="{% url 'app:cancelar_plan' %}">
+                {% csrf_token %}
+                <button type="submit" class="py-2 px-4 rounded-lg text-sm font-medium text-red-400 border border-red-400/30 hover:bg-red-400/10 transition cursor-pointer"
+                    onclick="return confirm('¿Seguro que deseas cancelar tu suscripción?')">
+                    Cancelar suscripción
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="max-w-5xl mx-auto mt-6 text-center text-sm text-gray-500">
+    <p>Todos los pagos se procesan de forma segura con Stripe. Acepta tarjetas de crédito/débito{% if stripe_test_mode %} <span class="badge-warning text-xs px-2 py-0.5 rounded-full">Modo prueba</span>{% endif %}</p>
+</div>
+{% endblock %}

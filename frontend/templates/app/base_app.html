@@ -120,6 +120,9 @@
                     <a href="{% url 'app:facturacion' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'facturacion' %}active{% endif %}">
                         <span class="text-base">🧾</span><span>Facturación</span>
                     </a>
+                    <a href="{% url 'app:mejorar_plan' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'mejorar_plan' %}active{% endif %}" style="background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08)); border: 1px solid rgba(99,102,241,0.15);">
+                        <span class="text-base">⭐</span><span class="text-indigo-300 font-medium">Mejorar plan →</span>
+                    </a>
                 </div>
                 {% endwith %}
             </nav>

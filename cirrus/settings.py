@@ -241,3 +241,9 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_TIMEOUT = 15  # seconds — prevents hanging on slow SMTP
 DEFAULT_FROM_EMAIL = f'Cirrus <{config("EMAIL_HOST_USER", default="cirrus@nubex.me")}>'
+
+# ── Stripe Payments ──────────────────────────────────────────────────
+STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY", default="")
+STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
+STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
+STRIPE_TEST_MODE = config("STRIPE_TEST_MODE", default=True, cast=bool)

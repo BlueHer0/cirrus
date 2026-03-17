@@ -47,6 +47,21 @@ class ClienteProfile(models.Model):
     conversiones_este_mes = models.IntegerField(default=0)
     descargas_este_mes = models.IntegerField(default=0)
 
+    # Stripe
+    stripe_customer_id = models.CharField(max_length=100, blank=True)
+    stripe_subscription_id = models.CharField(max_length=100, blank=True)
+    subscription_status = models.CharField(
+        max_length=20, default="none",
+        choices=[
+            ("none", "Sin suscripción"),
+            ("active", "Activa"),
+            ("past_due", "Pago pendiente"),
+            ("canceled", "Cancelada"),
+            ("trialing", "Prueba"),
+        ],
+    )
+    subscription_current_period_end = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -65,6 +80,28 @@ class ClienteProfile(models.Model):
         return Plan.objects.filter(slug=self.plan_legacy or "free").first()
 
 
+class StripePayment(models.Model):
+    """Registro de pagos procesados por Stripe."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="pagos")
+    stripe_payment_intent_id = models.CharField(max_length=100, blank=True)
+    stripe_invoice_id = models.CharField(max_length=100, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default="mxn")
+    concept = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, default="pending")
+    payment_method = models.CharField(max_length=50, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Pago Stripe"
+        verbose_name_plural = "Pagos Stripe"
+
+    def __str__(self):
+        return f"{self.user.email} — ${self.amount} {self.currency} — {self.status}"
+
+
 class EmailConfirmation(models.Model):
     """Token for email confirmation during registration."""
 
@@ -78,3 +115,4 @@ class EmailConfirmation(models.Model):
 
     def __str__(self):
         return f"{self.user.email} — {'✓' if self.confirmed else '✗'}"
+

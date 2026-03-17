@@ -524,6 +524,10 @@ class Plan(models.Model):
     activo = models.BooleanField(default=True)
     destacado = models.BooleanField(default=False)
 
+    # Stripe
+    stripe_product_id = models.CharField(max_length=100, blank=True)
+    stripe_price_id = models.CharField(max_length=100, blank=True)
+
     class Meta:
         ordering = ["orden"]
         verbose_name = "Plan"
