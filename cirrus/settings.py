@@ -8,6 +8,7 @@ from pathlib import Path
 
 from decouple import config, Csv
 import dj_database_url
+from celery.schedules import crontab
 
 # ── Paths ────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -139,6 +140,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.benchmark_hourly_report",
         "schedule": 3600,  # every hour
     },
+    "sync-efos-mensual": {
+        "task": "core.tasks.sync_efos_task",
+        "schedule": crontab(day_of_month="1", hour="5", minute="0"),
+        "options": {"queue": "sistema"},
+    },
 }
 
 CELERY_TASK_ROUTES = {
@@ -148,6 +154,7 @@ CELERY_TASK_ROUTES = {
     "core.tasks.agente_sincronizacion": {"queue": "scheduler"},
     "core.tasks.benchmark_hourly_report": {"queue": "celery"},
     "core.services.scheduler.programar_descargas_del_dia": {"queue": "scheduler"},
+    "core.tasks.sync_efos_task": {"queue": "sistema"},
 }
 CELERY_TASK_DEFAULT_QUEUE = "sistema"
 

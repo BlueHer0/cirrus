@@ -76,6 +76,7 @@ def _detectar_duplicados(empresa, year, month):
 def calcular_fiscscore(empresa, year, month):
     """Calculate FiscScore for an empresa+period. Returns dict."""
     from core.models import CFDI
+    from core.services.efos_sync import verificar_proveedores_empresa
 
     qs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month)
 
@@ -87,7 +88,7 @@ def calcular_fiscscore(empresa, year, month):
     gastos_total = float(recibidos_ie.aggregate(s=Sum("total"))["s"] or 0)
 
     # Cancelados
-    cancelados = 0  # estatus_sat not available yet
+    cancelados = 0
 
     # Efectivo no deducible
     efectivo_no_ded = recibidos_ie.filter(forma_pago="01", total__gt=2000).count()
@@ -98,6 +99,9 @@ def calcular_fiscscore(empresa, year, month):
 
     # Duplicados sospechosos (real detection)
     duplicados = _detectar_duplicados(empresa, year, month)
+
+    # EFOS — real blacklist check
+    alertas_efos = verificar_proveedores_empresa(empresa, year, month)
 
     # Deducibilidad
     no_ded_total = float(recibidos_ie.filter(forma_pago="01", total__gt=2000).aggregate(s=Sum("total"))["s"] or 0)
@@ -130,11 +134,15 @@ def calcular_fiscscore(empresa, year, month):
 
     errores_cfdi = max(100 - cancelados * 5, 0)
 
-    # FiscScore WITHOUT listas negras (redistributed weights)
+    # Riesgo proveedores (real EFOS check)
+    riesgo_proveedores = 100 if len(alertas_efos) == 0 else max(0, 100 - len(alertas_efos) * 25)
+
+    # FiscScore with real EFOS component
     score = round(
-        cumplimiento * 0.35
-        + consistencia_iva * 0.25
-        + deducibilidad * 0.20
+        cumplimiento * 0.30
+        + consistencia_iva * 0.20
+        + riesgo_proveedores * 0.15
+        + deducibilidad * 0.15
         + diversificacion * 0.10
         + errores_cfdi * 0.10
     )
@@ -161,6 +169,8 @@ def calcular_fiscscore(empresa, year, month):
         "deducibilidad": deducibilidad,
         "diversificacion": diversificacion,
         "consistencia_iva": consistencia_iva,
+        "riesgo_proveedores": riesgo_proveedores,
+        "alertas_efos": alertas_efos,
         "alertas": {
             "cancelados": cancelados,
             "efectivo_no_ded": efectivo_no_ded,
@@ -169,3 +179,4 @@ def calcular_fiscscore(empresa, year, month):
             "duplicados": duplicados,
         },
     }
+

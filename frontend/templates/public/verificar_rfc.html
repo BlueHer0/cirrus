@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificador EFOS 69-B | Cirrus</title>
+  <meta name="description" content="Verifica si un RFC está en la lista 69-B del SAT (EFOS). Consulta gratuita de contribuyentes con operaciones simuladas.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0a0b14; color: #e2e8f0; min-height: 100vh; }
+    .container { max-width: 640px; margin: 0 auto; padding: 40px 20px; }
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo h1 { font-size: 28px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .logo p { color: #718096; font-size: 14px; margin-top: 6px; }
+    .card { background: rgba(30,30,50,0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+    .search-form { display: flex; gap: 8px; margin-bottom: 8px; }
+    .search-form input { flex: 1; padding: 12px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 16px; font-family: 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.05em; outline: none; }
+    .search-form input:focus { border-color: #6366f1; }
+    .search-form button { padding: 12px 24px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .search-form button:hover { background: #4f46e5; }
+    .result-card { padding: 20px; border-radius: 10px; margin-top: 20px; }
+    .result-clean { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); }
+    .result-dirty { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); }
+    .result-icon { font-size: 40px; text-align: center; margin-bottom: 12px; }
+    .result-title { text-align: center; font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    .result-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; }
+    .result-detail .label { color: #718096; }
+    .result-detail .value { color: #e2e8f0; font-weight: 500; }
+    .meta { text-align: center; font-size: 11px; color: #4a5568; margin-top: 16px; }
+    .disclaimer { background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 8px; padding: 14px; font-size: 11px; color: #a0aec0; margin-top: 16px; line-height: 1.5; }
+    .cta { text-align: center; margin-top: 24px; padding: 20px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 10px; }
+    .cta p { font-size: 14px; color: #a0aec0; margin-bottom: 12px; }
+    .cta a { display: inline-block; padding: 10px 24px; background: #6366f1; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; }
+    .cta a:hover { background: #4f46e5; }
+    .stats { text-align: center; font-size: 12px; color: #4a5568; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>☁ Cirrus</h1>
+      <p>Verificador EFOS — Lista 69-B del SAT</p>
+    </div>
+
+    <div class="card">
+      <form method="POST" class="search-form">
+        {% csrf_token %}
+        <input type="text" name="rfc" placeholder="Ingresa un RFC..." value="{{ resultado.rfc_buscado|default:'' }}" maxlength="13" autocomplete="off" autofocus>
+        <button type="submit">Verificar</button>
+      </form>
+      <div class="stats">
+        {% if total_registros %}
+        Base de datos: {{ total_registros|floatformat:0 }} registros
+        {% if ultima_sync %}· Última actualización: {{ ultima_sync|date:"d/m/Y" }}{% endif %}
+        {% else %}
+        Base de datos en proceso de carga...
+        {% endif %}
+      </div>
+
+      {% if resultado %}
+        {% if resultado.en_lista %}
+        <div class="result-card result-dirty">
+          <div class="result-icon">🔴</div>
+          <div class="result-title" style="color: #f87171;">RFC encontrado en lista 69-B</div>
+          <div class="result-detail">
+            <div class="label">RFC</div>
+            <div class="value" style="font-family: monospace;">{{ resultado.rfc }}</div>
+            <div class="label">Nombre</div>
+            <div class="value">{{ resultado.nombre|default:"-" }}</div>
+            <div class="label">Situación</div>
+            <div class="value" style="color: #f87171; font-weight: 600;">{{ resultado.situacion|default:"-" }}</div>
+            {% if resultado.fecha_publicacion %}
+            <div class="label">Fecha publicación</div>
+            <div class="value">{{ resultado.fecha_publicacion|date:"d/m/Y" }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="result-card result-clean">
+          <div class="result-icon">🟢</div>
+          <div class="result-title" style="color: #34d399;">Este RFC NO aparece en el listado 69-B</div>
+          <div style="text-align: center; font-family: monospace; font-size: 16px; color: #34d399; margin-top: 8px;">{{ resultado.rfc_buscado }}</div>
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="disclaimer">
+      ⚠️ <strong>Disclaimer:</strong> Esta consulta es informativa y no constituye asesoría legal o fiscal.
+      Los datos provienen del listado publicado por el SAT conforme al Artículo 69-B del Código Fiscal de la Federación.
+      Para efectos legales, verifique directamente en el portal del SAT:
+      <a href="https://www.sat.gob.mx" target="_blank" style="color: #818cf8;">sat.gob.mx</a>
+    </div>
+
+    <div class="cta">
+      <p>¿Quieres monitorear a tus proveedores automáticamente?</p>
+      <a href="/app/register/">Regístrate en Cirrus →</a>
+    </div>
+
+    <div class="meta">
+      Fuente: SAT — Art. 69-B del Código Fiscal de la Federación<br>
+      © {{ year|default:"2026" }} Cirrus · <a href="/" style="color: #6366f1; text-decoration: none;">cirrus.nubex.me</a>
+    </div>
+  </div>
+</body>
+</html>

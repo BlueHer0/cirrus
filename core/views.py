@@ -996,3 +996,28 @@ def monitor_view(request):
 
     return render(request, "panel/monitor.html", ctx)
 
+
+# ── Public RFC Verifier ──────────────────────────────────────────────────
+
+def verificar_rfc_view(request):
+    """Public EFOS 69-B RFC verifier. No login required."""
+    from core.models import EFOS
+
+    resultado = None
+    ultima_sync = EFOS.objects.order_by("-updated_at").values_list("updated_at", flat=True).first()
+    total_registros = EFOS.objects.count()
+
+    if request.method == "POST" or request.GET.get("rfc"):
+        rfc = (request.POST.get("rfc") or request.GET.get("rfc", "")).strip().upper()
+        if rfc:
+            from core.services.efos_sync import verificar_rfc_efos
+            resultado = verificar_rfc_efos(rfc)
+            resultado["rfc_buscado"] = rfc
+            logger.info("EFOS verification: %s → %s", rfc, "EN LISTA" if resultado["en_lista"] else "LIMPIO")
+
+    return render(request, "public/verificar_rfc.html", {
+        "resultado": resultado,
+        "ultima_sync": ultima_sync,
+        "total_registros": total_registros,
+    })
+

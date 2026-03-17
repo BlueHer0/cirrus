@@ -626,3 +626,11 @@ def benchmark_hourly_report():
         "info"
     )
 
+
+@shared_task(queue="sistema")
+def sync_efos_task():
+    """Sincroniza la lista 69-B del SAT. Corre mensual."""
+    from core.services.efos_sync import sync_efos
+    return sync_efos()
+
+

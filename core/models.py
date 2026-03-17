@@ -553,3 +553,35 @@ class SolicitudHistorico(models.Model):
 
     def __str__(self):
         return f"{self.empresa.rfc} | {self.year} | {self.estado}"
+
+
+class EFOS(models.Model):
+    """Contribuyentes en listado 69-B del SAT (EFOS)."""
+
+    rfc = models.CharField(max_length=13, db_index=True, unique=True)
+    nombre = models.CharField(max_length=500, blank=True)
+    situacion = models.CharField(max_length=100, blank=True,
+        help_text="Presunto, Definitivo, Desvirtuado, Sentencia Favorable")
+    fecha_publicacion = models.DateField(null=True, blank=True)
+    fecha_publicacion_dof = models.DateField(null=True, blank=True)
+    numero_oficio_presuncion = models.CharField(max_length=200, blank=True)
+    fecha_oficio_presuncion = models.DateField(null=True, blank=True)
+    numero_oficio_definitivo = models.CharField(max_length=200, blank=True)
+    fecha_oficio_definitivo = models.DateField(null=True, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True,
+        help_text="Todos los campos originales del CSV")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha_publicacion"]
+        verbose_name = "EFOS (69-B)"
+        verbose_name_plural = "EFOS (69-B)"
+        indexes = [
+            models.Index(fields=["situacion"]),
+        ]
+
+    def __str__(self):
+        return f"{self.rfc} — {self.situacion}"
+
