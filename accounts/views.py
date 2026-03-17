@@ -496,38 +496,134 @@ def app_empresa_descargar(request, empresa_id):
 
 @login_required(login_url=APP_LOGIN_URL)
 def app_descargas(request):
-    """Download manager — form + history for all user empresas."""
+    """Automatic sync dashboard — no manual download form."""
     from core.models import Empresa, DescargaLog
+    from datetime import datetime
 
     empresas = Empresa.objects.filter(owner=request.user).order_by("rfc")
-    empresas_fiel = empresas.filter(fiel_verificada=True)
 
-    # Download history for all user empresas
-    downloads_qs = DescargaLog.objects.filter(
-        empresa__owner=request.user
-    ).select_related("empresa").order_by("-iniciado_at")
-    has_running = downloads_qs.filter(estado="ejecutando").exists()
-    recent_downloads = downloads_qs[:30]
+    if not empresas.exists():
+        return render(request, "app/descargas.html", {
+            "current_page": "descargas",
+            "empresas_data": [],
+            "plan": None,
+            "has_empresas": False,
+        })
 
-    now = datetime.now()
-    months = [
-        (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
-        (5, "Mayo"), (6, "Junio"), (7, "Julio"), (8, "Agosto"),
-        (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre"),
+    perfil = getattr(request.user, "perfil", None)
+    plan = perfil.get_plan() if perfil else None
+
+    MONTH_NAMES = [
+        "", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+        "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
     ]
+
+    empresas_data = []
+    now = datetime.now()
+
+    for emp in empresas:
+        # Total expected months (×2 for recibidos+emitidos)
+        total_meses = _calc_total_meses(emp, now)
+        completados = DescargaLog.objects.filter(
+            empresa=emp, estado="completado"
+        ).values("year", "month_start").distinct().count()
+        progreso = min((completados / total_meses * 100) if total_meses > 0 else 0, 100)
+
+        # Last download
+        ultima = DescargaLog.objects.filter(
+            empresa=emp, estado="completado"
+        ).order_by("-completado_at").first()
+
+        # Next download estimate
+        proxima = _calc_proxima_descarga(emp, plan, now)
+
+        # Purchasable historic year
+        anno_comprable = _calc_anno_comprable(emp, plan)
+
+        # Coverage label
+        if emp.sync_desde_year and emp.sync_desde_month:
+            cobertura = f"{MONTH_NAMES[emp.sync_desde_month]} {emp.sync_desde_year} → Presente"
+        else:
+            cobertura = "Sin configurar"
+
+        empresas_data.append({
+            "empresa": emp,
+            "progreso": round(progreso, 0),
+            "total_meses": total_meses,
+            "completados": completados,
+            "total_cfdis": emp.cfdis.count(),
+            "ultima": ultima,
+            "proxima": proxima,
+            "anno_comprable": anno_comprable,
+            "cobertura": cobertura,
+        })
+
+    # Recent download history (last 20)
+    recent = DescargaLog.objects.filter(
+        empresa__owner=request.user
+    ).select_related("empresa").order_by("-iniciado_at")[:20]
+    has_running = DescargaLog.objects.filter(
+        empresa__owner=request.user, estado__in=["ejecutando", "pendiente"]
+    ).exists()
 
     return render(request, "app/descargas.html", {
         "current_page": "descargas",
-        "empresas_fiel": empresas_fiel,
-        "has_empresas": empresas.exists(),
-        "has_fiel": empresas_fiel.exists(),
-        "recent_downloads": recent_downloads,
+        "empresas_data": empresas_data,
+        "plan": plan,
+        "has_empresas": True,
+        "recent_downloads": recent,
         "has_running": has_running,
-        "years": [2026, 2025],
-        "months": months,
-        "current_year": now.year,
-        "current_month": now.month,
     })
+
+
+def _calc_total_meses(empresa, now):
+    if not empresa.sync_desde_year:
+        return 0
+    y, m = empresa.sync_desde_year, empresa.sync_desde_month or 1
+    total = 0
+    while (y < now.year) or (y == now.year and m <= now.month):
+        total += 1
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return total * 2  # recibidos + emitidos
+
+
+def _calc_proxima_descarga(empresa, plan, now):
+    if not empresa.sync_activa:
+        return "Sync no activa"
+    if not empresa.fiel_verificada:
+        return "FIEL pendiente"
+    slug = plan.slug if plan else "free"
+    if slug == "free":
+        return "Al cierre del mes"
+    elif slug == "basico":
+        if now.day < 15:
+            return f"15/{now.month:02d}/{now.year}"
+        else:
+            nm = now.month + 1 if now.month < 12 else 1
+            ny = now.year if now.month < 12 else now.year + 1
+            return f"01/{nm:02d}/{ny}"
+    elif slug == "pro":
+        return "Semanal (auto)"
+    elif slug in ("enterprise", "owner"):
+        return "Cada ~2.5 días (auto)"
+    return "Automática"
+
+
+def _calc_anno_comprable(empresa, plan):
+    if not plan:
+        return None
+    slug = plan.slug
+    min_years = {"free": None, "basico": 2025, "pro": 2024, "enterprise": 2023, "owner": None}
+    min_year = min_years.get(slug)
+    if not min_year:
+        return None
+    sync_year = empresa.sync_desde_year or 2026
+    if sync_year <= min_year and (min_year - 1) >= 2023:
+        return {"year": sync_year - 1, "precio": 500}
+    return None
 
 
 # ── CFDIs ─────────────────────────────────────────────────────────────
@@ -1411,3 +1507,63 @@ def analysis_risks_view(request):
         "periodo": f"{MONTH_NAMES_ES[month]} {year}",
         "data": data, "now": datetime.now(),
     })
+
+
+# ── Comprar Histórico ────────────────────────────────────────────────
+
+@login_required(login_url=APP_LOGIN_URL)
+def app_comprar_historico(request):
+    """Historic year purchase request."""
+    from core.models import Empresa, SolicitudHistorico
+
+    empresa_id = request.GET.get("empresa", "") or request.POST.get("empresa", "")
+    year = int(request.GET.get("year", 0) or request.POST.get("year", 0))
+
+    try:
+        empresa = Empresa.objects.get(id=empresa_id, owner=request.user)
+    except (Empresa.DoesNotExist, ValueError):
+        return redirect("app:descargas")
+
+    if year < 2023 or year > 2026:
+        return redirect("app:descargas")
+
+    # Check if already requested
+    existing = SolicitudHistorico.objects.filter(
+        empresa=empresa, usuario=request.user, year=year,
+    ).exclude(estado="rechazado").first()
+
+    if request.method == "POST" and not existing:
+        sol = SolicitudHistorico.objects.create(
+            empresa=empresa,
+            usuario=request.user,
+            year=year,
+            precio=500,
+        )
+        # Send notification email (best effort)
+        try:
+            from django.core.mail import send_mail
+            send_mail(
+                f"[Cirrus] Solicitud histórico: {empresa.rfc} — {year}",
+                f"El usuario {request.user.email} solicita el año {year} "
+                f"para {empresa.rfc} ({empresa.nombre}). Precio: $500 MXN.",
+                "noreply@cirrus.nubex.me",
+                ["farizpe@icloud.com"],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+
+        from django.contrib import messages
+        messages.success(request,
+            f"Solicitud recibida para {empresa.rfc} — año {year}. "
+            "Te contactaremos para procesar el pago.")
+        return redirect("app:descargas")
+
+    return render(request, "app/comprar_historico.html", {
+        "current_page": "descargas",
+        "empresa": empresa,
+        "year": year,
+        "precio": 500,
+        "existing": existing,
+    })
+

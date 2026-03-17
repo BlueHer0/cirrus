@@ -531,3 +531,25 @@ class Plan(models.Model):
 
     def __str__(self):
         return f"{self.nombre} (${self.precio_mensual}/mes)"
+
+
+class SolicitudHistorico(models.Model):
+    """Solicitud de compra de año histórico por empresa."""
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="solicitudes_historico")
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name="solicitudes_historico")
+    year = models.IntegerField()
+    precio = models.DecimalField(max_digits=10, decimal_places=2, default=500)
+    estado = models.CharField(
+        max_length=20, default="pendiente",
+        choices=[("pendiente", "Pendiente"), ("pagado", "Pagado"), ("rechazado", "Rechazado")],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Solicitud Histórico"
+        verbose_name_plural = "Solicitudes Histórico"
+
+    def __str__(self):
+        return f"{self.empresa.rfc} | {self.year} | {self.estado}"

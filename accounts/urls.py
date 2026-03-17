@@ -47,4 +47,7 @@ urlpatterns = [
     path("analysis/income/", views.analysis_income_view, name="analysis_income"),
     path("analysis/top-rfc/", views.analysis_top_rfc_view, name="analysis_top_rfc"),
     path("analysis/risks/", views.analysis_risks_view, name="analysis_risks"),
+
+    # Purchase
+    path("comprar-historico/", views.app_comprar_historico, name="comprar_historico"),
 ]

@@ -1,0 +1,74 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Comprar Histórico{% endblock %}
+{% block page_title %}Comprar Año Histórico{% endblock %}
+{% block page_subtitle %}Descarga todos los CFDIs de un año completo{% endblock %}
+
+{% block content %}
+<div class="glass rounded-xl p-6" style="max-width: 600px;">
+
+  <div style="text-align: center; margin-bottom: 24px;">
+    <div style="font-size: 48px; margin-bottom: 8px;">📦</div>
+    <h2 style="color: white; font-size: 20px; font-weight: 600; margin: 0 0 4px;">
+      CFDIs del año {{ year }}
+    </h2>
+    <p style="color: #a0aec0; font-size: 14px; margin: 0;">
+      {{ empresa.nombre }} ({{ empresa.rfc }})
+    </p>
+  </div>
+
+  <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+       border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span style="color: #a0aec0; font-size: 13px;">Periodo</span>
+      <span style="color: white; font-size: 13px; font-weight: 500;">Enero a Diciembre {{ year }}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span style="color: #a0aec0; font-size: 13px;">Incluye</span>
+      <span style="color: white; font-size: 13px;">Emitidos + Recibidos</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span style="color: #a0aec0; font-size: 13px;">Empresa</span>
+      <span style="color: #818cf8; font-size: 13px; font-family: 'SF Mono', monospace;">{{ empresa.rfc }}</span>
+    </div>
+    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; margin-top: 8px;">
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #a0aec0; font-size: 14px; font-weight: 500;">Total</span>
+        <span style="color: #34d399; font-size: 20px; font-weight: 700;">${{ precio }} MXN</span>
+      </div>
+      <div style="color: #718096; font-size: 11px; text-align: right;">Pago único</div>
+    </div>
+  </div>
+
+  {% if existing %}
+  <div style="background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+       border-radius: 8px; padding: 14px; text-align: center; margin-bottom: 16px;">
+    <div style="color: #fbbf24; font-size: 13px;">
+      ⏳ Ya tienes una solicitud {{ existing.estado }} para este año.
+      <br><span style="font-size: 11px; color: #718096;">Creada el {{ existing.created_at|date:"d/m/Y H:i" }}</span>
+    </div>
+  </div>
+  {% else %}
+  <form method="post" action="{% url 'app:comprar_historico' %}">
+    {% csrf_token %}
+    <input type="hidden" name="empresa" value="{{ empresa.id }}">
+    <input type="hidden" name="year" value="{{ year }}">
+    <button type="submit" style="width: 100%; padding: 12px; background: #6366f1; border: none;
+            border-radius: 10px; color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.15s; font-family: inherit;">
+      Solicitar compra — ${{ precio }} MXN
+    </button>
+  </form>
+  <p style="color: #718096; font-size: 11px; text-align: center; margin-top: 8px;">
+    Recibirás un correo con las instrucciones de pago.
+    <br>Al confirmar, Cirrus descargará automáticamente todos los CFDIs del año {{ year }}.
+  </p>
+  {% endif %}
+
+  <div style="text-align: center; margin-top: 16px;">
+    <a href="{% url 'app:descargas' %}" style="color: #a0aec0; font-size: 13px; text-decoration: none;">
+      ← Volver a Descargas
+    </a>
+  </div>
+</div>
+{% endblock %}

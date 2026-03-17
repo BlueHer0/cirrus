@@ -354,7 +354,7 @@ def agente_sincronizacion():
     """Sync agent: checks empresas needing downloads, queues next month.
 
     Runs every 15 minutes via Celery Beat. Only queues one batch at a time
-    to avoid overwhelming the SAT portal.
+    to avoid overwhelming the SAT portal. Respects plan-based scheduling.
     """
     from core.models import Empresa, DescargaLog
     from core.services.monitor import log_info
@@ -364,12 +364,31 @@ def agente_sincronizacion():
     if ejecutando:
         return "Descarga en progreso, esperando"
 
-    # Find next empresa that needs a download
-    for empresa in Empresa.objects.filter(
+    now = datetime.now()
+
+    # Order by plan priority: enterprise/owner first, free last
+    empresas = Empresa.objects.filter(
         sync_activa=True,
         sync_completada=False,
         fiel_verificada=True,
-    ).order_by("ultimo_scrape"):
+    ).select_related("owner").order_by("ultimo_scrape")
+
+    # Sort by plan priority
+    def _plan_priority(emp):
+        try:
+            plan = emp.owner.perfil.get_plan()
+            slug = plan.slug if plan else "free"
+        except Exception:
+            slug = "free"
+        priority_map = {"owner": 0, "enterprise": 1, "pro": 2, "basico": 3, "free": 4}
+        return priority_map.get(slug, 4)
+
+    sorted_empresas = sorted(empresas, key=_plan_priority)
+
+    for empresa in sorted_empresas:
+        # Check plan-based scheduling
+        if not _decidir_si_descargar(empresa, now):
+            continue
 
         next_month = _calcular_siguiente_mes_pendiente(empresa)
         if not next_month:
@@ -409,6 +428,26 @@ def agente_sincronizacion():
         return f"Encolado: {empresa.rfc} {year}-{month:02d}"
 
     return "Nada pendiente"
+
+
+def _decidir_si_descargar(empresa, now):
+    """Check if empresa should download now based on its plan's schedule."""
+    try:
+        plan = empresa.owner.perfil.get_plan()
+        slug = plan.slug if plan else "free"
+    except Exception:
+        slug = "free"
+
+    if slug == "free":
+        # Free: only first 3 days of month
+        return now.day <= 3
+    elif slug == "basico":
+        # Basico: day 1-2 and 15-16
+        return now.day in (1, 2, 15, 16)
+    elif slug in ("pro", "enterprise", "owner"):
+        # Pro/Enterprise/Owner: always
+        return True
+    return False
 
 
 def _calcular_siguiente_mes_pendiente(empresa):
