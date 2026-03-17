@@ -108,10 +108,11 @@
             <a href="/" class="flex items-center gap-2">
                 <img src="{{ logo_b64 }}" alt="Cirrus" style="max-height:36px;">
             </a>
-            <div class="flex items-center gap-6">
-                <a href="#features" class="text-sm text-gray-400 hover:text-white transition">Features</a>
-                <a href="#precios" class="text-sm text-gray-400 hover:text-white transition">Precios</a>
-                <a href="#converter" class="text-sm text-gray-400 hover:text-white transition">Conversor</a>
+            <div class="flex items-center gap-5">
+                <a href="#features" class="text-sm text-gray-400 hover:text-white transition hidden md:inline">Características</a>
+                <a href="#precios" class="text-sm text-gray-400 hover:text-white transition hidden md:inline">Precios</a>
+                <a href="#verificador" class="text-sm text-gray-400 hover:text-white transition hidden md:inline">Verificar RFC</a>
+                <a href="#converter" class="text-sm text-gray-400 hover:text-white transition hidden md:inline">Conversor</a>
                 <a href="/app/login/" class="text-sm text-gray-400 hover:text-white transition">Iniciar Sesión</a>
                 <a href="/app/registro/" class="btn-glow px-4 py-2 rounded-lg text-sm text-white font-medium">Registrarse</a>
             </div>
@@ -173,37 +174,67 @@
                 <p class="text-gray-500 max-w-lg mx-auto">Una plataforma completa para gestionar tus comprobantes fiscales digitales.</p>
             </div>
 
-            <div class="grid md:grid-cols-3 gap-5">
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div class="glass-card rounded-2xl p-6">
                     <div class="feature-icon bg-gradient-to-br from-blue-500/20 to-blue-600/20 mb-4">📥</div>
-                    <h3 class="text-lg font-semibold text-white mb-2">Descarga Automática</h3>
-                    <p class="text-sm text-gray-500 leading-relaxed">Descarga masiva de CFDIs desde el portal del SAT usando tu e.firma (FIEL). Sin intervención manual.</p>
+                    <h3 class="text-lg font-semibold text-white mb-2">Descarga Automática del SAT</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Solo sube tu e.firma y nosotros nos encargamos. Nuestro motor Cirrus Beat programa y ejecuta las descargas automáticamente en los mejores horarios. Sin intervención manual.</p>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
                     <div class="feature-icon bg-gradient-to-br from-purple-500/20 to-purple-600/20 mb-4">🔒</div>
                     <h3 class="text-lg font-semibold text-white mb-2">Almacenamiento Seguro</h3>
-                    <p class="text-sm text-gray-500 leading-relaxed">XMLs encriptados en MinIO con redundancia. Tu FIEL se almacena con cifrado Fernet. Nunca en texto plano.</p>
+                    <p class="text-sm text-gray-500 leading-relaxed">Tus XMLs y credenciales se almacenan con cifrado de grado bancario. Nunca en texto plano. Solo tú accedes a tus datos.</p>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
                     <div class="feature-icon bg-gradient-to-br from-green-500/20 to-green-600/20 mb-4">📄</div>
-                    <h3 class="text-lg font-semibold text-white mb-2">PDF y Excel</h3>
-                    <p class="text-sm text-gray-500 leading-relaxed">Genera PDFs profesionales con logo corporativo. Exporta en Excel o CSV con filtros avanzados.</p>
+                    <h3 class="text-lg font-semibold text-white mb-2">PDF y Excel Profesional</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Genera PDFs profesionales con tu logotipo. Exporta a Excel con filtros avanzados para tu contabilidad.</p>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
                     <div class="feature-icon bg-gradient-to-br from-amber-500/20 to-amber-600/20 mb-4">🏢</div>
                     <h3 class="text-lg font-semibold text-white mb-2">Multi-Empresa</h3>
-                    <p class="text-sm text-gray-500 leading-relaxed">Gestiona múltiples RFCs desde un solo panel. Cada empresa con su FIEL, logo y configuración independiente.</p>
+                    <p class="text-sm text-gray-500 leading-relaxed">Gestiona todos tus RFCs desde un solo panel. Cada empresa con su propia e.firma y configuración independiente.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-indigo-500/20 to-indigo-600/20 mb-4">📊</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Análisis Fiscal Inteligente</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">6 herramientas automáticas: Resumen, IVA, Estado de Resultados, Top Clientes, Riesgos Fiscales. Con FiscScore — tu índice de salud fiscal de 0 a 100.</p>
+                </div>
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="feature-icon bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 mb-4">⚡</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Motor Cirrus Beat</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Nuestro motor inteligente construido con agentes de IA programa y optimiza cada descarga. Monitoreo 24/7 con acciones correctivas automáticas.</p>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
                     <div class="feature-icon bg-gradient-to-br from-rose-500/20 to-rose-600/20 mb-4">🔑</div>
                     <h3 class="text-lg font-semibold text-white mb-2">API REST</h3>
-                    <p class="text-sm text-gray-500 leading-relaxed">API completa con autenticación por API Key. Integra Cirrus con tus sistemas contables y ERPs.</p>
+                    <p class="text-sm text-gray-500 leading-relaxed">Integra Cirrus con tus sistemas contables y ERPs. Autenticación por API Key. Disponible en planes Profesional y Enterprise.</p>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
-                    <div class="feature-icon bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 mb-4">⏰</div>
-                    <h3 class="text-lg font-semibold text-white mb-2">Programación</h3>
-                    <p class="text-sm text-gray-500 leading-relaxed">Programa descargas automáticas diarias, semanales o mensuales con Celery Beat.</p>
+                    <div class="feature-icon bg-gradient-to-br from-orange-500/20 to-orange-600/20 mb-4">🔍</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Verificador Lista Negra SAT</h3>
+                    <p class="text-sm text-gray-500 leading-relaxed">Verifica gratis si un RFC aparece en el listado 69-B del SAT (EFOS). Base de datos con más de 14,000 registros, actualizada mensualmente.</p>
+                    <a href="/verificar-rfc/" class="inline-block mt-3 text-sm text-indigo-400 hover:text-indigo-300 font-medium transition">Verificar RFC →</a>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ VERIFICADOR 69-B ═══ -->
+    <section id="verificador" class="py-20">
+        <div class="max-w-6xl mx-auto px-6 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Verificador de Lista Negra SAT (69-B)</h2>
+            <p class="text-gray-500 max-w-xl mx-auto mb-8">Consulta gratis si un RFC aparece en el listado de empresas con operaciones simuladas del SAT. Más de 14,000 registros actualizados.</p>
+            <div class="max-w-lg mx-auto">
+                <form action="/verificar-rfc/" method="GET" class="flex gap-3">
+                    <input type="text" name="rfc" placeholder="Ingresa un RFC" maxlength="13" required
+                           class="flex-1 px-4 py-3 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
+                           style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); font-size: 16px;">
+                    <button type="submit" class="btn-glow px-6 py-3 rounded-xl text-sm text-white font-semibold whitespace-nowrap">
+                        Verificar
+                    </button>
+                </form>
+                <p class="text-xs text-gray-600 mt-3">Primera consulta sin registro. Regístrate gratis para consultas ilimitadas.</p>
             </div>
         </div>
     </section>
