@@ -153,8 +153,16 @@
     {% block content %}{% endblock %}
 
     <div class="footer">
-      Generado: {{ now|date:"d/m/Y H:i" }} — Fuente: CFDI SAT — Con fines informativos, no sustituye asesoría fiscal
-      <br>cirrus.nubex.me
+      <p style="margin-bottom: 4px;">
+        ⚠️ Este reporte es únicamente con fines informativos y de referencia.
+        No constituye opinión contable, fiscal ni legal. Los datos se obtienen
+        directamente de los CFDI publicados en el portal del SAT y pueden no
+        reflejar la totalidad de las operaciones. Para efectos de cumplimiento
+        fiscal, consulte a su contador o asesor fiscal.
+      </p>
+      <p style="font-size: 10px; color: #4a5568;">
+        Generado: {{ now|date:"d/m/Y H:i" }} — Fuente: CFDI SAT — cirrus.nubex.me
+      </p>
     </div>
   </div>
 </body>

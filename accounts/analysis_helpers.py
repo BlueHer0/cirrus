@@ -45,6 +45,34 @@ def prev_month(year, month):
     return y, m
 
 
+def _detectar_duplicados(empresa, year, month):
+    """Detect suspicious duplicate invoices: same emisor+monto within 3 days."""
+    from core.models import CFDI
+
+    qs = CFDI.objects.filter(
+        rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month,
+        rfc_receptor=empresa.rfc, tipo_comprobante="I",
+    )
+    # Group by (rfc_emisor, total) with 2+ occurrences
+    grupos = qs.values("rfc_emisor", "total").annotate(
+        count=Count("uuid"),
+    ).filter(count__gte=2)
+
+    sospechosos = 0
+    for dup in grupos:
+        cfdis = qs.filter(
+            rfc_emisor=dup["rfc_emisor"], total=dup["total"],
+        ).order_by("fecha")
+        fechas = list(cfdis.values_list("fecha", flat=True))
+        for i in range(len(fechas) - 1):
+            if fechas[i] and fechas[i + 1]:
+                delta = abs((fechas[i + 1] - fechas[i]).days)
+                if delta <= 3:
+                    sospechosos += 1
+                    break
+    return sospechosos
+
+
 def calcular_fiscscore(empresa, year, month):
     """Calculate FiscScore for an empresa+period. Returns dict."""
     from core.models import CFDI
@@ -67,6 +95,9 @@ def calcular_fiscscore(empresa, year, month):
 
     # PPD sin complemento
     ppd = qs.filter(metodo_pago="PPD").count()
+
+    # Duplicados sospechosos (real detection)
+    duplicados = _detectar_duplicados(empresa, year, month)
 
     # Deducibilidad
     no_ded_total = float(recibidos_ie.filter(forma_pago="01", total__gt=2000).aggregate(s=Sum("total"))["s"] or 0)
@@ -97,14 +128,13 @@ def calcular_fiscscore(empresa, year, month):
     if iva_por_pagar < 0:
         consistencia_iva = 70
 
-    riesgo_proveedores = 100  # no list checking yet
     errores_cfdi = max(100 - cancelados * 5, 0)
 
+    # FiscScore WITHOUT listas negras (redistributed weights)
     score = round(
-        cumplimiento * 0.30
-        + consistencia_iva * 0.20
-        + riesgo_proveedores * 0.15
-        + deducibilidad * 0.15
+        cumplimiento * 0.35
+        + consistencia_iva * 0.25
+        + deducibilidad * 0.20
         + diversificacion * 0.10
         + errores_cfdi * 0.10
     )
@@ -122,25 +152,6 @@ def calcular_fiscscore(empresa, year, month):
     # SVG dasharray: full circle = 2*pi*50 ≈ 314
     score_dash = round(score / 100 * 314)
 
-    # Proveedores nuevos con monto alto
-    proveedor_nuevo_count = 0
-    proveedor_nuevo_monto = 0
-    if ingresos > 0 or gastos_total > 0:
-        py, pm = prev_month(year, month)
-        prev_proveedores = set(
-            CFDI.objects.filter(
-                rfc_empresa=empresa.rfc, fecha__year=py, fecha__month=pm,
-                tipo_relacion="recibido"
-            ).values_list("rfc_emisor", flat=True).distinct()
-        )
-        if prev_proveedores:
-            avg_gasto = gastos_total / max(recibidos_ie.values("rfc_emisor").distinct().count(), 1)
-            nuevos = recibidos_ie.exclude(rfc_emisor__in=prev_proveedores).values("rfc_emisor").annotate(
-                m=Sum("total")
-            ).filter(m__gt=avg_gasto)
-            proveedor_nuevo_count = nuevos.count()
-            proveedor_nuevo_monto = float(sum(n["m"] for n in nuevos))
-
     return {
         "score": score,
         "label": label,
@@ -155,9 +166,6 @@ def calcular_fiscscore(empresa, year, month):
             "efectivo_no_ded": efectivo_no_ded,
             "efectivo_monto": efectivo_monto,
             "ppd": ppd,
-            "listas_negras": 0,
-            "duplicados": 0,
-            "proveedor_nuevo_count": proveedor_nuevo_count,
-            "proveedor_nuevo_monto": proveedor_nuevo_monto,
+            "duplicados": duplicados,
         },
     }

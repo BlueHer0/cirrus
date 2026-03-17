@@ -37,11 +37,11 @@
 <div class="section">
   <div class="section-title">Alertas Fiscales</div>
   <div style="display: flex; flex-direction: column; gap: 10px;">
-    <!-- Listas negras -->
-    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
-      <span style="font-size: 18px;">🟢</span>
-      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Proveedores en listas negras</span>
-      <span class="badge badge-green">{{ data.alertas.listas_negras }}</span>
+    <!-- Listas negras — Not available yet -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px; opacity: 0.5;">
+      <span style="font-size: 18px;">⚪</span>
+      <span style="flex: 1; font-size: 13px; color: #718096;">Proveedores en listas negras SAT — Próximamente</span>
+      <span class="badge" style="background: rgba(255,255,255,0.06); color: #718096; border: 1px solid rgba(255,255,255,0.08);">No disponible</span>
     </div>
 
     <!-- Cancelados -->
@@ -77,22 +77,15 @@
       <span class="badge {% if data.alertas.efectivo_no_ded > 0 %}badge-red{% else %}badge-green{% endif %}">{{ data.alertas.efectivo_no_ded }}{% if data.alertas.efectivo_monto_fmt %} · ${{ data.alertas.efectivo_monto_fmt }}{% endif %}</span>
     </div>
 
-    <!-- Duplicados -->
+    <!-- Duplicados sospechosos (real detection) -->
     <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
-      <span style="font-size: 18px;">🟢</span>
-      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Facturas duplicadas sospechosas</span>
-      <span class="badge badge-green">{{ data.alertas.duplicados }}</span>
-    </div>
-
-    <!-- Proveedor nuevo con monto alto -->
-    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
-      {% if data.alertas.proveedor_nuevo_count > 0 %}
+      {% if data.alertas.duplicados > 0 %}
       <span style="font-size: 18px;">🟡</span>
       {% else %}
       <span style="font-size: 18px;">🟢</span>
       {% endif %}
-      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Proveedores nuevos con monto alto</span>
-      <span class="badge {% if data.alertas.proveedor_nuevo_count > 0 %}badge-amber{% else %}badge-green{% endif %}">{{ data.alertas.proveedor_nuevo_count }}{% if data.alertas.proveedor_nuevo_monto_fmt %} · ${{ data.alertas.proveedor_nuevo_monto_fmt }}{% endif %}</span>
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Facturas duplicadas sospechosas</span>
+      <span class="badge {% if data.alertas.duplicados > 0 %}badge-amber{% else %}badge-green{% endif %}">{{ data.alertas.duplicados }}</span>
     </div>
   </div>
 </div>
@@ -103,19 +96,15 @@
   <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; font-size: 12px;">
     <span style="color: #a0aec0;">Cumplimiento fiscal</span>
     <span style="text-align: right; font-weight: 600;">{{ data.cumplimiento }}%</span>
-    <span style="color: #718096;">× 30%</span>
+    <span style="color: #718096;">× 35%</span>
     
     <span style="color: #a0aec0;">Consistencia IVA</span>
     <span style="text-align: right; font-weight: 600;">{{ data.consistencia_iva }}%</span>
-    <span style="color: #718096;">× 20%</span>
-    
-    <span style="color: #a0aec0;">Riesgo proveedores</span>
-    <span style="text-align: right; font-weight: 600;">100%</span>
-    <span style="color: #718096;">× 15%</span>
+    <span style="color: #718096;">× 25%</span>
     
     <span style="color: #a0aec0;">Deducibilidad</span>
     <span style="text-align: right; font-weight: 600;">{{ data.deducibilidad }}%</span>
-    <span style="color: #718096;">× 15%</span>
+    <span style="color: #718096;">× 20%</span>
     
     <span style="color: #a0aec0;">Diversificación</span>
     <span style="text-align: right; font-weight: 600;">{{ data.diversificacion }}%</span>

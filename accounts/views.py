@@ -1403,7 +1403,6 @@ def analysis_risks_view(request):
         "alertas": {
             **fs["alertas"],
             "efectivo_monto_fmt": _fmt(fs["alertas"]["efectivo_monto"]) if fs["alertas"]["efectivo_monto"] else "",
-            "proveedor_nuevo_monto_fmt": _fmt(fs["alertas"]["proveedor_nuevo_monto"]) if fs["alertas"]["proveedor_nuevo_monto"] else "",
         },
     }
     return render(request, "app/analysis_risks.html", {
