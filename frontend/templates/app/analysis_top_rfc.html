@@ -1,0 +1,107 @@
+{% extends "app/analysis_base.html" %}
+
+{% block content %}
+<!-- Concentration cards -->
+<div class="cards cards-2">
+  <div class="card">
+    <div class="card-label">Concentración Cliente #1</div>
+    <div class="card-value" style="display: flex; align-items: center; gap: 10px;">
+      <span class="{% if data.riesgo_cliente == 'alto' %}red{% elif data.riesgo_cliente == 'medio' %}amber{% else %}green{% endif %}">{{ data.concentracion_cliente }}%</span>
+      <span class="badge {% if data.riesgo_cliente == 'alto' %}badge-red{% elif data.riesgo_cliente == 'medio' %}badge-amber{% else %}badge-green{% endif %}">
+        {% if data.riesgo_cliente == 'alto' %}Riesgo alto{% elif data.riesgo_cliente == 'medio' %}Riesgo medio{% else %}Diversificado{% endif %}
+      </span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label">Concentración Proveedor #1</div>
+    <div class="card-value" style="display: flex; align-items: center; gap: 10px;">
+      <span class="{% if data.riesgo_proveedor == 'alto' %}red{% elif data.riesgo_proveedor == 'medio' %}amber{% else %}green{% endif %}">{{ data.concentracion_proveedor }}%</span>
+      <span class="badge {% if data.riesgo_proveedor == 'alto' %}badge-red{% elif data.riesgo_proveedor == 'medio' %}badge-amber{% else %}badge-green{% endif %}">
+        {% if data.riesgo_proveedor == 'alto' %}Riesgo alto{% elif data.riesgo_proveedor == 'medio' %}Riesgo medio{% else %}Diversificado{% endif %}
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Top clients + providers -->
+<div class="two-cols">
+  <div class="section">
+    <div class="section-title">🏢 Top 10 Clientes (por facturación)</div>
+    {% for c in data.clientes %}
+    <div class="bar-row">
+      <div class="bar-label" style="width: 130px; font-family: 'SF Mono','Fira Code',monospace; font-size: 11px; color: #818cf8;">{{ c.rfc }}</div>
+      <div class="bar-track">
+        <div class="bar-fill bg-green" style="width: {{ c.bar_pct }}%;"></div>
+      </div>
+      <div class="bar-value" style="width: 85px;">${{ c.monto_fmt }}</div>
+    </div>
+    {% empty %}
+    <div style="color: #475569; font-size: 13px;">Sin clientes en este periodo</div>
+    {% endfor %}
+  </div>
+  <div class="section">
+    <div class="section-title">📦 Top 10 Proveedores (por gasto)</div>
+    {% for p in data.proveedores %}
+    <div class="bar-row">
+      <div class="bar-label" style="width: 130px; font-family: 'SF Mono','Fira Code',monospace; font-size: 11px; color: #818cf8;">{{ p.rfc }}</div>
+      <div class="bar-track">
+        <div class="bar-fill bg-red" style="width: {{ p.bar_pct }}%;"></div>
+      </div>
+      <div class="bar-value" style="width: 85px;">${{ p.monto_fmt }}</div>
+    </div>
+    {% empty %}
+    <div style="color: #475569; font-size: 13px;">Sin proveedores en este periodo</div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Detail tables -->
+<div class="two-cols">
+  <div class="section">
+    <div class="section-title">Detalle Clientes</div>
+    <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+      <thead>
+        <tr style="color: #718096; border-bottom: 1px solid rgba(255,255,255,0.08);">
+          <th style="text-align: left; padding: 6px 4px;">RFC</th>
+          <th style="text-align: right; padding: 6px 4px;"># CFDIs</th>
+          <th style="text-align: right; padding: 6px 4px;">Monto</th>
+          <th style="text-align: right; padding: 6px 4px;">% Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in data.clientes %}
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+          <td style="padding: 5px 4px; font-family: monospace; color: #a0aec0;">{{ c.rfc }}</td>
+          <td style="text-align: right; padding: 5px 4px;">{{ c.count }}</td>
+          <td style="text-align: right; padding: 5px 4px; color: #34d399;">${{ c.monto_fmt }}</td>
+          <td style="text-align: right; padding: 5px 4px;">{{ c.pct }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="section">
+    <div class="section-title">Detalle Proveedores</div>
+    <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+      <thead>
+        <tr style="color: #718096; border-bottom: 1px solid rgba(255,255,255,0.08);">
+          <th style="text-align: left; padding: 6px 4px;">RFC</th>
+          <th style="text-align: right; padding: 6px 4px;"># CFDIs</th>
+          <th style="text-align: right; padding: 6px 4px;">Monto</th>
+          <th style="text-align: right; padding: 6px 4px;">% Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in data.proveedores %}
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+          <td style="padding: 5px 4px; font-family: monospace; color: #a0aec0;">{{ p.rfc }}</td>
+          <td style="text-align: right; padding: 5px 4px;">{{ p.count }}</td>
+          <td style="text-align: right; padding: 5px 4px; color: #f87171;">${{ p.monto_fmt }}</td>
+          <td style="text-align: right; padding: 5px 4px;">{{ p.pct }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

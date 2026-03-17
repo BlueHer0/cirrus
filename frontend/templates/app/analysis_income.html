@@ -1,0 +1,77 @@
+{% extends "app/analysis_base.html" %}
+
+{% block content %}
+<!-- Waterfall Chart -->
+<div class="section">
+  <div class="section-title">Estado de Resultados — Flujo</div>
+  <div style="max-width: 700px; margin: 0 auto;">
+    <!-- Ingresos -->
+    <div style="display: flex; align-items: center; margin-bottom: 12px;">
+      <span style="width: 90px; font-size: 13px; color: #a0aec0; text-align: right; margin-right: 12px;">Ingresos</span>
+      <div style="flex: 1; height: 36px; background: rgba(255,255,255,0.04); border-radius: 6px; overflow: hidden;">
+        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 6px; display: flex; align-items: center; padding-left: 12px;">
+          <span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);">${{ data.ingresos_fmt }}</span>
+        </div>
+      </div>
+    </div>
+    <!-- Gastos -->
+    <div style="display: flex; align-items: center; margin-bottom: 12px;">
+      <span style="width: 90px; font-size: 13px; color: #a0aec0; text-align: right; margin-right: 12px;">(−) Gastos</span>
+      <div style="flex: 1; height: 36px; background: rgba(255,255,255,0.04); border-radius: 6px; overflow: hidden;">
+        <div style="height: 100%; width: {{ data.gastos_pct }}%; background: linear-gradient(90deg, #ef4444, #f87171); border-radius: 6px; display: flex; align-items: center; padding-left: 12px; min-width: fit-content;">
+          <span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);">${{ data.gastos_fmt }}</span>
+        </div>
+      </div>
+    </div>
+    <!-- Separator -->
+    <div style="border-top: 2px dashed rgba(255,255,255,0.15); margin: 8px 0 8px 102px;"></div>
+    <!-- Utilidad -->
+    <div style="display: flex; align-items: center;">
+      <span style="width: 90px; font-size: 13px; color: #a0aec0; text-align: right; margin-right: 12px;">{% if data.es_perdida %}Pérdida{% else %}Utilidad{% endif %}</span>
+      <div style="flex: 1; height: 36px; background: rgba(255,255,255,0.04); border-radius: 6px; overflow: hidden;">
+        <div style="height: 100%; width: {{ data.utilidad_pct_abs }}%; background: linear-gradient(90deg, {% if data.es_perdida %}#ef4444, #f87171{% else %}#0d9488, #2dd4bf{% endif %}); border-radius: 6px; display: flex; align-items: center; padding-left: 12px; min-width: fit-content;">
+          <span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);">{% if data.es_perdida %}-{% endif %}${{ data.utilidad_fmt }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cards -->
+<div class="cards cards-3">
+  <div class="card">
+    <div class="card-label">Margen Bruto</div>
+    <div class="card-value {% if data.margen_bruto >= 0 %}green{% else %}red{% endif %}">{{ data.margen_bruto }}%</div>
+  </div>
+  <div class="card">
+    <div class="card-label">ISR Estimado (30%)</div>
+    <div class="card-value amber">${{ data.isr_fmt }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Margen Neto</div>
+    <div class="card-value {% if data.margen_neto >= 0 %}teal{% else %}red{% endif %}">{{ data.margen_neto }}%</div>
+  </div>
+</div>
+
+<!-- 6-month comparative chart -->
+<div class="section">
+  <div class="section-title">Comparativo 6 Meses — Ingresos vs Gastos</div>
+  <div style="display: grid; grid-template-columns: repeat({{ data.tendencia|length }}, 1fr); gap: 12px; height: 220px; align-items: end;">
+    {% for t in data.tendencia %}
+    <div style="display: flex; flex-direction: column; align-items: center; height: 100%;">
+      <div style="flex: 1; display: flex; align-items: flex-end; gap: 3px; width: 100%; justify-content: center;">
+        <!-- Ingresos bar -->
+        <div style="width: 40%; height: {{ t.ing_pct }}%; background: linear-gradient(to top, #10b981, #34d399); border-radius: 3px 3px 0 0; min-height: 2px;" title="Ingresos: ${{ t.ing_fmt }}"></div>
+        <!-- Gastos bar -->
+        <div style="width: 40%; height: {{ t.gas_pct }}%; background: linear-gradient(to top, #3b82f6, #60a5fa); border-radius: 3px 3px 0 0; min-height: 2px;" title="Gastos: ${{ t.gas_fmt }}"></div>
+      </div>
+      <div style="font-size: 10px; color: #718096; margin-top: 6px; text-align: center;">{{ t.mes_nombre }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 11px;">
+    <span><span style="display: inline-block; width: 10px; height: 10px; background: #34d399; border-radius: 2px; margin-right: 4px;"></span>Ingresos</span>
+    <span><span style="display: inline-block; width: 10px; height: 10px; background: #60a5fa; border-radius: 2px; margin-right: 4px;"></span>Gastos</span>
+  </div>
+</div>
+{% endblock %}

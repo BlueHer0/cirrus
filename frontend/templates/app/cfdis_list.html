@@ -88,7 +88,7 @@
         <strong style="color: white;">{{ filters.month_name|default:"" }} {{ filters.year }}</strong> —
         <strong style="color: #34d399;">{{ total_cfdis }} comprobantes</strong>
     </div>
-    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <a href="{% url 'app:analysis_summary' %}?empresa={{ filters.empresa }}&year={{ filters.year }}&month={{ filters.month }}"
            style="padding: 8px 16px; background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #a78bfa; text-decoration: none; font-size: 13px; transition: all 0.15s;"
            onmouseover="this.style.background='rgba(99,102,241,0.35)'" onmouseout="this.style.background='rgba(99,102,241,0.2)'">
@@ -104,13 +104,28 @@
            onmouseover="this.style.background='rgba(99,102,241,0.35)'" onmouseout="this.style.background='rgba(99,102,241,0.2)'">
            🧾 IVA
         </a>
-        <span style="padding: 8px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #475569; font-size: 13px; cursor: not-allowed;" title="Próximamente">📈 Estado Res.</span>
-        <span style="padding: 8px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #475569; font-size: 13px; cursor: not-allowed;" title="Próximamente">🏢 Top RFC</span>
-        <span style="padding: 8px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #475569; font-size: 13px; cursor: not-allowed;" title="Próximamente">⚠️ Riesgos</span>
-        <span style="padding: 8px 12px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; color: #34d399; font-size: 12px; font-weight: 700;">FISCSCORE 85</span>
+        <a href="{% url 'app:analysis_income' %}?empresa={{ filters.empresa }}&year={{ filters.year }}&month={{ filters.month }}"
+           style="padding: 8px 16px; background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #a78bfa; text-decoration: none; font-size: 13px; transition: all 0.15s;"
+           onmouseover="this.style.background='rgba(99,102,241,0.35)'" onmouseout="this.style.background='rgba(99,102,241,0.2)'">
+           📈 Estado Res.
+        </a>
+        <a href="{% url 'app:analysis_top_rfc' %}?empresa={{ filters.empresa }}&year={{ filters.year }}&month={{ filters.month }}"
+           style="padding: 8px 16px; background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #a78bfa; text-decoration: none; font-size: 13px; transition: all 0.15s;"
+           onmouseover="this.style.background='rgba(99,102,241,0.35)'" onmouseout="this.style.background='rgba(99,102,241,0.2)'">
+           🏢 Top RFC
+        </a>
+        <a href="{% url 'app:analysis_risks' %}?empresa={{ filters.empresa }}&year={{ filters.year }}&month={{ filters.month }}"
+           style="padding: 8px 16px; background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #a78bfa; text-decoration: none; font-size: 13px; transition: all 0.15s;"
+           onmouseover="this.style.background='rgba(99,102,241,0.35)'" onmouseout="this.style.background='rgba(99,102,241,0.2)'">
+           ⚠️ Riesgos
+        </a>
+        {% if fiscscore %}
+        <span style="padding: 8px 12px; background: rgba({{ fiscscore.color_bg }}); border: 1px solid rgba({{ fiscscore.color_border }}); border-radius: 8px; color: {{ fiscscore.color }}; font-size: 12px; font-weight: 700; margin-left: auto;">FISCSCORE {{ fiscscore.score }}</span>
+        {% endif %}
     </div>
 </div>
 {% endif %}
+
 
 
 <!-- Results Table -->

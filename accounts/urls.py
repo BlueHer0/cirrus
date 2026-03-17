@@ -44,4 +44,7 @@ urlpatterns = [
     path("analysis/summary/", views.analysis_summary_view, name="analysis_summary"),
     path("analysis/fiscal/", views.analysis_fiscal_view, name="analysis_fiscal"),
     path("analysis/iva/", views.analysis_iva_view, name="analysis_iva"),
+    path("analysis/income/", views.analysis_income_view, name="analysis_income"),
+    path("analysis/top-rfc/", views.analysis_top_rfc_view, name="analysis_top_rfc"),
+    path("analysis/risks/", views.analysis_risks_view, name="analysis_risks"),
 ]

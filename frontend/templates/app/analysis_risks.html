@@ -1,0 +1,129 @@
+{% extends "app/analysis_base.html" %}
+
+{% block content %}
+<!-- FiscScore Gauge + Label -->
+<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 24px;">
+  <svg viewBox="0 0 120 120" width="200" height="200">
+    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/>
+    <circle cx="60" cy="60" r="50" fill="none" stroke="{{ data.score_color }}" stroke-width="10"
+      stroke-dasharray="{{ data.score_dash }} 314" stroke-dashoffset="78.5"
+      transform="rotate(-90 60 60)" stroke-linecap="round"
+      style="transition: stroke-dasharray 1s ease;"/>
+    <text x="60" y="55" text-anchor="middle" fill="white" font-size="28" font-weight="700">{{ data.score }}</text>
+    <text x="60" y="72" text-anchor="middle" fill="#718096" font-size="10">{{ data.score_label }}</text>
+  </svg>
+  <div style="font-size: 14px; color: {{ data.score_color }}; font-weight: 600; margin-top: 8px;">
+    FISCSCORE — {{ data.score_label }}
+  </div>
+</div>
+
+<!-- Component cards -->
+<div class="cards cards-3">
+  <div class="card">
+    <div class="card-label">Cumplimiento</div>
+    <div class="card-value {% if data.cumplimiento >= 80 %}green{% elif data.cumplimiento >= 50 %}amber{% else %}red{% endif %}">{{ data.cumplimiento }}%</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Deducibilidad</div>
+    <div class="card-value {% if data.deducibilidad >= 80 %}green{% elif data.deducibilidad >= 50 %}amber{% else %}red{% endif %}">{{ data.deducibilidad }}%</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Diversificación</div>
+    <div class="card-value {% if data.diversificacion >= 70 %}green{% elif data.diversificacion >= 40 %}amber{% else %}red{% endif %}">{{ data.diversificacion }}%</div>
+  </div>
+</div>
+
+<!-- Alerts with traffic lights -->
+<div class="section">
+  <div class="section-title">Alertas Fiscales</div>
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <!-- Listas negras -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+      <span style="font-size: 18px;">🟢</span>
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Proveedores en listas negras</span>
+      <span class="badge badge-green">{{ data.alertas.listas_negras }}</span>
+    </div>
+
+    <!-- Cancelados -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+      {% if data.alertas.cancelados > 0 %}
+      <span style="font-size: 18px;">🟡</span>
+      {% else %}
+      <span style="font-size: 18px;">🟢</span>
+      {% endif %}
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">CFDI cancelados en el periodo</span>
+      <span class="badge {% if data.alertas.cancelados > 0 %}badge-amber{% else %}badge-green{% endif %}">{{ data.alertas.cancelados }}</span>
+    </div>
+
+    <!-- PPD sin complemento -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+      {% if data.alertas.ppd > 0 %}
+      <span style="font-size: 18px;">🟡</span>
+      {% else %}
+      <span style="font-size: 18px;">🟢</span>
+      {% endif %}
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">CFDI PPD sin complemento de pago</span>
+      <span class="badge {% if data.alertas.ppd > 0 %}badge-amber{% else %}badge-green{% endif %}">{{ data.alertas.ppd }} pendientes</span>
+    </div>
+
+    <!-- Efectivo no deducible -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+      {% if data.alertas.efectivo_no_ded > 0 %}
+      <span style="font-size: 18px;">🔴</span>
+      {% else %}
+      <span style="font-size: 18px;">🟢</span>
+      {% endif %}
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Gastos en efectivo &gt; $2,000 (no deducibles)</span>
+      <span class="badge {% if data.alertas.efectivo_no_ded > 0 %}badge-red{% else %}badge-green{% endif %}">{{ data.alertas.efectivo_no_ded }}{% if data.alertas.efectivo_monto_fmt %} · ${{ data.alertas.efectivo_monto_fmt }}{% endif %}</span>
+    </div>
+
+    <!-- Duplicados -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+      <span style="font-size: 18px;">🟢</span>
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Facturas duplicadas sospechosas</span>
+      <span class="badge badge-green">{{ data.alertas.duplicados }}</span>
+    </div>
+
+    <!-- Proveedor nuevo con monto alto -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+      {% if data.alertas.proveedor_nuevo_count > 0 %}
+      <span style="font-size: 18px;">🟡</span>
+      {% else %}
+      <span style="font-size: 18px;">🟢</span>
+      {% endif %}
+      <span style="flex: 1; font-size: 13px; color: #e2e8f0;">Proveedores nuevos con monto alto</span>
+      <span class="badge {% if data.alertas.proveedor_nuevo_count > 0 %}badge-amber{% else %}badge-green{% endif %}">{{ data.alertas.proveedor_nuevo_count }}{% if data.alertas.proveedor_nuevo_monto_fmt %} · ${{ data.alertas.proveedor_nuevo_monto_fmt }}{% endif %}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Score breakdown -->
+<div class="section">
+  <div class="section-title">Desglose del FiscScore</div>
+  <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; font-size: 12px;">
+    <span style="color: #a0aec0;">Cumplimiento fiscal</span>
+    <span style="text-align: right; font-weight: 600;">{{ data.cumplimiento }}%</span>
+    <span style="color: #718096;">× 30%</span>
+    
+    <span style="color: #a0aec0;">Consistencia IVA</span>
+    <span style="text-align: right; font-weight: 600;">{{ data.consistencia_iva }}%</span>
+    <span style="color: #718096;">× 20%</span>
+    
+    <span style="color: #a0aec0;">Riesgo proveedores</span>
+    <span style="text-align: right; font-weight: 600;">100%</span>
+    <span style="color: #718096;">× 15%</span>
+    
+    <span style="color: #a0aec0;">Deducibilidad</span>
+    <span style="text-align: right; font-weight: 600;">{{ data.deducibilidad }}%</span>
+    <span style="color: #718096;">× 15%</span>
+    
+    <span style="color: #a0aec0;">Diversificación</span>
+    <span style="text-align: right; font-weight: 600;">{{ data.diversificacion }}%</span>
+    <span style="color: #718096;">× 10%</span>
+    
+    <span style="color: #a0aec0;">Errores CFDI</span>
+    <span style="text-align: right; font-weight: 600;">100%</span>
+    <span style="color: #718096;">× 10%</span>
+  </div>
+</div>
+{% endblock %}

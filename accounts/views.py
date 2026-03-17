@@ -633,6 +633,30 @@ def app_cfdis_list(request):
         filters["month_name"] = MONTH_NAMES[filters["month"]]
 
     now = datetime.now()
+
+    # Calculate FiscScore if filters active
+    fiscscore_ctx = None
+    if empresa_id and empresa_id != "__none__" and filters.get("year") and filters.get("month"):
+        try:
+            from accounts.analysis_helpers import calcular_fiscscore
+            emp_obj = Empresa.objects.filter(id=empresa_id).first()
+            if emp_obj:
+                fs = calcular_fiscscore(emp_obj, filters["year"], filters["month"])
+                # Map color to rgba backgrounds
+                color_map = {
+                    "#34d399": ("16,185,129,0.15", "16,185,129,0.25"),
+                    "#fbbf24": ("251,191,36,0.15", "251,191,36,0.25"),
+                    "#f97316": ("249,115,22,0.15", "249,115,22,0.25"),
+                    "#f87171": ("248,113,113,0.15", "248,113,113,0.25"),
+                }
+                bg, border = color_map.get(fs["color"], ("99,102,241,0.15", "99,102,241,0.25"))
+                fiscscore_ctx = {
+                    "score": fs["score"], "color": fs["color"],
+                    "color_bg": bg, "color_border": border,
+                }
+        except Exception:
+            pass
+
     return render(request, "app/cfdis_list.html", {
         "current_page": "cfdis",
         "cfdis": qs.order_by("-fecha")[offset:offset + page_size],
@@ -651,6 +675,7 @@ def app_cfdis_list(request):
         "total_pages": total_pages,
         "has_prev": page > 1,
         "has_next": offset + page_size < total,
+        "fiscscore": fiscscore_ctx,
     })
 
 
@@ -1217,6 +1242,172 @@ def analysis_iva_view(request):
     }
     return render(request, "app/analysis_iva.html", {
         "titulo": "🧾 IVA del Periodo",
+        "empresa": empresa, "year": year, "month": month,
+        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "data": data, "now": datetime.now(),
+    })
+
+
+# ── Analysis Phase 2 Views ───────────────────────────────────────────
+
+@login_required(login_url=APP_LOGIN_URL)
+def analysis_income_view(request):
+    from django.db.models import Sum
+
+    empresa_id = request.GET.get("empresa", "")
+    year = int(request.GET.get("year", 2026))
+    month = int(request.GET.get("month", 3))
+
+    empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
+    if not empresa:
+        return redirect("app:cfdis")
+
+    ingresos = float(qs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)
+    gastos = float(qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)
+    utilidad = ingresos - gastos
+    margen_bruto = round(utilidad / ingresos * 100) if ingresos > 0 else 0
+    isr = utilidad * 0.30 if utilidad > 0 else 0
+    margen_neto = round((utilidad - isr) / ingresos * 100) if ingresos > 0 else 0
+
+    gastos_pct = round(gastos / ingresos * 100) if ingresos > 0 else 0
+    utilidad_pct_abs = max(round(abs(utilidad) / max(ingresos, 1) * 100), 3)
+
+    # 6-month trend
+    tendencia = []
+    max_val = 1
+    for i in range(5, -1, -1):
+        m = month - i
+        y = year
+        while m <= 0:
+            m += 12
+            y -= 1
+        _, tqs = _analysis_base_qs(request, empresa_id, y, m)
+        if tqs is not None:
+            ing = float(tqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)
+            gas = float(tqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)
+        else:
+            ing, gas = 0, 0
+        max_val = max(max_val, ing, gas)
+        tendencia.append({
+            "mes_nombre": MONTH_NAMES_ES[m][:3], "year": y, "month": m,
+            "ingresos": ing, "gastos": gas, "ing_fmt": _fmt(ing), "gas_fmt": _fmt(gas),
+        })
+
+    for t in tendencia:
+        t["ing_pct"] = round(t["ingresos"] / max_val * 100) if max_val > 0 else 0
+        t["gas_pct"] = round(t["gastos"] / max_val * 100) if max_val > 0 else 0
+
+    data = {
+        "ingresos_fmt": _fmt(ingresos), "gastos_fmt": _fmt(gastos),
+        "utilidad_fmt": _fmt(abs(utilidad)), "es_perdida": utilidad < 0,
+        "gastos_pct": gastos_pct, "utilidad_pct_abs": utilidad_pct_abs,
+        "margen_bruto": margen_bruto, "isr_fmt": _fmt(isr), "margen_neto": margen_neto,
+        "tendencia": tendencia,
+    }
+    return render(request, "app/analysis_income.html", {
+        "titulo": "📈 Estado de Resultados",
+        "empresa": empresa, "year": year, "month": month,
+        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "data": data, "now": datetime.now(),
+    })
+
+
+@login_required(login_url=APP_LOGIN_URL)
+def analysis_top_rfc_view(request):
+    from django.db.models import Sum, Count
+
+    empresa_id = request.GET.get("empresa", "")
+    year = int(request.GET.get("year", 2026))
+    month = int(request.GET.get("month", 3))
+
+    empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
+    if not empresa:
+        return redirect("app:cfdis")
+
+    # Top clients (empresa is emisor → group by receptor)
+    clientes_raw = list(
+        qs.filter(tipo_relacion="emitido", tipo_comprobante="I")
+        .values("rfc_receptor").annotate(monto=Sum("total"), count=Count("uuid"))
+        .order_by("-monto")[:10]
+    )
+    # Top providers (empresa is receptor → group by emisor)
+    proveedores_raw = list(
+        qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"])
+        .values("rfc_emisor").annotate(monto=Sum("total"), count=Count("uuid"))
+        .order_by("-monto")[:10]
+    )
+
+    total_ing = sum(float(c["monto"]) for c in clientes_raw) or 1
+    total_gas = sum(float(p["monto"]) for p in proveedores_raw) or 1
+    max_c = float(clientes_raw[0]["monto"]) if clientes_raw else 1
+    max_p = float(proveedores_raw[0]["monto"]) if proveedores_raw else 1
+
+    clientes = [
+        {
+            "rfc": c["rfc_receptor"], "count": c["count"],
+            "monto_fmt": _fmt(c["monto"]),
+            "pct": round(float(c["monto"]) / total_ing * 100),
+            "bar_pct": round(float(c["monto"]) / max_c * 100),
+        }
+        for c in clientes_raw
+    ]
+    proveedores = [
+        {
+            "rfc": p["rfc_emisor"], "count": p["count"],
+            "monto_fmt": _fmt(p["monto"]),
+            "pct": round(float(p["monto"]) / total_gas * 100),
+            "bar_pct": round(float(p["monto"]) / max_p * 100),
+        }
+        for p in proveedores_raw
+    ]
+
+    conc_c = clientes[0]["pct"] if clientes else 0
+    conc_p = proveedores[0]["pct"] if proveedores else 0
+
+    data = {
+        "clientes": clientes, "proveedores": proveedores,
+        "concentracion_cliente": conc_c,
+        "concentracion_proveedor": conc_p,
+        "riesgo_cliente": "alto" if conc_c > 50 else "medio" if conc_c > 30 else "bajo",
+        "riesgo_proveedor": "alto" if conc_p > 50 else "medio" if conc_p > 30 else "bajo",
+    }
+    return render(request, "app/analysis_top_rfc.html", {
+        "titulo": "🏢 Top RFC — Clientes y Proveedores",
+        "empresa": empresa, "year": year, "month": month,
+        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "data": data, "now": datetime.now(),
+    })
+
+
+@login_required(login_url=APP_LOGIN_URL)
+def analysis_risks_view(request):
+    from accounts.analysis_helpers import calcular_fiscscore
+
+    empresa_id = request.GET.get("empresa", "")
+    year = int(request.GET.get("year", 2026))
+    month = int(request.GET.get("month", 3))
+
+    empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
+    if not empresa:
+        return redirect("app:cfdis")
+
+    fs = calcular_fiscscore(empresa, year, month)
+
+    data = {
+        "score": fs["score"], "score_label": fs["label"], "score_color": fs["color"],
+        "score_dash": fs["score_dash"],
+        "cumplimiento": fs["cumplimiento"],
+        "deducibilidad": fs["deducibilidad"],
+        "diversificacion": fs["diversificacion"],
+        "consistencia_iva": fs["consistencia_iva"],
+        "alertas": {
+            **fs["alertas"],
+            "efectivo_monto_fmt": _fmt(fs["alertas"]["efectivo_monto"]) if fs["alertas"]["efectivo_monto"] else "",
+            "proveedor_nuevo_monto_fmt": _fmt(fs["alertas"]["proveedor_nuevo_monto"]) if fs["alertas"]["proveedor_nuevo_monto"] else "",
+        },
+    }
+    return render(request, "app/analysis_risks.html", {
+        "titulo": "⚠️ Riesgos Fiscales — FiscScore",
         "empresa": empresa, "year": year, "month": month,
         "periodo": f"{MONTH_NAMES_ES[month]} {year}",
         "data": data, "now": datetime.now(),
