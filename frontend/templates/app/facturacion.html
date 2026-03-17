@@ -1,61 +1,265 @@
 {% extends "app/base_app.html" %}
 
 {% block title %}Facturación{% endblock %}
-{% block page_title %}Datos de Facturación{% endblock %}
-{% block page_subtitle %}Tus datos fiscales para que te facturemos{% endblock %}
+{% block page_title %}Facturación{% endblock %}
+{% block page_subtitle %}Tu plan, pagos y datos fiscales{% endblock %}
 
 {% block content %}
-<div class="glass rounded-xl p-6 max-w-2xl">
-    <form method="post" class="space-y-4">
+
+{# ── SECTION 1: Plan actual ── #}
+<div class="glass rounded-2xl p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <span>📋</span> Tu plan actual
+        </h3>
+        <a href="{% url 'app:mejorar_plan' %}" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold text-white">
+            {% if plan_actual and plan_actual.precio_mensual > 0 %}Cambiar plan{% else %}Mejorar plan →{% endif %}
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Plan</span>
+            <p class="text-white font-semibold text-lg mt-1">
+                {{ plan_actual.nombre|default:"Gratis" }}
+                {% if profile.subscription_cancel_at_period_end %}
+                    <span class="ml-2 text-xs px-2 py-0.5 rounded-full" style="background: rgba(239,68,68,0.15); color: #f87171;">Cancelado</span>
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Estado</span>
+            <p class="mt-1">
+                {% if profile.subscription_status == 'active' and not profile.subscription_cancel_at_period_end %}
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span><span class="text-green-400 font-medium">Activa</span></span>
+                {% elif profile.subscription_cancel_at_period_end %}
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span class="text-amber-400 font-medium">Cancela al vencer</span></span>
+                {% elif profile.subscription_status == 'past_due' %}
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-400 pulse-dot"></span><span class="text-red-400 font-medium">Pago pendiente</span></span>
+                {% elif profile.subscription_status == 'canceled' %}
+                    <span class="text-gray-500">Cancelada</span>
+                {% else %}
+                    <span class="text-gray-500">Sin suscripción</span>
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Precio</span>
+            <p class="text-white font-semibold mt-1">
+                {% if plan_actual and plan_actual.precio_mensual > 0 %}
+                    ${{ plan_actual.precio_mensual|floatformat:0 }} MXN/mes
+                {% else %}
+                    Gratis
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">
+                {% if profile.subscription_cancel_at_period_end %}Acceso hasta{% else %}Próximo cobro{% endif %}
+            </span>
+            <p class="text-white font-semibold mt-1">
+                {% if profile.subscription_current_period_end %}
+                    {{ profile.subscription_current_period_end|date:"d M Y" }}
+                {% else %}
+                    —
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    {% if profile.subscription_status == 'active' and not profile.subscription_cancel_at_period_end and plan_actual.precio_mensual > 0 %}
+    <div class="mt-4 pt-4 border-t border-white/5">
+        <form method="POST" action="{% url 'app:cancelar_plan' %}">
+            {% csrf_token %}
+            <button type="submit" class="text-sm text-gray-500 hover:text-red-400 transition cursor-pointer"
+                onclick="return confirm('¿Seguro que deseas cancelar? Mantendrás acceso hasta el final del periodo.')">
+                Cancelar suscripción
+            </button>
+        </form>
+        <p class="text-xs text-gray-600 mt-1">Si cancelas, mantienes acceso hasta el final del periodo de facturación.</p>
+    </div>
+    {% endif %}
+
+    {% if profile.subscription_cancel_at_period_end %}
+    <div class="mt-4 pt-4 border-t border-white/5" style="background: rgba(99,102,241,0.05); border-radius: 12px; padding: 16px; margin-top: 16px;">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-amber-400 font-medium text-sm">¿Cambiaste de opinión?</p>
+                <p class="text-xs text-gray-500 mt-0.5">Tu plan seguirá activo hasta {{ profile.subscription_current_period_end|date:"d/m/Y" }}</p>
+            </div>
+            <form method="POST" action="{% url 'app:reactivar_plan' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold text-white cursor-pointer">
+                    Reactivar plan
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# ── SECTION 2: Historial de pagos ── #}
+<div class="glass rounded-2xl p-6 mb-6">
+    <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
+        <span>💳</span> Historial de Pagos
+    </h3>
+
+    {% if pagos %}
+    <div class="overflow-x-auto">
+        <table class="w-full glass-table">
+            <thead>
+                <tr class="text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="text-left py-3 px-4">Fecha</th>
+                    <th class="text-left py-3 px-4">Concepto</th>
+                    <th class="text-right py-3 px-4">Monto</th>
+                    <th class="text-center py-3 px-4">Estado</th>
+                    <th class="text-center py-3 px-4">Recibo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pago in pagos %}
+                <tr>
+                    <td class="py-3 px-4 text-sm text-gray-300">{{ pago.created_at|date:"d/m/Y" }}</td>
+                    <td class="py-3 px-4 text-sm text-white">{{ pago.concept }}</td>
+                    <td class="py-3 px-4 text-sm text-white text-right font-mono">${{ pago.amount|floatformat:2 }} {{ pago.currency|upper }}</td>
+                    <td class="py-3 px-4 text-center">
+                        {% if pago.status == 'paid' %}
+                            <span class="badge-success text-xs px-2 py-1 rounded-full">✅ Pagado</span>
+                        {% elif pago.status == 'pending' %}
+                            <span class="badge-warning text-xs px-2 py-1 rounded-full">⏳ Pendiente</span>
+                        {% else %}
+                            <span class="badge-error text-xs px-2 py-1 rounded-full">❌ Fallido</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        {% if pago.status == 'paid' %}
+                        <a href="{% url 'app:descargar_recibo' pago.id %}" class="text-indigo-400 hover:text-indigo-300 transition" title="Descargar recibo">
+                            📄
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-8">
+        <span class="text-4xl mb-3 block">💳</span>
+        <p class="text-gray-400">No tienes pagos registrados aún.</p>
+        <a href="{% url 'app:mejorar_plan' %}" class="text-indigo-400 hover:text-indigo-300 text-sm mt-2 inline-block">Explora nuestros planes →</a>
+    </div>
+    {% endif %}
+</div>
+
+{# ── SECTION 3: Datos de facturación ── #}
+<div class="glass rounded-2xl p-6">
+    <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
+        <span>🧾</span> Datos de Facturación
+    </h3>
+
+    {% if not profile.rfc_facturacion %}
+    <p class="text-sm text-gray-400 mb-4">Agrega tus datos fiscales para recibir factura en cada pago.</p>
+    {% endif %}
+
+    <form method="POST" action="{% url 'app:facturacion' %}" id="fiscal-form">
         {% csrf_token %}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">RFC</label>
-                <input type="text" name="rfc_facturacion" value="{{ profile.rfc_facturacion }}" maxlength="13" placeholder="XAXX010101000"
-                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm font-mono uppercase">
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">RFC</label>
+                <input type="text" name="rfc_facturacion"
+                    value="{{ profile.rfc_facturacion }}"
+                    maxlength="13" placeholder="XAXX010101000"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none uppercase"
+                    style="letter-spacing: 1px;">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Razón Social</label>
-                <input type="text" name="razon_social" value="{{ profile.razon_social }}" placeholder="Nombre fiscal"
-                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Régimen Fiscal</label>
-                <select name="regimen_fiscal" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
-                    <option value="">— Seleccionar —</option>
-                    <option value="601" {% if profile.regimen_fiscal == "601" %}selected{% endif %}>601 — General de Ley PM</option>
-                    <option value="603" {% if profile.regimen_fiscal == "603" %}selected{% endif %}>603 — Personas Morales sin fines de lucro</option>
-                    <option value="605" {% if profile.regimen_fiscal == "605" %}selected{% endif %}>605 — Sueldos y Salarios</option>
-                    <option value="606" {% if profile.regimen_fiscal == "606" %}selected{% endif %}>606 — Arrendamiento</option>
-                    <option value="612" {% if profile.regimen_fiscal == "612" %}selected{% endif %}>612 — Actividades Empresariales PF</option>
-                    <option value="616" {% if profile.regimen_fiscal == "616" %}selected{% endif %}>616 — Sin obligaciones fiscales</option>
-                    <option value="621" {% if profile.regimen_fiscal == "621" %}selected{% endif %}>621 — Incorporación Fiscal</option>
-                    <option value="625" {% if profile.regimen_fiscal == "625" %}selected{% endif %}>625 — RESICO</option>
-                    <option value="626" {% if profile.regimen_fiscal == "626" %}selected{% endif %}>626 — RESICO PM</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Código Postal</label>
-                <input type="text" name="codigo_postal" value="{{ profile.codigo_postal }}" maxlength="5" placeholder="64000"
-                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Uso CFDI</label>
-                <select name="uso_cfdi" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50">
-                    <option value="G01" {% if profile.uso_cfdi == "G01" %}selected{% endif %}>G01 — Adquisición de mercancías</option>
-                    <option value="G03" {% if profile.uso_cfdi == "G03" %}selected{% endif %}>G03 — Gastos en general</option>
-                    <option value="I01" {% if profile.uso_cfdi == "I01" %}selected{% endif %}>I01 — Construcciones</option>
-                    <option value="P01" {% if profile.uso_cfdi == "P01" %}selected{% endif %}>P01 — Por definir</option>
-                    <option value="S01" {% if profile.uso_cfdi == "S01" %}selected{% endif %}>S01 — Sin efectos fiscales</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Email para factura</label>
-                <input type="email" name="email_facturacion" value="{{ profile.email_facturacion }}" placeholder="facturacion@empresa.com"
-                    class="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 text-sm">
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Razón Social</label>
+                <input type="text" name="razon_social"
+                    value="{{ profile.razon_social }}"
+                    placeholder="Razón social o nombre"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
             </div>
         </div>
-        <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm text-white font-medium">Guardar Datos Fiscales</button>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Régimen Fiscal</label>
+                <select name="regimen_fiscal"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none appearance-none"
+                    style="background-image: url('data:image/svg+xml,<%3Fsvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath d=%22M6 8L1 3h10z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 12px center;">
+                    <option value="" {% if not profile.regimen_fiscal %}selected{% endif %}>Seleccionar...</option>
+                    <option value="601" {% if profile.regimen_fiscal == '601' %}selected{% endif %}>601 — General de Ley PM</option>
+                    <option value="603" {% if profile.regimen_fiscal == '603' %}selected{% endif %}>603 — PM Fines no Lucrativos</option>
+                    <option value="605" {% if profile.regimen_fiscal == '605' %}selected{% endif %}>605 — Sueldos y Salarios</option>
+                    <option value="606" {% if profile.regimen_fiscal == '606' %}selected{% endif %}>606 — Arrendamiento</option>
+                    <option value="607" {% if profile.regimen_fiscal == '607' %}selected{% endif %}>607 — Enajenación/Adquisición</option>
+                    <option value="608" {% if profile.regimen_fiscal == '608' %}selected{% endif %}>608 — Demás ingresos</option>
+                    <option value="610" {% if profile.regimen_fiscal == '610' %}selected{% endif %}>610 — Residentes Extranjero</option>
+                    <option value="611" {% if profile.regimen_fiscal == '611' %}selected{% endif %}>611 — Dividendos</option>
+                    <option value="612" {% if profile.regimen_fiscal == '612' %}selected{% endif %}>612 — Actividades Empresariales</option>
+                    <option value="614" {% if profile.regimen_fiscal == '614' %}selected{% endif %}>614 — Intereses</option>
+                    <option value="616" {% if profile.regimen_fiscal == '616' %}selected{% endif %}>616 — Sin obligaciones fiscales</option>
+                    <option value="620" {% if profile.regimen_fiscal == '620' %}selected{% endif %}>620 — Soc. Cooperativas</option>
+                    <option value="621" {% if profile.regimen_fiscal == '621' %}selected{% endif %}>621 — Incorporación Fiscal</option>
+                    <option value="622" {% if profile.regimen_fiscal == '622' %}selected{% endif %}>622 — Agrícolas/Ganaderas</option>
+                    <option value="625" {% if profile.regimen_fiscal == '625' %}selected{% endif %}>625 — Plataformas Tecnológicas</option>
+                    <option value="626" {% if profile.regimen_fiscal == '626' %}selected{% endif %}>626 — RESICO</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Código Postal</label>
+                <input type="text" name="codigo_postal"
+                    value="{{ profile.codigo_postal }}"
+                    maxlength="5" placeholder="64000"
+                    pattern="[0-9]{5}" title="5 dígitos"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Uso CFDI</label>
+                <select name="uso_cfdi"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none appearance-none"
+                    style="background-image: url('data:image/svg+xml,<%3Fsvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22%3E%3Cpath d=%22M6 8L1 3h10z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 12px center;">
+                    <option value="G01" {% if profile.uso_cfdi == 'G01' %}selected{% endif %}>G01 — Adquisición de mercancías</option>
+                    <option value="G02" {% if profile.uso_cfdi == 'G02' %}selected{% endif %}>G02 — Devoluciones/descuentos</option>
+                    <option value="G03" {% if profile.uso_cfdi == 'G03' %}selected{% endif %}>G03 — Gastos en general</option>
+                    <option value="I01" {% if profile.uso_cfdi == 'I01' %}selected{% endif %}>I01 — Construcciones</option>
+                    <option value="I02" {% if profile.uso_cfdi == 'I02' %}selected{% endif %}>I02 — Mobiliario y equipo</option>
+                    <option value="I03" {% if profile.uso_cfdi == 'I03' %}selected{% endif %}>I03 — Equipo de transporte</option>
+                    <option value="I04" {% if profile.uso_cfdi == 'I04' %}selected{% endif %}>I04 — Equipo de cómputo</option>
+                    <option value="I06" {% if profile.uso_cfdi == 'I06' %}selected{% endif %}>I06 — Comunicaciones telefónicas</option>
+                    <option value="I08" {% if profile.uso_cfdi == 'I08' %}selected{% endif %}>I08 — Otra maquinaria</option>
+                    <option value="D01" {% if profile.uso_cfdi == 'D01' %}selected{% endif %}>D01 — Honorarios médicos</option>
+                    <option value="D04" {% if profile.uso_cfdi == 'D04' %}selected{% endif %}>D04 — Donativos</option>
+                    <option value="D05" {% if profile.uso_cfdi == 'D05' %}selected{% endif %}>D05 — Intereses hipotecarios</option>
+                    <option value="D10" {% if profile.uso_cfdi == 'D10' %}selected{% endif %}>D10 — Pagos educativos</option>
+                    <option value="S01" {% if profile.uso_cfdi == 'S01' %}selected{% endif %}>S01 — Sin efectos fiscales</option>
+                    <option value="CP01" {% if profile.uso_cfdi == 'CP01' %}selected{% endif %}>CP01 — Pagos</option>
+                    <option value="P01" {% if profile.uso_cfdi == 'P01' %}selected{% endif %}>P01 — Por definir</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1.5">Email para factura</label>
+                <input type="email" name="email_facturacion"
+                    value="{{ profile.email_facturacion }}"
+                    placeholder="facturacion@empresa.com"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+        </div>
+
+        <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm font-semibold text-white cursor-pointer">
+            Guardar datos fiscales
+        </button>
     </form>
+
+    <p class="text-xs text-gray-600 mt-4">
+        Si no proporcionas datos fiscales, tus recibos se generan con RFC genérico XAXX010101000 (público en general).
+        La facturación fiscal CFDI estará disponible próximamente.
+    </p>
 </div>
+
 {% endblock %}

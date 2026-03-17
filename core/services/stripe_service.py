@@ -86,10 +86,34 @@ def cancel_subscription(user):
     """Cancel subscription at end of current period."""
     profile = user.perfil
     if profile.stripe_subscription_id:
-        stripe.Subscription.modify(
+        sub = stripe.Subscription.modify(
             profile.stripe_subscription_id,
             cancel_at_period_end=True,
         )
+        profile.subscription_cancel_at_period_end = True
+        if sub.get("current_period_end"):
+            from datetime import datetime, timezone
+            profile.subscription_current_period_end = datetime.fromtimestamp(
+                sub["current_period_end"], tz=timezone.utc
+            )
+        profile.save(update_fields=[
+            "subscription_cancel_at_period_end",
+            "subscription_current_period_end",
+        ])
+        return True
+    return False
+
+
+def reactivate_subscription(user):
+    """Reactivate a subscription that was set to cancel at period end."""
+    profile = user.perfil
+    if profile.stripe_subscription_id:
+        stripe.Subscription.modify(
+            profile.stripe_subscription_id,
+            cancel_at_period_end=False,
+        )
+        profile.subscription_cancel_at_period_end = False
+        profile.save(update_fields=["subscription_cancel_at_period_end"])
         return True
     return False
 
@@ -99,6 +123,7 @@ def handle_webhook_event(event):
     from core.services.monitor import log_info
     from core.services.alerts import send_telegram
     from core.models import Plan
+    from accounts.models import StripePayment
 
     event_type = event["type"]
     data = event["data"]["object"]
@@ -118,11 +143,38 @@ def handle_webhook_event(event):
                 if data.get("subscription"):
                     profile.stripe_subscription_id = data["subscription"]
                     profile.subscription_status = "active"
+                    profile.subscription_cancel_at_period_end = False
+                    # Fetch period end from subscription
+                    try:
+                        sub = stripe.Subscription.retrieve(data["subscription"])
+                        if sub.get("current_period_end"):
+                            from datetime import datetime, timezone
+                            profile.subscription_current_period_end = (
+                                datetime.fromtimestamp(
+                                    sub["current_period_end"], tz=timezone.utc
+                                )
+                            )
+                    except Exception:
+                        pass
                 profile.save()
+
+                # Create payment record
+                amount = (data.get("amount_total") or 0) / 100
+                StripePayment.objects.create(
+                    user=user,
+                    stripe_payment_intent_id=data.get("payment_intent", ""),
+                    stripe_invoice_id=data.get("invoice", ""),
+                    amount=amount,
+                    currency=data.get("currency", "mxn"),
+                    concept=f"{plan.nombre} (mensual)",
+                    status="paid",
+                    payment_method="card",
+                )
 
                 log_info("system", f"Plan activado: {user.email} → {plan.nombre}")
                 send_telegram(
-                    f"💰 Nuevo pago: *{user.email}* → {plan.nombre}", "success"
+                    f"💰 Nuevo pago: *{user.email}* → {plan.nombre} (${amount})",
+                    "success",
                 )
             except (User.DoesNotExist, Plan.DoesNotExist) as e:
                 log_info("system", f"Webhook error: {e}")
@@ -139,6 +191,24 @@ def handle_webhook_event(event):
                 emp.sync_desde_month = 1
                 emp.sync_completada = False
                 emp.save()
+
+                # Payment record for one-time
+                if user_id:
+                    from django.contrib.auth.models import User
+                    try:
+                        user = User.objects.get(id=user_id)
+                        StripePayment.objects.create(
+                            user=user,
+                            stripe_payment_intent_id=data.get("payment_intent", ""),
+                            amount=(data.get("amount_total") or 0) / 100,
+                            currency=data.get("currency", "mxn"),
+                            concept=f"Año histórico {year} — {emp.rfc}",
+                            status="paid",
+                            payment_method="card",
+                        )
+                    except User.DoesNotExist:
+                        pass
+
                 log_info("system", f"Histórico activado: {emp.rfc} desde {year}")
                 send_telegram(
                     f"💰 Año histórico: *{emp.rfc}* {year}", "success"
@@ -150,6 +220,24 @@ def handle_webhook_event(event):
         customer_id = data.get("customer")
         amount = data.get("amount_paid", 0) / 100
         log_info("system", f"Factura pagada: customer={customer_id} ${amount} MXN")
+
+        # Record renewal payment
+        from accounts.models import ClienteProfile
+        profile = ClienteProfile.objects.filter(
+            stripe_customer_id=customer_id
+        ).first()
+        if profile and amount > 0:
+            plan = profile.get_plan()
+            StripePayment.objects.create(
+                user=profile.user,
+                stripe_invoice_id=data.get("id", ""),
+                stripe_payment_intent_id=data.get("payment_intent", ""),
+                amount=amount,
+                currency=data.get("currency", "mxn"),
+                concept=f"{plan.nombre if plan else 'Suscripción'} (renovación)",
+                status="paid",
+                payment_method="card",
+            )
 
     elif event_type == "invoice.payment_failed":
         customer_id = data.get("customer")
@@ -163,6 +251,28 @@ def handle_webhook_event(event):
             profile.subscription_status = "past_due"
             profile.save(update_fields=["subscription_status"])
 
+    elif event_type == "customer.subscription.updated":
+        subscription_id = data.get("id")
+        from accounts.models import ClienteProfile
+
+        profile = ClienteProfile.objects.filter(
+            stripe_subscription_id=subscription_id
+        ).first()
+        if profile:
+            cancel_at = data.get("cancel_at_period_end", False)
+            profile.subscription_cancel_at_period_end = cancel_at
+            if data.get("current_period_end"):
+                from datetime import datetime, timezone
+                profile.subscription_current_period_end = (
+                    datetime.fromtimestamp(
+                        data["current_period_end"], tz=timezone.utc
+                    )
+                )
+            profile.save(update_fields=[
+                "subscription_cancel_at_period_end",
+                "subscription_current_period_end",
+            ])
+
     elif event_type == "customer.subscription.deleted":
         subscription_id = data.get("id")
         from accounts.models import ClienteProfile
@@ -172,6 +282,7 @@ def handle_webhook_event(event):
         ).first()
         if profile:
             profile.subscription_status = "canceled"
+            profile.subscription_cancel_at_period_end = False
             profile.plan_fk = Plan.objects.filter(slug="free").first()
             profile.save()
             log_info("system", f"Suscripción cancelada: {profile.user.email}")

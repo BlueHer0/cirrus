@@ -58,4 +58,6 @@ urlpatterns = [
     path("pago-exitoso/", views.pago_exitoso, name="pago_exitoso"),
     path("comprar-historico/checkout/", views.comprar_historico_checkout, name="comprar_historico_checkout"),
     path("cancelar-plan/", views.cancelar_plan, name="cancelar_plan"),
+    path("reactivar-plan/", views.reactivar_plan, name="reactivar_plan"),
+    path("recibo/<int:pago_id>/", views.descargar_recibo, name="descargar_recibo"),
 ]

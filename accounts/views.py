@@ -1099,10 +1099,47 @@ def app_facturacion(request):
         messages.success(request, "Datos de facturación actualizados")
         return redirect("app:facturacion")
 
+    from accounts.models import StripePayment
+
+    plan_actual = profile.get_plan()
+    pagos = StripePayment.objects.filter(user=request.user).order_by("-created_at")[:20]
+
     return render(request, "app/facturacion.html", {
         "current_page": "facturacion",
         "profile": profile,
+        "plan_actual": plan_actual,
+        "pagos": pagos,
     })
+
+
+@login_required
+def descargar_recibo(request, pago_id):
+    """Download PDF receipt for a payment."""
+    from accounts.models import StripePayment
+    from core.services.recibo_pdf import generar_recibo
+
+    pago = StripePayment.objects.filter(id=pago_id, user=request.user).first()
+    if not pago:
+        return redirect("app:facturacion")
+
+    pdf = generar_recibo(pago)
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="Recibo_Cirrus_{pago.id:06d}.pdf"'
+    return response
+
+
+@login_required
+def reactivar_plan(request):
+    """Reactivate a subscription that was set to cancel."""
+    if request.method == "POST":
+        try:
+            from core.services.stripe_service import reactivate_subscription
+
+            reactivate_subscription(request.user)
+            messages.success(request, "¡Tu suscripción ha sido reactivada!")
+        except Exception as e:
+            messages.error(request, f"Error al reactivar: {e}")
+    return redirect("app:facturacion")
 
 
 # ── Analysis Views ────────────────────────────────────────────────────

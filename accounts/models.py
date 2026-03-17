@@ -61,6 +61,7 @@ class ClienteProfile(models.Model):
         ],
     )
     subscription_current_period_end = models.DateTimeField(null=True, blank=True)
+    subscription_cancel_at_period_end = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
