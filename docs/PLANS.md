@@ -1,97 +1,70 @@
-# Cirrus — Sistema de Planes y Descargas
+# Cirrus — Programación de Descargas por Plan
 
-## Filosofía
-El cliente NUNCA elige manualmente qué descargar.
-Cirrus administra todo automáticamente según el plan.
-El cliente solo ve progreso y fechas de próxima descarga.
+## Reglas Globales
 
-## Planes
+- **Ventana horaria**: Solo 10PM-4AM CST (04:00-10:00 UTC) + 22:00-23:59 UTC
+- **Spacing**: Mínimo 10 minutos entre descargas del mismo RFC
+- **Retry inteligente**: Login fallido → 30 min, Timeout → 15 min, Otro → escalada 5-60 min
+- **Prioridad**: Enterprise > Pro > Básico > Gratis
+- **Primera descarga**: Siempre permitida (bypass de horario y plan)
+- **Rotación RFC**: `ultimo_scrape` ASC (el que lleva más sin descargar va primero)
 
-### Gratis ($0/mes)
-- 1 empresa (RFC)
-- Descarga automática: solo mes anterior al cerrar
-- 30 CFDIs visibles
-- PDFs ilimitados (con publicidad Cirrus)
-- Excel: 3/mes
-- Sin API REST
-- Historial: solo meses descargados (no compra histórico)
-- Solo primeros 100 registros, luego se elimina plan gratis
-- Prioridad de descarga: BAJA (después de planes de pago)
-- Programación: después de todos los clientes de pago
+---
 
-### Básico ($199/mes)
-- 2 empresas
-- Al registrarse: descarga todo 2026 (enero → mes anterior)
-- Después: descarga automática día 1 y 15 de cada mes
-- 500 CFDIs visibles (entre todas las empresas)
-- PDFs ilimitados (con publicidad Cirrus)
-- Excel: 10/mes
-- Sin API REST
-- Puede comprar 2025: $500 MXN por empresa (pago único)
-- CFDI extra sobre límite: $0.25 c/u (cuenta por pagar)
-- Prioridad: MEDIA
+## Plan Gratis ($0)
 
-### Profesional ($499/mes)
-- 6 empresas
-- Al registrarse: descarga todo desde enero 2025
-- Después: descarga semanal automática (4/mes)
-- 5,000 CFDIs visibles
-- PDFs ilimitados (con publicidad Cirrus + tu logo)
-- Excel: 50/mes
-- API REST completa
-- Puede comprar 2024: $500 MXN por empresa (pago único)
-- CFDI extra: $0.25 c/u
-- Prioridad: ALTA
+- **Descargas**: 1 vez al mes (días 1-5)
+- **Cobertura**: Solo mes anterior completo
+- **Prioridad**: Última en la cola
+- **Descarga urgente extra**: $50 MXN
 
-### Enterprise ($1,299/mes)
-- 15 empresas
-- Al registrarse: descarga todo desde enero 2024
-- Después: descarga cada ~2.5 días (12/mes)
-- 50,000 CFDIs visibles
-- PDFs ilimitados (con publicidad Cirrus + tu logo)
-- Excel: ilimitado
-- API REST completa
-- Puede comprar 2023: $500 MXN por empresa (pago único)
-- CFDI extra: $0.25 c/u
-- Prioridad: MÁXIMA
+## Plan Básico ($199/mes)
 
-### Owner (oculto, $0)
-- Todo ilimitado, no aparece en pricing
-- Solo para cuentas de Fernando
+- **Descargas**: 2 veces al mes
+- **Programación**: Días 8-12 y 18-22
+- **Al registrarse**: Descarga todo 2026
+- **Distribución**: Tandeado por día de registro de la semana
 
-## Excedentes (a destajo)
-- RFC adicional sobre el plan: $49 MXN/mes
-- CFDI extra sobre límite visible: $0.25 MXN c/u
-- Año histórico adicional por empresa: $500 MXN (pago único)
+## Plan Profesional ($499/mes)
 
-## Compra de histórico
-- Cada plan tiene un año base incluido
-- Años anteriores se compran POR EMPRESA, no por cuenta
-- Ejemplo: Plan Básico + 3 empresas + quiere 2025 para 2 de ellas:
-  $199/mes + $500×2 = $199/mes + $1,000 único
-- Máximo hacia atrás: 2023 (Enterprise)
-- El botón "Comprar 2024" aparece solo si su plan lo permite
-- Al comprar, se encolan las descargas automáticamente
+- **Descargas**: 4 veces al mes (semanal)
+- **Programación**: Día fijo por RFC → `hash(RFC) % 5`
+  - 0=lunes, 1=martes, 2=miércoles, 3=jueves, 4=viernes
+- **Al registrarse**: Descarga desde enero 2025
 
-## Lógica del agente de sincronización
-1. Revisa cada 15 min qué empresas necesitan descarga
-2. Prioridad: Enterprise > Pro > Básico > Gratis
-3. No encola si ya existe descarga completada para ese periodo
-4. Respeta los límites del plan (no descarga periodos no incluidos)
-5. Gratis: solo programa al cerrar el mes
-6. Básico: programa día 1 y 15
-7. Pro: programa semanal
-8. Enterprise: programa cada ~2.5 días
+## Plan Enterprise ($1,299/mes)
 
-## Lo que ve el cliente en /app/descargas/
-- NO hay formulario manual de descarga
-- Card por empresa con:
-  - Cobertura (desde cuándo hasta presente)
-  - Progreso (% sincronizado)
-  - Última descarga (fecha + cuántos CFDIs)
-  - Próxima descarga (fecha estimada)
-  - Total CFDIs
-- Si hay año histórico disponible para comprar:
-  Botón "¿Necesitas {año}? $500 MXN por empresa → [Solicitar]"
-- Mensaje: "Cirrus descarga automáticamente según tu plan.
-  Las descargas se programan en horarios de baja demanda del SAT."
+- **Descargas**: 10+ veces al mes (cada ~3 días)
+- **Programación**: Escalonado por RFC → `hash(RFC) % 3`
+  - `dia_inicio = hash(RFC) % 3`
+  - Descarga cuando `(dia - dia_inicio) % 3 == 0`
+- **Al registrarse**: Descarga desde enero 2024
+
+## Plan Owner (interno)
+
+- Sin restricciones (misma lógica que Enterprise)
+- Sin límites de empresas ni descargas
+
+---
+
+## Implementación
+
+```python
+# core/tasks.py
+
+def _es_hora_optima():
+    hora_utc = datetime.now(timezone.utc).hour
+    return (4 <= hora_utc <= 10) or hora_utc >= 22
+
+def _decidir_si_descargar(empresa, plan, now):
+    slug = plan.slug if plan else "free"
+    if slug == "free":
+        return now.day <= 5
+    elif slug == "basico":
+        return abs(now.day - 10) <= 2 or abs(now.day - 20) <= 2
+    elif slug == "pro":
+        return now.weekday() == hash(empresa.rfc) % 5
+    elif slug in ("enterprise", "owner"):
+        return (now.day - hash(empresa.rfc) % 3) % 3 == 0
+    return False
+```

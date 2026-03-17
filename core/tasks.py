@@ -148,9 +148,18 @@ def descargar_cfdis(self, empresa_id: str, params: dict | None = None,
             empresa.rfc, retry_num + 1, exc,
         )
 
-        # Escalating delays: 2min, 5min, 10min, 20min, 30min, then 60min
-        delays = [120, 300, 600, 1200, 1800, 3600, 3600, 3600, 3600, 3600]
-        delay = delays[min(retry_num, len(delays) - 1)]
+        # Smart retry delays based on error type
+        error_str = str(exc).lower()
+        if "login fallido" in error_str or "sesión activa" in error_str:
+            # SAT login failure — wait 30 min (SAT saturated)
+            delay = 1800
+        elif "timeout" in error_str or "connection" in error_str:
+            # Network issue — wait 15 min
+            delay = 900
+        else:
+            # Other errors — escalating delays
+            delays = [300, 600, 1200, 1800, 3600, 3600, 3600, 3600, 3600, 3600]
+            delay = delays[min(retry_num, len(delays) - 1)]
 
         # Append error to log but do NOT set estado='error'
         errors = log.errores or []
@@ -181,9 +190,7 @@ def descargar_cfdis(self, empresa_id: str, params: dict | None = None,
             _send_client_email_failure(empresa, log)
             return {"error": "max retries exhausted"}
         else:
-            # Removed: individual retry telegrams — too noisy, reported in hourly summary
-            logger.warning("⚠️ Reintento %d/10: %s — %s", retry_num + 1, empresa.rfc, str(exc)[:200])
-            # Retry with same log ID
+            logger.warning("⚠️ Reintento %d/10: %s — %s (delay=%dmin)", retry_num + 1, empresa.rfc, str(exc)[:200], delay // 60)
             raise self.retry(
                 exc=exc,
                 countdown=delay,
@@ -355,12 +362,16 @@ def agente_sincronizacion():
 
     Runs every 15 minutes via Celery Beat.
     - Auto-cleans zombie downloads (ejecutando > 1 hour)
+    - Night window: only downloads 10PM-4AM CST (04:00-10:00 UTC)
+    - 10-min spacing between downloads of same RFC
+    - Rotates RFCs (least recently downloaded first)
     - Respects worker capacity (max 3 concurrent)
     - Processes multiple empresas per cycle
-    - Bypasses plan restrictions for first-time downloads
+    - Bypasses time/plan restrictions for first-time downloads
     """
     from core.models import Empresa, DescargaLog
     from core.services.monitor import log_info
+    from django.db.models import F
 
     now = datetime.now()
     now_utc = datetime.now(timezone.utc)
@@ -375,6 +386,17 @@ def agente_sincronizacion():
         zombies.update(estado="error", progreso="Zombie auto-limpiado por agente")
         log_info("system", f"Agente: {zombie_count} zombies limpiados")
 
+    # PASO 0.5: Verificar ventana horaria
+    if not _es_hora_optima():
+        # Exception: check if any empresa has 0 downloads (first-time)
+        tiene_primera = Empresa.objects.filter(
+            sync_activa=True, fiel_verificada=True, sync_completada=False,
+        ).exclude(
+            id__in=DescargaLog.objects.filter(estado="completado").values("empresa_id")
+        ).exists()
+        if not tiene_primera:
+            return "Fuera de horario óptimo, esperando madrugada"
+
     # PASO 1: Contar ejecuciones reales (< 1 hora)
     ejecutando = DescargaLog.objects.filter(
         estado="ejecutando", iniciado_at__gte=cutoff
@@ -385,12 +407,12 @@ def agente_sincronizacion():
 
     slots = 3 - ejecutando
 
-    # PASO 2: Empresas por prioridad de plan
+    # PASO 2: Empresas por prioridad de plan + RFC rotation (ultimo_scrape)
     empresas = Empresa.objects.filter(
         sync_activa=True,
         fiel_verificada=True,
         sync_completada=False,
-    ).select_related("owner")
+    ).select_related("owner").order_by(F("ultimo_scrape").asc(nulls_first=True))
 
     def _plan_priority(emp):
         try:
@@ -413,13 +435,26 @@ def agente_sincronizacion():
         except Exception:
             plan = None
 
-        # First-time bypass: if 0 completed downloads, always allow
+        # First-time bypass: if 0 completed downloads, allow anytime
         es_primera = not DescargaLog.objects.filter(
             empresa=empresa, estado="completado"
         ).exists()
 
-        if not es_primera and not _decidir_si_descargar(plan, now):
-            continue
+        if not es_primera:
+            # Night window check (already checked globally, but first-time bypass)
+            if not _es_hora_optima():
+                continue
+            # Plan-based day check
+            if not _decidir_si_descargar(empresa, plan, now):
+                continue
+            # 10-min spacing: skip if last download finished < 10 min ago
+            ultima = DescargaLog.objects.filter(
+                empresa=empresa, estado="completado"
+            ).order_by("-completado_at").first()
+            if ultima and ultima.completado_at:
+                diff = (now_utc - ultima.completado_at).total_seconds()
+                if diff < 600:  # 10 minutes
+                    continue
 
         siguiente = _encontrar_siguiente_pendiente(empresa, now)
         if not siguiente:
@@ -468,16 +503,33 @@ def agente_sincronizacion():
     return f"Encoladas: {encoladas} empresas"
 
 
-def _decidir_si_descargar(plan, now):
-    """Check if plan allows downloading today."""
+def _es_hora_optima():
+    """Solo descargar en ventana óptima: 10PM-4AM CST (04:00-10:00 UTC).
+    También 22:00-23:59 UTC = 4-6PM CST (buenos resultados en telemetría).
+    """
+    hora_utc = datetime.now(timezone.utc).hour
+    return (4 <= hora_utc <= 10) or hora_utc >= 22
+
+
+def _decidir_si_descargar(empresa, plan, now):
+    """Check if plan allows downloading today, using RFC hash for distribution."""
     slug = plan.slug if plan else "free"
 
     if slug == "free":
         return now.day <= 5
     elif slug == "basico":
-        return now.day in (1, 2, 3, 14, 15, 16)
-    elif slug in ("pro", "enterprise", "owner"):
-        return True
+        # Two windows: around day 10 and day 20
+        ventana1 = abs(now.day - 10) <= 2  # days 8-12
+        ventana2 = abs(now.day - 20) <= 2  # days 18-22
+        return ventana1 or ventana2
+    elif slug == "pro":
+        # Weekly, fixed day per RFC
+        dia_semana = hash(empresa.rfc) % 5  # mon(0) to fri(4)
+        return now.weekday() == dia_semana
+    elif slug in ("enterprise", "owner"):
+        # Every 3 days, staggered by RFC
+        dia_inicio = hash(empresa.rfc) % 3
+        return (now.day - dia_inicio) % 3 == 0
     return False
 
 
