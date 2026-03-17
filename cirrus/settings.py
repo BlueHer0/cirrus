@@ -140,6 +140,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.benchmark_hourly_report",
         "schedule": 3600,  # every hour
     },
+    "supervisor-cirrus": {
+        "task": "core.tasks.supervisor_cirrus",
+        "schedule": 900,  # every 15 minutes, runs before sync agent
+        "options": {"queue": "sistema"},
+    },
     "sync-efos-mensual": {
         "task": "core.tasks.sync_efos_task",
         "schedule": crontab(day_of_month="1", hour="5", minute="0"),
@@ -155,6 +160,7 @@ CELERY_TASK_ROUTES = {
     "core.tasks.benchmark_hourly_report": {"queue": "celery"},
     "core.services.scheduler.programar_descargas_del_dia": {"queue": "scheduler"},
     "core.tasks.sync_efos_task": {"queue": "sistema"},
+    "core.tasks.supervisor_cirrus": {"queue": "sistema"},
 }
 CELERY_TASK_DEFAULT_QUEUE = "sistema"
 

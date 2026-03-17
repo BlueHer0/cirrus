@@ -8,7 +8,7 @@ Task inventory:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
 
@@ -351,121 +351,149 @@ def health_check_playwright():
 
 @shared_task(soft_time_limit=60, time_limit=90)
 def agente_sincronizacion():
-    """Sync agent: checks empresas needing downloads, queues next month.
+    """Sync agent: checks empresas needing downloads, queues next months.
 
-    Runs every 15 minutes via Celery Beat. Only queues one batch at a time
-    to avoid overwhelming the SAT portal. Respects plan-based scheduling.
+    Runs every 15 minutes via Celery Beat.
+    - Auto-cleans zombie downloads (ejecutando > 1 hour)
+    - Respects worker capacity (max 3 concurrent)
+    - Processes multiple empresas per cycle
+    - Bypasses plan restrictions for first-time downloads
     """
     from core.models import Empresa, DescargaLog
     from core.services.monitor import log_info
 
-    # Don't queue if there's already a download running
-    ejecutando = DescargaLog.objects.filter(estado="ejecutando").exists()
-    if ejecutando:
-        return "Descarga en progreso, esperando"
-
     now = datetime.now()
+    now_utc = datetime.now(timezone.utc)
 
-    # Order by plan priority: enterprise/owner first, free last
+    # PASO 0: Limpiar zombies (ejecutando > 1 hora)
+    cutoff = now_utc - timedelta(hours=1)
+    zombies = DescargaLog.objects.filter(
+        estado="ejecutando", iniciado_at__lt=cutoff
+    )
+    zombie_count = zombies.count()
+    if zombie_count > 0:
+        zombies.update(estado="error", progreso="Zombie auto-limpiado por agente")
+        log_info("system", f"Agente: {zombie_count} zombies limpiados")
+
+    # PASO 1: Contar ejecuciones reales (< 1 hora)
+    ejecutando = DescargaLog.objects.filter(
+        estado="ejecutando", iniciado_at__gte=cutoff
+    ).count()
+
+    if ejecutando >= 3:
+        return f"Workers llenos ({ejecutando} ejecutando)"
+
+    slots = 3 - ejecutando
+
+    # PASO 2: Empresas por prioridad de plan
     empresas = Empresa.objects.filter(
         sync_activa=True,
-        sync_completada=False,
         fiel_verificada=True,
-    ).select_related("owner").order_by("ultimo_scrape")
+        sync_completada=False,
+    ).select_related("owner")
 
-    # Sort by plan priority
     def _plan_priority(emp):
         try:
             plan = emp.owner.perfil.get_plan()
             slug = plan.slug if plan else "free"
         except Exception:
             slug = "free"
-        priority_map = {"owner": 0, "enterprise": 1, "pro": 2, "basico": 3, "free": 4}
-        return priority_map.get(slug, 4)
+        return {"owner": 0, "enterprise": 1, "pro": 2, "basico": 3, "free": 4}.get(slug, 4)
 
     sorted_empresas = sorted(empresas, key=_plan_priority)
 
+    encoladas = 0
+
     for empresa in sorted_empresas:
-        # Check plan-based scheduling
-        if not _decidir_si_descargar(empresa, now):
+        if encoladas >= slots:
+            break
+
+        try:
+            plan = empresa.owner.perfil.get_plan()
+        except Exception:
+            plan = None
+
+        # First-time bypass: if 0 completed downloads, always allow
+        es_primera = not DescargaLog.objects.filter(
+            empresa=empresa, estado="completado"
+        ).exists()
+
+        if not es_primera and not _decidir_si_descargar(plan, now):
             continue
 
-        next_month = _calcular_siguiente_mes_pendiente(empresa)
-        if not next_month:
+        siguiente = _encontrar_siguiente_pendiente(empresa, now)
+        if not siguiente:
             empresa.sync_completada = True
             empresa.save(update_fields=["sync_completada"])
             log_info("download", f"Sync completa: {empresa.rfc} — todos los meses descargados")
             continue
 
-        year, month = next_month
+        year, month = siguiente
 
-        # Pre-check: skip if already completed for this RFC+period
-        ya_completado = DescargaLog.objects.filter(
-            empresa__rfc=empresa.rfc,
-            year=year,
-            month_start=month,
-            month_end=month,
-            estado="completado",
+        # Don't queue if already ejecutando for this period
+        ya_ejecutando = DescargaLog.objects.filter(
+            empresa=empresa, year=year, month_start=month,
+            estado="ejecutando",
         ).exists()
-        if ya_completado:
-            logger.info("⏭️ Agente skip: %s %d-%02d — ya completado", empresa.rfc, year, month)
+        if ya_ejecutando:
             continue
 
-        # Queue both recibidos + emitidos for this month
+        # Queue only what's missing (recibidos and/or emitidos)
+        queued_any = False
         for tipo in ["recibidos", "emitidos"]:
-            descargar_cfdis.delay(
-                str(empresa.id),
-                params={
-                    "year": year,
-                    "month_start": month,
-                    "month_end": month,
-                    "tipos": [tipo],
-                },
-                triggered_by="schedule",
-            )
+            ya_completado = DescargaLog.objects.filter(
+                empresa=empresa, year=year, month_start=month,
+                month_end=month, estado="completado",
+            ).filter(tipos__contains=[tipo]).exists()
 
-        log_info("download", f"Agente encoló: {empresa.rfc} {year}-{month:02d}")
-        return f"Encolado: {empresa.rfc} {year}-{month:02d}"
+            if not ya_completado:
+                descargar_cfdis.delay(
+                    str(empresa.id),
+                    params={
+                        "year": year,
+                        "month_start": month,
+                        "month_end": month,
+                        "tipos": [tipo],
+                    },
+                    triggered_by="schedule",
+                )
+                queued_any = True
 
-    return "Nada pendiente"
+        if queued_any:
+            log_info("download", f"Agente encoló: {empresa.rfc} {year}-{month:02d}")
+            encoladas += 1
+
+    if encoladas == 0:
+        return "Nada pendiente"
+    return f"Encoladas: {encoladas} empresas"
 
 
-def _decidir_si_descargar(empresa, now):
-    """Check if empresa should download now based on its plan's schedule."""
-    try:
-        plan = empresa.owner.perfil.get_plan()
-        slug = plan.slug if plan else "free"
-    except Exception:
-        slug = "free"
+def _decidir_si_descargar(plan, now):
+    """Check if plan allows downloading today."""
+    slug = plan.slug if plan else "free"
 
     if slug == "free":
-        # Free: only first 3 days of month
-        return now.day <= 3
+        return now.day <= 5
     elif slug == "basico":
-        # Basico: day 1-2 and 15-16
-        return now.day in (1, 2, 15, 16)
+        return now.day in (1, 2, 3, 14, 15, 16)
     elif slug in ("pro", "enterprise", "owner"):
-        # Pro/Enterprise/Owner: always
         return True
     return False
 
 
-def _calcular_siguiente_mes_pendiente(empresa):
-    """Calculate the next month that needs downloading for an empresa.
+def _encontrar_siguiente_pendiente(empresa, now):
+    """Find next month needing download (most recent first).
 
-    Returns (year, month) tuple or None if all months are downloaded.
-    Prioritizes most recent months first (what the client cares about most).
+    Checks recibidos and emitidos separately via JSON tipos field.
     """
     from core.models import DescargaLog
 
     if not empresa.sync_desde_year or not empresa.sync_desde_month:
         return None
 
-    now = datetime.now()
     y = empresa.sync_desde_year
     m = empresa.sync_desde_month
 
-    # Build list of all months needed
     meses = []
     while (y < now.year) or (y == now.year and m <= now.month):
         meses.append((y, m))
@@ -474,19 +502,18 @@ def _calcular_siguiente_mes_pendiente(empresa):
             m = 1
             y += 1
 
-    # Most recent first
     meses.reverse()
 
     for year, month in meses:
-        # Check if both recibidos+emitidos are completed for this month
-        completados = DescargaLog.objects.filter(
-            empresa=empresa,
-            year=year,
-            month_start=month,
+        rec = DescargaLog.objects.filter(
+            empresa=empresa, year=year, month_start=month,
             estado="completado",
-        ).count()
-        # Need at least 2 completed logs (recibidos + emitidos)
-        if completados < 2:
+        ).filter(tipos__contains=["recibidos"]).exists()
+        emi = DescargaLog.objects.filter(
+            empresa=empresa, year=year, month_start=month,
+            estado="completado",
+        ).filter(tipos__contains=["emitidos"]).exists()
+        if not rec or not emi:
             return (year, month)
 
     return None
@@ -634,3 +661,9 @@ def sync_efos_task():
     return sync_efos()
 
 
+@shared_task(queue="sistema")
+def supervisor_cirrus():
+    """Agente supervisor. Corre cada 15 min."""
+    from core.services.supervisor import CirrusSupervisor
+    sup = CirrusSupervisor()
+    return sup.ejecutar()

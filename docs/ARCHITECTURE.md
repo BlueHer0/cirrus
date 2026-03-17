@@ -48,6 +48,25 @@
 - Reporte horario Telegram (si hubo actividad)
 - /panel/monitor/ — servicios, workers, jobs, telemetría
 
+## Supervisor Inteligente
+- Task: `supervisor_cirrus` (cada 15 min vía Celery Beat)
+- Archivo: `core/services/supervisor.py`
+- Funciones:
+  - 🧹 Limpia descargas zombies (ejecutando > 1 hora)
+  - ⚠️ Alerta empresas sin descargas (sync activa pero 0 completadas)
+  - ⚠️ Detecta SAT lento (promedio 2x mayor que histórico)
+  - 🔴 Monitorea espacio en disco (alerta >70%, crítico >85%)
+  - 🔴 Detecta errores repetidos (3+ consecutivos por empresa)
+- Acciones: limpieza automática, alertas Telegram
+
+## Agente de Sincronización
+- Task: `agente_sincronizacion` (cada 15 min)
+- Auto-limpia zombies antes de evaluar
+- No se bloquea por descargas ejecutando (usa sistema de slots, max 3)
+- Procesa múltiples empresas por ciclo
+- Bypass de restricción de plan para primeras descargas
+- Verifica recibidos y emitidos por separado
+
 ## Backups
 - Script: /var/www/cirrus/scripts/backup.sh
 - Cron: diario 4AM UTC
@@ -61,4 +80,3 @@
 - Parsea XML original de MinIO para datos completos (emisor, receptor, conceptos, impuestos, timbre)
 - Botones: PDF (genera con WeasyPrint), XML (descarga raw), Excel (3 hojas: comprobante, conceptos, impuestos)
 - Fallback: si XML no disponible, muestra datos del modelo Django
-
