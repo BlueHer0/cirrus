@@ -76,38 +76,82 @@
         .btn-ghost { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); transition: all 0.2s; }
         .btn-ghost:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
 
-        /* Mobile sidebar */
+        /* ── Sidebar ── */
+        #sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 14rem;
+            z-index: 50;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
         #sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 40;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
         }
-        #sidebar-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
+        #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* Mobile: hidden off-screen, slides in */
+        @media (max-width: 767px) {
+            #sidebar { transform: translateX(-100%); width: 17rem; }
+            #sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0 !important; }
+        }
+        /* Desktop: always visible */
+        @media (min-width: 768px) {
+            #sidebar { transform: translateX(0); }
+            .main-content { margin-left: 14rem; }
+        }
+
+        /* Mobile top bar */
+        .mobile-topbar {
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background: rgba(10, 12, 18, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         @media (max-width: 767px) {
-            #sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            }
-            #sidebar.open {
-                transform: translateX(0);
-            }
+            .mobile-topbar { display: flex; }
         }
     </style>
 </head>
 <body class="text-gray-300 antialiased">
 
+    <!-- MOBILE TOP BAR — sticky hamburger -->
+    <div class="mobile-topbar items-center justify-between px-4 py-3">
+        <button id="hamburger-btn" onclick="toggleSidebar()" class="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all active:scale-95" aria-label="Abrir menú">
+            <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+        <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <span class="text-white text-sm font-bold">☁</span>
+            </div>
+            <span class="text-white font-bold text-sm tracking-tight">CIRRUS</span>
+        </div>
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+            {{ user.first_name|default:user.username|truncatechars:2|upper }}
+        </div>
+    </div>
+
     <div class="flex min-h-screen">
 
-        <!-- MOBILE OVERLAY -->
-        <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 md:hidden" onclick="toggleSidebar()"></div>
+        <!-- SIDEBAR OVERLAY (mobile) -->
+        <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
         <!-- SIDEBAR -->
-        <aside id="sidebar" class="sidebar fixed left-0 top-0 bottom-0 w-64 md:w-56 flex flex-col z-40">
+        <aside id="sidebar" class="sidebar flex flex-col">
             <!-- Close button (mobile) -->
-            <button onclick="toggleSidebar()" class="md:hidden absolute top-4 right-4 text-gray-400 hover:text-white p-1">
+            <button onclick="toggleSidebar()" class="md:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
 
@@ -176,18 +220,12 @@
         </aside>
 
         <!-- MAIN CONTENT -->
-        <main class="flex-1 ml-0 md:ml-56 p-4 md:p-6 min-w-0">
-            <!-- Mobile header bar -->
+        <main class="main-content flex-1 p-4 md:p-6 min-w-0">
+            <!-- Page header -->
             <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center gap-3">
-                    <!-- Hamburger (mobile only) -->
-                    <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white p-1.5 -ml-1.5 rounded-lg hover:bg-white/5">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    </button>
-                    <div>
-                        <h2 class="text-xl md:text-2xl font-bold text-white">{% block page_title %}Dashboard{% endblock %}</h2>
-                        <p class="text-sm text-gray-500 mt-0.5">{% block page_subtitle %}{% endblock %}</p>
-                    </div>
+                <div>
+                    <h2 class="text-xl md:text-2xl font-bold text-white">{% block page_title %}Dashboard{% endblock %}</h2>
+                    <p class="text-sm text-gray-500 mt-0.5">{% block page_subtitle %}{% endblock %}</p>
                 </div>
                 <div class="flex items-center gap-3">
                     {% block page_actions %}{% endblock %}
@@ -210,10 +248,20 @@
 
 <script>
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('sidebar-overlay').classList.toggle('active');
-    document.body.classList.toggle('overflow-hidden');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const isOpen = sidebar.classList.contains('open');
+    if (isOpen) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.classList.remove('overflow-hidden');
+    } else {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.classList.add('overflow-hidden');
+    }
 }
+
 function closeSidebar() {
     if (window.innerWidth < 768) {
         document.getElementById('sidebar').classList.remove('open');
@@ -221,6 +269,20 @@ function closeSidebar() {
         document.body.classList.remove('overflow-hidden');
     }
 }
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSidebar();
+});
+
+// Auto-close when resizing to desktop
+window.addEventListener('resize', function() {
+    if (window.innerWidth >= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sidebar-overlay').classList.remove('active');
+        document.body.classList.remove('overflow-hidden');
+    }
+});
 </script>
 
 <link rel="stylesheet" href="https://sidewidget.vercel.app/react-widget-uv.css">
