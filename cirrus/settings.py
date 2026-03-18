@@ -123,17 +123,18 @@ TELEGRAM_BOT_TOKEN = config("TELEGRAM_BOT_TOKEN", default="")
 TELEGRAM_CHAT_ID = config("TELEGRAM_CHAT_ID", default="")
 TELEGRAM_ALERTS_ENABLED = config("TELEGRAM_ALERTS_ENABLED", default=False, cast=bool)
 CELERY_BEAT_SCHEDULE = {
-    "programar-descargas-del-dia": {
-        "task": "core.services.scheduler.programar_descargas_del_dia",
-        "schedule": 3600,  # every hour
+    "procesar-cola-descargas": {
+        "task": "core.tasks.procesar_cola_descargas",
+        "schedule": 300,  # every 5 minutes
+        "options": {"queue": "descarga"},
+    },
+    "generar-jobs-mensuales": {
+        "task": "core.tasks.generar_jobs_mes",
+        "schedule": crontab(day_of_month="1", hour="3", minute="0"),
         "options": {"queue": "scheduler"},
     },
     "health-check-playwright": {
         "task": "core.tasks.health_check_playwright",
-        "schedule": 900,  # every 15 minutes
-    },
-    "agente-sincronizacion": {
-        "task": "core.tasks.agente_sincronizacion",
         "schedule": 900,  # every 15 minutes
     },
     "benchmark-hourly-report": {
@@ -142,7 +143,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "supervisor-cirrus": {
         "task": "core.tasks.supervisor_cirrus",
-        "schedule": 900,  # every 15 minutes, runs before sync agent
+        "schedule": 900,  # every 15 minutes
         "options": {"queue": "sistema"},
     },
     "sync-efos-mensual": {
@@ -159,11 +160,12 @@ CELERY_BEAT_SCHEDULE = {
 
 CELERY_TASK_ROUTES = {
     "core.tasks.descargar_cfdis": {"queue": "descarga"},
+    "core.tasks.procesar_cola_descargas": {"queue": "descarga"},
+    "core.tasks.generar_jobs_mes": {"queue": "scheduler"},
     "core.tasks.verificar_fiel": {"queue": "verificacion"},
     "core.tasks.health_check_playwright": {"queue": "sistema"},
     "core.tasks.agente_sincronizacion": {"queue": "scheduler"},
     "core.tasks.benchmark_hourly_report": {"queue": "celery"},
-    "core.services.scheduler.programar_descargas_del_dia": {"queue": "scheduler"},
     "core.tasks.sync_efos_task": {"queue": "sistema"},
     "core.tasks.supervisor_cirrus": {"queue": "sistema"},
     "core.tasks.verificar_fiel_y_descargar_csf": {"queue": "descarga"},

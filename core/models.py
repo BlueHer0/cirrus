@@ -240,6 +240,62 @@ class APIKey(models.Model):
         return f"{self.nombre} ({'activa' if self.activa else 'inactiva'})"
 
 
+class DescargaJob(models.Model):
+    """Un job de descarga = 1 empresa + 1 mes + 1 tipo.
+
+    Ordered queue: prioridad ASC, programado_para ASC.
+    unique_together prevents duplicate jobs.
+    """
+
+    empresa = models.ForeignKey(
+        Empresa, on_delete=models.CASCADE, related_name="jobs",
+    )
+    year = models.IntegerField()
+    month = models.IntegerField()
+    tipo = models.CharField(max_length=15, choices=[
+        ("recibidos", "Recibidos"),
+        ("emitidos", "Emitidos"),
+    ])
+
+    estado = models.CharField(max_length=15, default="en_cola", choices=[
+        ("en_cola", "En cola"),
+        ("ejecutando", "Ejecutando"),
+        ("completado", "Completado"),
+        ("error", "Error"),
+    ])
+
+    prioridad = models.IntegerField(
+        default=5,
+        help_text="1=máxima (owner/enterprise), 3=alta (pro), 5=media (basico), 9=baja (free)",
+    )
+
+    programado_para = models.DateTimeField(
+        help_text="No ejecutar antes de esta fecha/hora",
+    )
+
+    # Results
+    cfdis_descargados = models.IntegerField(default=0)
+    cfdis_nuevos = models.IntegerField(default=0)
+    duracion_segundos = models.IntegerField(default=0)
+    intentos = models.IntegerField(default=0)
+    max_intentos = models.IntegerField(default=5)
+    ultimo_error = models.TextField(blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    iniciado_at = models.DateTimeField(null=True, blank=True)
+    completado_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["prioridad", "programado_para"]
+        unique_together = ["empresa", "year", "month", "tipo"]
+        verbose_name = "Descarga Job"
+        verbose_name_plural = "Descarga Jobs"
+
+    def __str__(self):
+        return f"{self.empresa.rfc} {self.year}-{self.month:02d} {self.tipo} [{self.estado}]"
+
+
 class DescargaLog(models.Model):
     """Log de cada ejecución del scrapper."""
 

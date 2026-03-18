@@ -438,7 +438,10 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
         empresa.sync_desde_month = 1
         empresa.save()
 
-        log_info("csf", f"Empresa registrada con CSF: {empresa.rfc} — {empresa.nombre}")
+        # Step 7: Generate download jobs
+        from core.services.job_scheduler import generar_jobs_iniciales
+        jobs_count = generar_jobs_iniciales(empresa)
+        log_info("csf", f"Empresa registrada con CSF: {empresa.rfc} — {empresa.nombre} ({jobs_count} jobs)")
         send_telegram(
             f"✅ Empresa registrada con CSF: {empresa.rfc}\n{empresa.nombre}",
             "success",
@@ -575,6 +578,149 @@ def health_check_playwright():
             "critical",
         )
         return {"ok": False, "error": str(e)}
+
+
+# ── Job Queue Worker ──────────────────────────────────────────────────
+
+
+@shared_task(soft_time_limit=600, time_limit=660)
+def procesar_cola_descargas():
+    """Process the next download job from the ordered queue.
+
+    Runs every 5 minutes. Rules:
+    1. Only processes 1 job per cycle
+    2. Max 3 concurrent jobs
+    3. Order: prioridad ASC, programado_para ASC
+    4. NEVER creates jobs — only executes them
+    5. On failure: increment intentos, reschedule with backoff
+    """
+    from core.models import DescargaJob, DescargaLog
+    from core.services.monitor import log_info, log_error
+    from core.services.alerts import send_telegram
+    from django.db.models import F
+
+    now = datetime.now(timezone.utc)
+
+    # Clean zombies (ejecutando > 1 hour)
+    zombies = DescargaJob.objects.filter(
+        estado="ejecutando",
+        iniciado_at__lt=now - timedelta(hours=1),
+    )
+    zombie_count = zombies.count()
+    if zombie_count > 0:
+        for z in zombies:
+            z.estado = "error" if z.intentos >= z.max_intentos else "en_cola"
+            z.ultimo_error = "Zombie — más de 1 hora ejecutando"
+            if z.estado == "en_cola":
+                z.programado_para = now + timedelta(minutes=10)
+            z.save(update_fields=["estado", "ultimo_error", "programado_para"])
+        log_info("system", f"Cola: {zombie_count} zombies limpiados")
+
+    # Count real running jobs
+    ejecutando = DescargaJob.objects.filter(
+        estado="ejecutando",
+        iniciado_at__gte=now - timedelta(hours=1),
+    ).count()
+
+    if ejecutando >= 3:
+        return f"Workers llenos ({ejecutando} ejecutando)"
+
+    # Pick next job
+    job = DescargaJob.objects.filter(
+        estado="en_cola",
+        programado_para__lte=now,
+        intentos__lt=F("max_intentos"),
+    ).select_related("empresa").order_by("prioridad", "programado_para").first()
+
+    if not job:
+        return "Cola vacía"
+
+    # Mark as executing
+    job.estado = "ejecutando"
+    job.iniciado_at = now
+    job.intentos += 1
+    job.save(update_fields=["estado", "iniciado_at", "intentos"])
+
+    empresa = job.empresa
+    logger.info(
+        "📥 Job: %s %d-%02d %s (intento %d, prio %d)",
+        empresa.rfc, job.year, job.month, job.tipo, job.intentos, job.prioridad,
+    )
+
+    try:
+        from core.services.scrapper import ejecutar_descarga
+
+        # Create a lightweight DescargaLog as bridge to existing scrapper
+        dl = DescargaLog.objects.create(
+            empresa=empresa,
+            estado="ejecutando",
+            year=job.year,
+            month_start=job.month,
+            month_end=job.month,
+            tipos=[job.tipo],
+            triggered_by="schedule",
+            iniciado_at=now,
+        )
+
+        result = ejecutar_descarga(empresa, dl)
+
+        # Success
+        fin = datetime.now(timezone.utc)
+        job.estado = "completado"
+        job.completado_at = fin
+        job.duracion_segundos = int((fin - job.iniciado_at).total_seconds())
+        job.cfdis_nuevos = getattr(result, "total_cfdis", 0)
+        job.cfdis_descargados = getattr(result, "total_files", 0)
+        job.save()
+
+        # Update DescargaLog too
+        dl.estado = "completado"
+        dl.cfdis_nuevos = job.cfdis_nuevos
+        dl.cfdis_descargados = job.cfdis_descargados
+        dl.completado_at = fin
+        dl.duracion_segundos = job.duracion_segundos
+        dl.save()
+
+        # Update empresa timestamp
+        empresa.ultimo_scrape = fin
+        empresa.save(update_fields=["ultimo_scrape"])
+
+        log_info(
+            "download",
+            f"✅ {empresa.rfc} {job.year}-{job.month:02d} {job.tipo}: "
+            f"{job.cfdis_nuevos} nuevos en {job.duracion_segundos}s",
+        )
+        return f"OK: {job}"
+
+    except Exception as e:
+        error_str = str(e)[:500]
+        job.ultimo_error = error_str
+
+        if job.intentos >= job.max_intentos:
+            job.estado = "error"
+            send_telegram(
+                f"🔴 Job agotó reintentos: {empresa.rfc} "
+                f"{job.year}-{job.month:02d} {job.tipo}\n"
+                f"Error: {error_str[:200]}",
+                "critical",
+            )
+        else:
+            job.estado = "en_cola"
+            delays = [300, 900, 1800, 3600, 7200]  # 5m, 15m, 30m, 1h, 2h
+            delay = delays[min(job.intentos - 1, len(delays) - 1)]
+            job.programado_para = now + timedelta(seconds=delay)
+
+        job.save()
+        log_error("download", f"Job failed: {job} — {error_str[:200]}")
+        return f"Error: {job}"
+
+
+@shared_task
+def generar_jobs_mes():
+    """Generate download jobs for the month that just closed. Day 1 of each month."""
+    from core.services.job_scheduler import generar_jobs_mensuales
+    count = generar_jobs_mensuales()
+    return f"Generated {count} monthly jobs"
 
 
 @shared_task(soft_time_limit=60, time_limit=90)
