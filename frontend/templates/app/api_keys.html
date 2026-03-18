@@ -51,6 +51,7 @@
     </table>
 </div>
 
+{% if api_check.permitido %}
 <div class="glass rounded-xl p-5 max-w-lg">
     <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Crear Nueva Key</h3>
     <form method="post" class="space-y-4">
@@ -74,4 +75,13 @@
         <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm text-white font-medium">🔑 Crear Key</button>
     </form>
 </div>
+{% else %}
+<div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px; padding: 24px; text-align: center;">
+    <span class="text-3xl block mb-3">🔒</span>
+    <p class="text-gray-300 font-medium mb-1">La API REST está disponible desde el plan Profesional</p>
+    <p class="text-gray-500 text-sm mb-4">Integra Cirrus con tus sistemas de contabilidad, ERP o aplicaciones propias.</p>
+    <a href="{% url 'app:mejorar_plan' %}" class="btn-primary px-6 py-2.5 rounded-lg text-sm text-white font-semibold inline-block">Ver planes →</a>
+</div>
+{% endif %}
 {% endblock %}
+

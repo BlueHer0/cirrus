@@ -5,30 +5,66 @@
 {% block page_subtitle %}Resumen de tu cuenta{% endblock %}
 
 {% block content %}
+{# ── Usage Cards with Progress Bars ── #}
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    {# Empresas #}
     <div class="glass stat-card rounded-xl p-5" style="--glow-color: #6366f1;">
         <div class="text-[11px] text-gray-500 uppercase tracking-wider">Empresas</div>
-        <div class="text-3xl font-bold text-white mt-2">{{ stats.empresas }}</div>
-        <div class="text-xs text-gray-500 mt-1">de {{ stats.max_empresas }} permitidas</div>
+        <div class="text-3xl font-bold text-white mt-2">{{ resumen.empresas.actuales }}</div>
+        <div class="text-xs text-gray-500 mt-1">de {{ resumen.empresas.limite }} permitidas</div>
+        <div class="mt-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px;">
+            <div style="width: {{ resumen.empresas.pct }}%; height: 100%; border-radius: 4px; transition: width 0.5s;
+                 background: {% if resumen.empresas.pct > 90 %}#f87171{% elif resumen.empresas.pct > 70 %}#fbbf24{% else %}#34d399{% endif %};"></div>
+        </div>
+        {% if not resumen.empresas.permitido %}
+        <div class="text-[11px] text-amber-400 mt-1">Límite alcanzado</div>
+        {% endif %}
     </div>
+
+    {# CFDIs #}
     <div class="glass stat-card rounded-xl p-5" style="--glow-color: #8b5cf6;">
-        <div class="text-[11px] text-gray-500 uppercase tracking-wider">CFDIs</div>
-        <div class="text-3xl font-bold text-white mt-2">{{ stats.total_cfdis }}</div>
-        <div class="text-xs text-gray-500 mt-1">comprobantes almacenados</div>
+        <div class="text-[11px] text-gray-500 uppercase tracking-wider">CFDIs visibles</div>
+        <div class="text-3xl font-bold text-white mt-2">{{ resumen.cfdis.visibles|default:"0" }}</div>
+        <div class="text-xs text-gray-500 mt-1">
+            {% if resumen.cfdis.tiene_excedente %}
+                de {{ resumen.cfdis.total }} totales ({{ resumen.cfdis.excedente }} ocultos)
+            {% else %}
+                de {{ resumen.cfdis.limite }} límite
+            {% endif %}
+        </div>
+        <div class="mt-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px;">
+            <div style="width: {{ resumen.cfdis.pct }}%; height: 100%; border-radius: 4px; transition: width 0.5s;
+                 background: {% if resumen.cfdis.pct > 90 %}#f87171{% elif resumen.cfdis.pct > 70 %}#fbbf24{% else %}#34d399{% endif %};"></div>
+        </div>
+        {% if resumen.cfdis.tiene_excedente %}
+        <a href="{% url 'app:mejorar_plan' %}" class="text-[11px] text-amber-400 mt-1 inline-block">{{ resumen.cfdis.excedente }} ocultos — Mejorar →</a>
+        {% endif %}
     </div>
+
+    {# Descargas #}
     <div class="glass stat-card rounded-xl p-5" style="--glow-color: #3b82f6;">
         <div class="text-[11px] text-gray-500 uppercase tracking-wider">Descargas / mes</div>
-        <div class="text-3xl font-bold text-white mt-2">{{ stats.descargas_mes }}</div>
-        <div class="text-xs text-gray-500 mt-1">de {{ stats.max_descargas }} limit</div>
+        <div class="text-3xl font-bold text-white mt-2">{{ resumen.descargas.usadas }}</div>
+        <div class="text-xs text-gray-500 mt-1">de {{ resumen.descargas.limite }} limit</div>
+        <div class="mt-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px;">
+            <div style="width: {{ resumen.descargas.pct }}%; height: 100%; border-radius: 4px; transition: width 0.5s;
+                 background: {% if resumen.descargas.pct > 90 %}#f87171{% elif resumen.descargas.pct > 70 %}#fbbf24{% else %}#34d399{% endif %};"></div>
+        </div>
     </div>
+
+    {# Plan #}
     <div class="glass stat-card rounded-xl p-5" style="--glow-color: #10b981;">
         <div class="text-[11px] text-gray-500 uppercase tracking-wider">Plan</div>
-        <div class="text-2xl font-bold text-white mt-2">{{ stats.plan }}</div>
-        <div class="text-xs text-indigo-400 mt-1 cursor-pointer hover:text-indigo-300">Mejorar plan →</div>
+        <div class="text-2xl font-bold text-white mt-2">{{ resumen.plan.nombre|default:"Gratis" }}</div>
+        {% if resumen.plan.slug == 'free' or not resumen.plan.precio_mensual %}
+        <a href="{% url 'app:mejorar_plan' %}" class="text-xs text-indigo-400 mt-1 inline-block hover:text-indigo-300 cursor-pointer">Mejorar plan →</a>
+        {% else %}
+        <div class="text-xs text-green-400 mt-1">✓ Activo</div>
+        {% endif %}
     </div>
 </div>
 
-<!-- Quick Actions -->
+{# ── Quick Actions ── #}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <a href="{% url 'app:empresas' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
         <div class="text-2xl mb-2">🏢</div>
@@ -45,8 +81,16 @@
     <a href="{% url 'app:api_keys' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
         <div class="text-2xl mb-2">🔑</div>
         <h3 class="text-white font-semibold mb-1">API Keys</h3>
-        <p class="text-gray-500 text-sm">Genera llaves para integrar Cirrus con tus sistemas</p>
-        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">Administrar →</span>
+        <p class="text-gray-500 text-sm">
+            {% if resumen.api.permitido %}
+            Genera llaves para integrar Cirrus con tus sistemas
+            {% else %}
+            Disponible desde plan Profesional
+            {% endif %}
+        </p>
+        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">
+            {% if resumen.api.permitido %}Administrar →{% else %}Ver planes →{% endif %}
+        </span>
     </a>
 </div>
 {% endblock %}

@@ -259,28 +259,27 @@ def app_dashboard(request):
     if request.user.is_staff:
         messages.info(request, "Usa el panel de administración")
         return redirect("/panel/")
-    from core.models import Empresa, CFDI
+
+    from core.services.plan_enforcer import PlanEnforcer
 
     profile = _ensure_profile(request.user)
-    empresas = Empresa.objects.filter(owner=request.user)
-    user_rfcs = _get_user_rfcs(request.user)
-    total_cfdis = CFDI.objects.filter(
-        Q(rfc_empresa__in=user_rfcs) | Q(uploaded_by=request.user)
-    ).count()
+    enforcer = PlanEnforcer(request.user)
+    resumen = enforcer.resumen()
+    plan = resumen["plan"]
 
-    plan = profile.get_plan()
     return render(request, "app/dashboard.html", {
         "current_page": "dashboard",
         "profile": profile,
         "plan": plan,
+        "resumen": resumen,
         "stats": {
-            "empresas": empresas.count(),
-            "max_empresas": plan.max_empresas if plan else 1,
-            "total_cfdis": total_cfdis,
+            "empresas": resumen["empresas"]["actuales"],
+            "max_empresas": resumen["empresas"]["limite"],
+            "total_cfdis": resumen["cfdis"]["total"],
             "conversiones_mes": profile.conversiones_este_mes,
             "max_conversiones": plan.max_conversiones_pdf if plan else 10,
-            "descargas_mes": profile.descargas_este_mes,
-            "max_descargas": plan.max_descargas_mes if plan else 1,
+            "descargas_mes": resumen["descargas"]["usadas"],
+            "max_descargas": resumen["descargas"]["limite"],
             "plan": plan.nombre if plan else "Gratis",
         },
     })
@@ -291,19 +290,22 @@ def app_dashboard(request):
 @login_required(login_url=APP_LOGIN_URL)
 def app_empresas_list(request):
     from core.models import Empresa
+    from core.services.plan_enforcer import PlanEnforcer
 
     profile = _ensure_profile(request.user)
+    enforcer = PlanEnforcer(request.user)
+    emp_check = enforcer.puede_crear_empresa()
 
     if request.method == "POST":
         rfc = request.POST.get("rfc", "").strip().upper()
         nombre = request.POST.get("nombre", "").strip()
         notas = request.POST.get("notas", "").strip()
 
-        empresas_count = Empresa.objects.filter(owner=request.user).count()
-        plan = profile.get_plan()
-        max_emp = plan.max_empresas if plan else 1
-        if empresas_count >= max_emp:
-            messages.error(request, f"Tu plan permite máximo {max_emp} empresa(s). Mejora tu plan para agregar más.")
+        if not emp_check["permitido"]:
+            messages.warning(
+                request,
+                emp_check["mensaje"] + " Mejora tu plan para agregar más.",
+            )
         elif not rfc or not nombre:
             messages.error(request, "RFC y Nombre son obligatorios")
         elif len(rfc) > 13:
@@ -325,6 +327,8 @@ def app_empresas_list(request):
         "current_page": "empresas",
         "empresas": empresas,
         "profile": profile,
+        "puede_crear": emp_check["permitido"],
+        "emp_check": emp_check,
     })
 
 
@@ -705,6 +709,18 @@ def app_cfdis_list(request):
         )
         filters["q"] = search
 
+    # Plan-based CFDI visibility limit
+    from core.services.plan_enforcer import PlanEnforcer
+    enforcer = PlanEnforcer(request.user)
+    cfdis_check = enforcer.puede_ver_cfdi()
+
+    # Apply visibility limit (cap the queryset)
+    if cfdis_check["tiene_excedente"]:
+        visible_ids = list(
+            qs.order_by("-fecha").values_list("uuid", flat=True)[:cfdis_check["limite"]]
+        )
+        qs = qs.filter(uuid__in=visible_ids)
+
     total = qs.count()
     page = int(request.GET.get("page", 1))
     page_size = 50
@@ -761,6 +777,7 @@ def app_cfdis_list(request):
         "filters": filters,
         "selected_empresa_rfc": selected_empresa_rfc,
         "unassigned_count": unassigned_count,
+        "cfdis_check": cfdis_check,
         "years": [2026, 2025],
         "months": [
             (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
@@ -871,6 +888,15 @@ def app_upload_xmls(request):
     import io
 
     if request.method == "POST":
+        # Enforce upload limit
+        from core.services.plan_enforcer import PlanEnforcer
+        enforcer = PlanEnforcer(request.user)
+        upload_check = enforcer.puede_upload()
+        if not upload_check["permitido"]:
+            return JsonResponse({
+                "error": f"Límite de uploads alcanzado ({upload_check['usados']}/{upload_check['limite']}). Mejora tu plan."
+            }, status=403)
+
         files = request.FILES.getlist("xmls")
         if not files:
             return JsonResponse({"error": "No se recibieron archivos"}, status=400)
@@ -997,7 +1023,15 @@ def app_api_keys(request):
     import secrets
     from core.models import APIKey, Empresa
 
+    from core.services.plan_enforcer import PlanEnforcer
+    enforcer = PlanEnforcer(request.user)
+    api_check = enforcer.puede_usar_api()
+
     if request.method == "POST":
+        if not api_check["permitido"]:
+            messages.warning(request, api_check["mensaje"])
+            return redirect("app:api_keys")
+
         action = request.POST.get("action", "create")
         if action == "create":
             nombre = request.POST.get("nombre", "").strip()
@@ -1031,6 +1065,7 @@ def app_api_keys(request):
         "current_page": "api_keys",
         "api_keys": keys,
         "empresas": empresas,
+        "api_check": api_check,
     })
 
 

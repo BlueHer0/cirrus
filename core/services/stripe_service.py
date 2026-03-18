@@ -176,6 +176,36 @@ def handle_webhook_event(event):
                     f"💰 Nuevo pago: *{user.email}* → {plan.nombre} (${amount})",
                     "success",
                 )
+
+                # Email confirmation with receipt PDF
+                try:
+                    from django.core.mail import EmailMessage as DjangoEmail
+                    from core.services.recibo_pdf import generar_recibo
+
+                    payment = StripePayment.objects.filter(
+                        user=user
+                    ).order_by("-created_at").first()
+                    if payment:
+                        pdf = generar_recibo(payment)
+                        email = DjangoEmail(
+                            subject=f"Tu plan {plan.nombre} está activo — Cirrus",
+                            body=(
+                                f"¡Gracias por tu pago! Tu plan {plan.nombre} "
+                                f"ya está activo.\n\n"
+                                f"Adjuntamos tu recibo de pago.\n\n"
+                                f"— Equipo Cirrus\ncirrus.nubex.me"
+                            ),
+                            from_email="Cirrus <cirrus@nubex.me>",
+                            to=[user.email],
+                        )
+                        email.attach(
+                            f"Recibo_Cirrus_{payment.id:06d}.pdf",
+                            pdf,
+                            "application/pdf",
+                        )
+                        email.send(fail_silently=True)
+                except Exception:
+                    pass
             except (User.DoesNotExist, Plan.DoesNotExist) as e:
                 log_info("system", f"Webhook error: {e}")
 
@@ -250,6 +280,24 @@ def handle_webhook_event(event):
         if profile:
             profile.subscription_status = "past_due"
             profile.save(update_fields=["subscription_status"])
+
+            # Notify user of failed payment
+            try:
+                from django.core.mail import send_mail
+
+                send_mail(
+                    "Problema con tu pago — Cirrus",
+                    "No pudimos procesar tu pago mensual. "
+                    "Por favor actualiza tu método de pago en tu panel.\n\n"
+                    "Si no se regulariza en 7 días, tu cuenta será "
+                    "degradada al plan gratuito.\n\n"
+                    "— Equipo Cirrus\ncirrus.nubex.me",
+                    "Cirrus <cirrus@nubex.me>",
+                    [profile.user.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
 
     elif event_type == "customer.subscription.updated":
         subscription_id = data.get("id")

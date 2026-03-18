@@ -5,7 +5,11 @@
 {% block page_subtitle %}Gestiona tus empresas y credenciales FIEL{% endblock %}
 
 {% block page_actions %}
+{% if puede_crear %}
 <button onclick="document.getElementById('new-empresa').classList.toggle('hidden')" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium">+ Nueva Empresa</button>
+{% else %}
+<a href="{% url 'app:mejorar_plan' %}" class="btn-primary px-4 py-2 rounded-lg text-sm text-white font-medium" style="background: linear-gradient(135deg, #f59e0b, #d97706);">Mejorar plan →</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -37,9 +41,10 @@
 </div>
 
 <!-- Plan Limits -->
-{% if profile.max_empresas <= empresas|length %}
-<div class="glass rounded-xl p-4 mb-4 badge-warning border border-amber-500/20">
-    <p class="text-sm">Has alcanzado el límite de {{ profile.max_empresas }} empresa(s) en tu plan <strong>{{ profile.get_plan_display }}</strong>.</p>
+{% if not puede_crear %}
+<div style="background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; text-align: center;">
+    ⚠️ Has alcanzado el límite de <strong>{{ emp_check.limite }}</strong> empresa(s) en tu plan.
+    <a href="{% url 'app:mejorar_plan' %}" style="color: #a78bfa; margin-left: 8px; font-weight: 600;">Mejorar plan →</a>
 </div>
 {% endif %}
 
