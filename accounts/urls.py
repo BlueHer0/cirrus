@@ -20,6 +20,7 @@ urlpatterns = [
 
     # Empresas
     path("empresas/", views.app_empresas_list, name="empresas"),
+    path("empresas/nueva/", views.app_crear_empresa, name="crear_empresa"),
     path("empresas/<uuid:empresa_id>/", views.app_empresa_detail, name="empresa_detail"),
     path("empresas/<uuid:empresa_id>/fiel/", views.app_empresa_fiel, name="empresa_fiel"),
     path("empresas/<uuid:empresa_id>/verificar/", views.app_empresa_verificar, name="empresa_verificar"),

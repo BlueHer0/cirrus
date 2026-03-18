@@ -92,6 +92,73 @@
     </div>
 </div>
 
+{% if empresa.razon_social or empresa.csf_minio_key %}
+<!-- Datos Oficiales CSF -->
+<div class="glass rounded-xl p-5 mb-6">
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Datos Oficiales (SAT)</h3>
+        {% if empresa.csf_ultima_descarga %}
+        <span class="text-[10px] text-gray-500">📄 CSF {{ empresa.csf_ultima_descarga|date:"M Y" }}</span>
+        {% endif %}
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% if empresa.razon_social %}
+        <div><div class="text-[11px] text-gray-500 uppercase">Razón Social</div><div class="text-white text-sm">{{ empresa.razon_social }}</div></div>
+        {% endif %}
+        {% if empresa.regimen_capital %}
+        <div><div class="text-[11px] text-gray-500 uppercase">Régimen Capital</div><div class="text-gray-300 text-sm">{{ empresa.regimen_capital }}</div></div>
+        {% endif %}
+        {% if empresa.nombre_comercial %}
+        <div><div class="text-[11px] text-gray-500 uppercase">Nombre Comercial</div><div class="text-gray-300 text-sm">{{ empresa.nombre_comercial }}</div></div>
+        {% endif %}
+        {% if empresa.regimen_fiscal %}
+        <div><div class="text-[11px] text-gray-500 uppercase">Régimen Fiscal</div><div class="text-gray-300 text-sm">{{ empresa.regimen_fiscal }}</div></div>
+        {% endif %}
+        {% if empresa.codigo_postal %}
+        <div><div class="text-[11px] text-gray-500 uppercase">Código Postal</div><div class="text-gray-300 text-sm font-mono">{{ empresa.codigo_postal }}</div></div>
+        {% endif %}
+        {% if empresa.direccion_calle %}
+        <div class="md:col-span-2">
+            <div class="text-[11px] text-gray-500 uppercase">Dirección Fiscal</div>
+            <div class="text-gray-300 text-sm">
+                {{ empresa.direccion_calle }}
+                {% if empresa.direccion_num_ext %} #{{ empresa.direccion_num_ext }}{% endif %}
+                {% if empresa.direccion_num_int %} Int. {{ empresa.direccion_num_int }}{% endif %}
+                {% if empresa.direccion_colonia %}, Col. {{ empresa.direccion_colonia }}{% endif %}
+                {% if empresa.direccion_municipio %}, {{ empresa.direccion_municipio }}{% endif %}
+                {% if empresa.direccion_estado %}, {{ empresa.direccion_estado }}{% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% if empresa.estatus_padron %}
+        <div>
+            <div class="text-[11px] text-gray-500 uppercase">Estatus en el Padrón</div>
+            <div class="text-sm">
+                {% if "ACTIVO" in empresa.estatus_padron|upper %}
+                <span class="text-green-400 font-medium">● {{ empresa.estatus_padron }}</span>
+                {% else %}
+                <span class="text-amber-400 font-medium">{{ empresa.estatus_padron }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% if empresa.fecha_inicio_operaciones %}
+        <div><div class="text-[11px] text-gray-500 uppercase">Inicio Operaciones</div><div class="text-gray-300 text-sm">{{ empresa.fecha_inicio_operaciones|date:"d/M/Y" }}</div></div>
+        {% endif %}
+    </div>
+    {% if empresa.actividades_economicas %}
+    <div class="mt-4 pt-4 border-t border-white/5">
+        <div class="text-[11px] text-gray-500 uppercase mb-2">Actividades Económicas</div>
+        <div class="space-y-1">
+            {% for act in empresa.actividades_economicas %}
+            <div class="text-gray-300 text-xs bg-white/5 rounded-lg px-3 py-1.5">{{ act }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Recent Downloads for this empresa -->
 {% if recent_downloads %}
 <div class="glass rounded-xl p-5">

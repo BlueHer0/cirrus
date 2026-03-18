@@ -1,0 +1,88 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Nueva Empresa{% endblock %}
+{% block page_title %}Nueva Empresa{% endblock %}
+{% block page_subtitle %}Registra tu empresa con e.firma (FIEL){% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+    <div class="glass rounded-2xl p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <span class="text-white text-xl">🔐</span>
+            </div>
+            <div>
+                <h3 class="text-white font-semibold">Sube tu e.firma (FIEL)</h3>
+                <p class="text-gray-500 text-sm">Cirrus descargará tu Constancia de Situación Fiscal del SAT para registrar tu empresa con datos oficiales.</p>
+            </div>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Archivo .cer</label>
+                <input type="file" name="cer_file" accept=".cer" required
+                    class="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm
+                           file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-sm
+                           file:bg-indigo-500/20 file:text-indigo-300 hover:file:bg-indigo-500/30
+                           focus:outline-none focus:border-indigo-500/50">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Archivo .key</label>
+                <input type="file" name="key_file" accept=".key" required
+                    class="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm
+                           file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-sm
+                           file:bg-indigo-500/20 file:text-indigo-300 hover:file:bg-indigo-500/30
+                           focus:outline-none focus:border-indigo-500/50">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Contraseña de la FIEL</label>
+                <input type="password" name="fiel_password" required placeholder="••••••••"
+                    class="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-indigo-500/50">
+            </div>
+
+            <button type="submit" class="btn-primary w-full py-3 rounded-xl text-white font-medium text-sm">
+                🚀 Registrar empresa
+            </button>
+        </form>
+    </div>
+
+    <div class="glass rounded-xl p-4">
+        <div class="flex items-start gap-3">
+            <span class="text-lg">🔒</span>
+            <div>
+                <p class="text-xs text-gray-400">Tus credenciales se encriptan con cifrado de grado bancario (Fernet/AES-128). La contraseña nunca se almacena en texto plano. Los archivos se guardan exclusivamente en almacenamiento cifrado.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-6 glass rounded-xl p-4">
+        <h4 class="text-white text-sm font-medium mb-3">¿Qué pasa después?</h4>
+        <div class="space-y-2">
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">1</span>
+                Validamos tu FIEL criptográficamente
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">2</span>
+                Descargamos tu Constancia del SAT
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">3</span>
+                Registramos tu empresa con datos oficiales
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+                <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">4</span>
+                Activamos la descarga automática de CFDIs
+            </div>
+        </div>
+    </div>
+
+    <p class="text-center mt-6">
+        <a href="{% url 'app:empresas' %}" class="text-indigo-400 hover:text-indigo-300 text-sm">← Volver a empresas</a>
+    </p>
+</div>
+{% endblock %}

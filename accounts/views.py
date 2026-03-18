@@ -392,29 +392,6 @@ def app_empresas_list(request):
     enforcer = PlanEnforcer(request.user)
     emp_check = enforcer.puede_crear_empresa()
 
-    if request.method == "POST":
-        rfc = request.POST.get("rfc", "").strip().upper()
-        nombre = request.POST.get("nombre", "").strip()
-        notas = request.POST.get("notas", "").strip()
-
-        if not emp_check["permitido"]:
-            messages.warning(
-                request,
-                emp_check["mensaje"] + " Mejora tu plan para agregar más.",
-            )
-        elif not rfc or not nombre:
-            messages.error(request, "RFC y Nombre son obligatorios")
-        elif len(rfc) > 13:
-            messages.error(request, "RFC no puede tener más de 13 caracteres")
-        elif Empresa.objects.filter(rfc=rfc).exists():
-            messages.error(request, f"Ya existe una empresa con RFC {rfc}")
-        else:
-            empresa = Empresa.objects.create(
-                rfc=rfc, nombre=nombre, notas=notas, owner=request.user,
-            )
-            messages.success(request, f"Empresa {rfc} agregada")
-            return redirect("app:empresa_detail", empresa_id=empresa.id)
-
     empresas = Empresa.objects.filter(owner=request.user).annotate(
         cfdi_count=Count("cfdis"),
     ).order_by("nombre")
@@ -425,6 +402,90 @@ def app_empresas_list(request):
         "profile": profile,
         "puede_crear": emp_check["permitido"],
         "emp_check": emp_check,
+    })
+
+
+@login_required(login_url=APP_LOGIN_URL)
+def app_crear_empresa(request):
+    """New empresa registration — FIEL-only flow."""
+    from core.models import Empresa
+    from core.services.plan_enforcer import PlanEnforcer
+
+    enforcer = PlanEnforcer(request.user)
+    emp_check = enforcer.puede_crear_empresa()
+
+    if not emp_check["permitido"]:
+        messages.warning(request, emp_check["mensaje"])
+        return redirect("app:empresas")
+
+    if request.method == "POST":
+        cer_file = request.FILES.get("cer_file")
+        key_file = request.FILES.get("key_file")
+        fiel_password = request.POST.get("fiel_password", "")
+
+        if not cer_file or not key_file or not fiel_password:
+            messages.error(request, "Los 3 campos son obligatorios.")
+            return render(request, "app/empresa_nueva.html", {
+                "current_page": "empresas",
+            })
+
+        # Step 1: Local crypto validation
+        try:
+            from core.services.fiel_encryption import validate_fiel_local
+            cer_data = cer_file.read()
+            key_data = key_file.read()
+            fiel_info = validate_fiel_local(cer_data, key_data, fiel_password)
+        except Exception as e:
+            messages.error(request, f"FIEL inválida: {e}")
+            return render(request, "app/empresa_nueva.html", {
+                "current_page": "empresas",
+            })
+
+        rfc = fiel_info["rfc"]
+
+        # Step 2: Check if empresa already exists for this user
+        empresa = Empresa.objects.filter(rfc=rfc, owner=request.user).first()
+        if not empresa:
+            empresa = Empresa.objects.create(
+                rfc=rfc,
+                nombre=f"{rfc} (pendiente CSF)",
+                owner=request.user,
+                fiel_status="verificando",
+            )
+
+        # Step 3: Upload FIEL to MinIO
+        from core.services.fiel_encryption import encrypt_password
+        from core.services.storage_minio import upload_bytes
+
+        cer_key = f"fiel/{rfc}/{rfc}.cer"
+        key_key = f"fiel/{rfc}/{rfc}.key"
+        upload_bytes(cer_data, cer_key)
+        upload_bytes(key_data, key_key)
+
+        empresa.fiel_cer_key = cer_key
+        empresa.fiel_key_key = key_key
+        empresa.fiel_password_encrypted = encrypt_password(fiel_password)
+        empresa.fiel_expira = fiel_info.get("valid_to")
+        empresa.fiel_status = "verificando"
+        empresa.save()
+
+        # Step 4: Enqueue verification + CSF download
+        from core.tasks import verificar_fiel_y_descargar_csf
+        verificar_fiel_y_descargar_csf.delay(str(empresa.id))
+
+        from core.services.monitor import log_info
+        log_info("fiel", f"FIEL recibida para {rfc}, CSF en proceso",
+                 user_email=request.user.email)
+
+        messages.success(
+            request,
+            f"FIEL recibida para {rfc}. Estamos verificando y descargando "
+            f"tu Constancia de Situación Fiscal. Esto puede tardar unos minutos.",
+        )
+        return redirect("app:empresa_detail", empresa_id=empresa.id)
+
+    return render(request, "app/empresa_nueva.html", {
+        "current_page": "empresas",
     })
 
 

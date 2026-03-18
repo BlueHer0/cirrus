@@ -324,6 +324,227 @@ def verificar_fiel(self, empresa_id: str):
         fiel_ctx["temp_dir"].cleanup()
 
 
+@shared_task(bind=True, max_retries=5, soft_time_limit=600, time_limit=660)
+def verificar_fiel_y_descargar_csf(self, empresa_id):
+    """Verify FIEL + download CSF + parse + update empresa with official data.
+
+    Full flow for new empresa registration:
+    1. Verify FIEL against SAT (or local)
+    2. Download Constancia de Situación Fiscal PDF
+    3. Parse with Docling/pdfplumber
+    4. Update empresa with official data
+    5. Activate CFDI sync
+    """
+    from core.models import Empresa
+    from core.services.fiel_encryption import get_fiel_for_scraping, validate_fiel_local
+    from core.services.csf_scraper import descargar_csf
+    from core.services.csf_parser import parsear_csf_con_docling
+    from core.services.storage_minio import upload_bytes
+    from core.services.monitor import log_info, log_error
+    from core.services.alerts import send_telegram
+    from pathlib import Path
+
+    try:
+        empresa = Empresa.objects.get(id=empresa_id)
+    except Empresa.DoesNotExist:
+        return {"error": f"Empresa {empresa_id} not found"}
+
+    fiel_ctx = None
+    try:
+        # Step 1: Get FIEL files
+        fiel_ctx = get_fiel_for_scraping(empresa)
+
+        # Step 2: Verify FIEL locally first
+        cer_data = Path(fiel_ctx["cer_path"]).read_bytes()
+        key_data = Path(fiel_ctx["key_path"]).read_bytes()
+        info = validate_fiel_local(cer_data, key_data, fiel_ctx["password"])
+
+        if not info.get("is_valid"):
+            empresa.fiel_status = "rechazada"
+            empresa.save(update_fields=["fiel_status"])
+            send_telegram(f"❌ FIEL inválida: {empresa.rfc}", "warning")
+            return {"error": "FIEL invalid"}
+
+        # Mark as verified
+        empresa.fiel_verificada = True
+        empresa.fiel_status = "verificada"
+        empresa.fiel_verificada_at = datetime.now(timezone.utc)
+        empresa.save(update_fields=["fiel_verificada", "fiel_status", "fiel_verificada_at"])
+        log_info("fiel", f"FIEL verificada localmente: {empresa.rfc}")
+
+        # Step 3: Download CSF from SAT
+        try:
+            csf_pdf_bytes = descargar_csf(
+                cer_path=fiel_ctx["cer_path"],
+                key_path=fiel_ctx["key_path"],
+                password=fiel_ctx["password"],
+            )
+        except Exception as csf_err:
+            # CSF download failed but FIEL is OK — activate sync anyway
+            log_error("csf", f"CSF download failed for {empresa.rfc}: {csf_err}")
+            empresa.sync_activa = True
+            empresa.sync_desde_year = 2025
+            empresa.sync_desde_month = 1
+            empresa.save(update_fields=["sync_activa", "sync_desde_year", "sync_desde_month"])
+            send_telegram(
+                f"⚠️ FIEL OK pero CSF falló: {empresa.rfc}\n{str(csf_err)[:200]}",
+                "warning",
+            )
+            return {"verified": True, "csf": False, "error": str(csf_err)}
+
+        if not csf_pdf_bytes:
+            raise Exception("CSF PDF empty")
+
+        # Step 4: Save PDF to MinIO
+        now = datetime.now()
+        csf_key = f"csf/{empresa.rfc}/{now.year}-{now.month:02d}.pdf"
+        upload_bytes(csf_pdf_bytes, csf_key, content_type="application/pdf")
+        empresa.csf_minio_key = csf_key
+        empresa.csf_ultima_descarga = datetime.now(timezone.utc)
+
+        # Step 5: Parse CSF
+        datos = parsear_csf_con_docling(csf_pdf_bytes)
+
+        if datos:
+            empresa.nombre = datos.get("razon_social", empresa.nombre)
+            empresa.razon_social = datos.get("razon_social", "")
+            empresa.regimen_fiscal = datos.get("regimen_fiscal", "")
+            empresa.regimen_capital = datos.get("regimen_capital", "")
+            empresa.nombre_comercial = datos.get("nombre_comercial", "")
+            empresa.codigo_postal = datos.get("codigo_postal", "")
+            empresa.direccion_calle = datos.get("calle", "")
+            empresa.direccion_num_ext = datos.get("num_exterior", "")
+            empresa.direccion_num_int = datos.get("num_interior", "")
+            empresa.direccion_colonia = datos.get("colonia", "")
+            empresa.direccion_localidad = datos.get("localidad", "")
+            empresa.direccion_municipio = datos.get("municipio", "")
+            empresa.direccion_estado = datos.get("estado", "")
+            empresa.actividades_economicas = datos.get("actividades", [])
+            # Parse fecha if string
+            fecha_str = datos.get("fecha_inicio")
+            if fecha_str:
+                try:
+                    from dateutil.parser import parse as parse_date
+                    empresa.fecha_inicio_operaciones = parse_date(
+                        fecha_str, dayfirst=True
+                    ).date()
+                except Exception:
+                    pass
+            empresa.estatus_padron = datos.get("estatus_padron", "")
+
+        # Step 6: Activate sync
+        empresa.sync_activa = True
+        empresa.sync_desde_year = 2025
+        empresa.sync_desde_month = 1
+        empresa.save()
+
+        log_info("csf", f"Empresa registrada con CSF: {empresa.rfc} — {empresa.nombre}")
+        send_telegram(
+            f"✅ Empresa registrada con CSF: {empresa.rfc}\n{empresa.nombre}",
+            "success",
+        )
+
+        # Notify client
+        from django.core.mail import send_mail
+        from django.conf import settings as dj_settings
+
+        send_mail(
+            f"Tu empresa {empresa.rfc} está lista — Cirrus",
+            f"¡Tu empresa fue registrada exitosamente!\n\n"
+            f"RFC: {empresa.rfc}\n"
+            f"Nombre: {empresa.nombre}\n\n"
+            f"Ya estamos descargando tus CFDIs automáticamente.\n\n"
+            f"— Equipo Cirrus",
+            dj_settings.DEFAULT_FROM_EMAIL,
+            [empresa.owner.email],
+            fail_silently=True,
+        )
+
+        return {"verified": True, "csf": True, "nombre": empresa.nombre}
+
+    except Exception as exc:
+        error_str = str(exc)
+        log_error("csf", f"Error CSF {empresa.rfc}: {error_str}")
+
+        if "login" in error_str.lower() or "timeout" in error_str.lower():
+            raise self.retry(exc=exc, countdown=300)
+
+        empresa.fiel_status = "rechazada"
+        empresa.save(update_fields=["fiel_status"])
+        send_telegram(f"❌ CSF falló: {empresa.rfc} — {error_str[:200]}", "warning")
+        return {"error": error_str}
+
+    finally:
+        if fiel_ctx:
+            fiel_ctx["temp_dir"].cleanup()
+
+
+@shared_task
+def descargar_csf_mensual():
+    """Download CSF for all active empresas. Runs on day 2 of each month."""
+    from core.models import Empresa
+    from core.services.monitor import log_info
+
+    empresas = Empresa.objects.filter(fiel_verificada=True, sync_activa=True)
+    count = empresas.count()
+    log_info("csf", f"CSF mensual: {count} empresas a procesar")
+
+    for emp in empresas:
+        descargar_csf_empresa.delay(str(emp.id))
+
+    return f"Enqueued {count} CSF downloads"
+
+
+@shared_task(bind=True, max_retries=3, soft_time_limit=600, time_limit=660)
+def descargar_csf_empresa(self, empresa_id):
+    """Download & parse CSF for a single empresa (refresh)."""
+    from core.models import Empresa
+    from core.services.fiel_encryption import get_fiel_for_scraping
+    from core.services.csf_scraper import descargar_csf
+    from core.services.csf_parser import parsear_csf_con_docling
+    from core.services.storage_minio import upload_bytes
+    from core.services.monitor import log_info, log_error
+
+    empresa = Empresa.objects.get(id=empresa_id)
+    fiel_ctx = None
+
+    try:
+        fiel_ctx = get_fiel_for_scraping(empresa)
+
+        csf_pdf_bytes = descargar_csf(
+            cer_path=fiel_ctx["cer_path"],
+            key_path=fiel_ctx["key_path"],
+            password=fiel_ctx["password"],
+        )
+
+        if not csf_pdf_bytes:
+            raise Exception("CSF PDF empty")
+
+        now = datetime.now()
+        csf_key = f"csf/{empresa.rfc}/{now.year}-{now.month:02d}.pdf"
+        upload_bytes(csf_pdf_bytes, csf_key, content_type="application/pdf")
+
+        datos = parsear_csf_con_docling(csf_pdf_bytes)
+        if datos:
+            empresa.razon_social = datos.get("razon_social", empresa.razon_social)
+            empresa.regimen_fiscal = datos.get("regimen_fiscal", empresa.regimen_fiscal)
+            empresa.estatus_padron = datos.get("estatus_padron", empresa.estatus_padron)
+
+        empresa.csf_minio_key = csf_key
+        empresa.csf_ultima_descarga = datetime.now(timezone.utc)
+        empresa.save()
+
+        log_info("csf", f"CSF actualizada: {empresa.rfc}")
+
+    except Exception as exc:
+        log_error("csf", f"CSF refresh failed {empresa.rfc}: {exc}")
+        raise self.retry(exc=exc, countdown=600)
+
+    finally:
+        if fiel_ctx:
+            fiel_ctx["temp_dir"].cleanup()
+
+
 @shared_task(soft_time_limit=60, time_limit=90)
 def health_check_playwright():
     """Verify that Playwright can launch Chromium. Runs every 15 minutes."""

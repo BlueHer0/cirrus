@@ -150,6 +150,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(day_of_month="1", hour="5", minute="0"),
         "options": {"queue": "sistema"},
     },
+    "descargar-csf-mensual": {
+        "task": "core.tasks.descargar_csf_mensual",
+        "schedule": crontab(day_of_month="2", hour="6", minute="0"),
+        "options": {"queue": "descarga"},
+    },
 }
 
 CELERY_TASK_ROUTES = {
@@ -161,6 +166,9 @@ CELERY_TASK_ROUTES = {
     "core.services.scheduler.programar_descargas_del_dia": {"queue": "scheduler"},
     "core.tasks.sync_efos_task": {"queue": "sistema"},
     "core.tasks.supervisor_cirrus": {"queue": "sistema"},
+    "core.tasks.verificar_fiel_y_descargar_csf": {"queue": "descarga"},
+    "core.tasks.descargar_csf_mensual": {"queue": "descarga"},
+    "core.tasks.descargar_csf_empresa": {"queue": "descarga"},
 }
 CELERY_TASK_DEFAULT_QUEUE = "sistema"
 

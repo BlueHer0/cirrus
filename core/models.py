@@ -73,6 +73,25 @@ class Empresa(models.Model):
         help_text="Key en MinIO del logo de la empresa",
     )
 
+    # ── Datos oficiales de la CSF ─────────────────────────────────────
+    razon_social = models.CharField(max_length=500, blank=True)
+    regimen_capital = models.CharField(max_length=200, blank=True)
+    nombre_comercial = models.CharField(max_length=500, blank=True)
+    regimen_fiscal = models.CharField(max_length=200, blank=True)
+    codigo_postal = models.CharField(max_length=5, blank=True)
+    direccion_calle = models.CharField(max_length=300, blank=True)
+    direccion_num_ext = models.CharField(max_length=50, blank=True)
+    direccion_num_int = models.CharField(max_length=50, blank=True)
+    direccion_colonia = models.CharField(max_length=200, blank=True)
+    direccion_localidad = models.CharField(max_length=200, blank=True)
+    direccion_municipio = models.CharField(max_length=200, blank=True)
+    direccion_estado = models.CharField(max_length=100, blank=True)
+    actividades_economicas = models.JSONField(default=list, blank=True)
+    fecha_inicio_operaciones = models.DateField(null=True, blank=True)
+    estatus_padron = models.CharField(max_length=50, blank=True)
+    csf_minio_key = models.CharField(max_length=500, blank=True)
+    csf_ultima_descarga = models.DateTimeField(null=True, blank=True)
+
     # Metadata
     owner = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="empresas",
