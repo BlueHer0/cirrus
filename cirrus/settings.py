@@ -168,6 +168,10 @@ CELERY_TASK_DEFAULT_QUEUE = "sistema"
 SESSION_COOKIE_AGE = 3600 * 8              # 8 hours max
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True     # Expire on browser close
 SESSION_SAVE_EVERY_REQUEST = True          # Renew with activity
+SESSION_COOKIE_SECURE = True              # Only HTTPS
+SESSION_COOKIE_HTTPONLY = True             # No JS access
+SESSION_COOKIE_SAMESITE = "Lax"           # CSRF protection
+CSRF_COOKIE_SECURE = True                 # CSRF only HTTPS
 
 # ── MinIO (S3-compatible Object Storage) ─────────────────────────────────
 MINIO_ENDPOINT = config("MINIO_ENDPOINT", default="localhost:9000")

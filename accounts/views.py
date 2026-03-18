@@ -161,7 +161,10 @@ def app_register(request):
 
 
 def confirmar_email(request, token):
-    """Confirm email via signed token."""
+    """Confirm email via signed token. Always logs out any existing session."""
+    # SECURITY: always clear any active session first
+    auth_logout(request)
+
     try:
         data = signing.loads(token, salt=CONFIRM_SALT, max_age=CONFIRM_MAX_AGE)
         user = User.objects.get(id=data["user_id"])
@@ -207,20 +210,28 @@ def reenviar_confirmacion(request):
 
 
 def app_login(request):
-    """Client login. Clears existing session if user is staff."""
-    if request.user.is_authenticated:
-        if request.user.is_staff:
-            auth_logout(request)
-        else:
-            return redirect("app:dashboard")
+    """Client login. Rate-limited, clears stale sessions."""
+    # Always clear any existing session on GET
+    if request.user.is_authenticated and request.method == "GET":
+        auth_logout(request)
 
     if request.method == "POST":
-        # Clear any existing session first
+        # Clear any existing session
         if request.user.is_authenticated:
             auth_logout(request)
 
         email = request.POST.get("email", "").strip().lower()
         password = request.POST.get("password", "")
+
+        # Rate limiting
+        from django.core.cache import cache
+        ip = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "")).split(",")[0].strip()
+        rate_key = f"login_attempts_{ip}"
+        attempts = cache.get(rate_key, 0)
+
+        if attempts >= 5:
+            messages.error(request, "Demasiados intentos. Espera 15 minutos.")
+            return render(request, "app/login.html", {"year": datetime.now().year})
 
         # Check if user exists but is inactive (unconfirmed)
         try:
@@ -237,19 +248,104 @@ def app_login(request):
 
         user = authenticate(request, username=email, password=password)
         if user:
+            cache.delete(rate_key)  # Reset on success
             auth_login(request, user)
             from core.services.monitor import log_info
             log_info("auth", f"Login: {email}")
+            if user.is_staff:
+                return redirect("/panel/")
             return redirect(request.GET.get("next", "app:dashboard"))
         else:
+            cache.set(rate_key, attempts + 1, 900)  # 15 min timeout
             messages.error(request, "Email o contraseña incorrectos")
 
     return render(request, "app/login.html", {"year": datetime.now().year})
 
 
 def app_logout(request):
+    """Proper logout: clear session, delete cookies."""
     auth_logout(request)
-    return redirect("landing")
+    response = redirect("landing")
+    response.delete_cookie("sessionid")
+    response.delete_cookie("csrftoken")
+    return response
+
+
+def recuperar_password(request):
+    """Send password reset link via email."""
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip().lower()
+        user = User.objects.filter(email=email).first()
+
+        if user and user.is_active:
+            signer = signing.TimestampSigner(salt="password-reset")
+            token = signer.sign(str(user.id))
+            reset_url = request.build_absolute_uri(f"/app/reset-password/{token}/")
+
+            from django.core.mail import send_mail
+            send_mail(
+                "Restablecer contraseña — Cirrus",
+                f"Haz click en el siguiente enlace para restablecer tu contraseña:\n\n"
+                f"{reset_url}\n\n"
+                f"Este enlace expira en 1 hora.\n\n"
+                f"Si no solicitaste esto, ignora este mensaje.\n\n"
+                f"— Equipo Cirrus",
+                "Cirrus <cirrus@nubex.me>",
+                [email],
+                fail_silently=True,
+            )
+
+        # Always show same message (don't reveal if email exists)
+        messages.info(request, "Si el email está registrado, recibirás un enlace para restablecer tu contraseña.")
+        return redirect("app:login")
+
+    return render(request, "app/recuperar_password.html", {"year": datetime.now().year})
+
+
+def reset_password(request, token):
+    """Reset password via signed token (1 hour expiry)."""
+    from django.core.signing import BadSignature, SignatureExpired
+    signer = signing.TimestampSigner(salt="password-reset")
+
+    try:
+        user_id = signer.unsign(token, max_age=3600)
+    except (BadSignature, SignatureExpired):
+        messages.error(request, "Link inválido o expirado. Solicita uno nuevo.")
+        return redirect("app:recuperar_password")
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        messages.error(request, "Link inválido.")
+        return redirect("app:login")
+
+    if request.method == "POST":
+        password1 = request.POST.get("password1", "")
+        password2 = request.POST.get("password2", "")
+
+        if password1 != password2:
+            messages.error(request, "Las contraseñas no coinciden.")
+            return render(request, "app/reset_password.html", {
+                "token": token, "year": datetime.now().year,
+            })
+        if len(password1) < 8:
+            messages.error(request, "La contraseña debe tener al menos 8 caracteres.")
+            return render(request, "app/reset_password.html", {
+                "token": token, "year": datetime.now().year,
+            })
+
+        user.set_password(password1)
+        user.save()
+
+        from core.services.monitor import log_info
+        log_info("auth", f"Password reset: {user.email}")
+
+        messages.success(request, "¡Contraseña actualizada! Inicia sesión.")
+        return redirect("app:login")
+
+    return render(request, "app/reset_password.html", {
+        "token": token, "year": datetime.now().year,
+    })
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────

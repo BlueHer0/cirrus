@@ -12,6 +12,8 @@ urlpatterns = [
     path("logout/", views.app_logout, name="logout"),
     path("confirmar/<str:token>/", views.confirmar_email, name="confirmar"),
     path("reenviar/", views.reenviar_confirmacion, name="reenviar"),
+    path("recuperar-password/", views.recuperar_password, name="recuperar_password"),
+    path("reset-password/<str:token>/", views.reset_password, name="reset_password"),
 
     # Dashboard
     path("", views.app_dashboard, name="dashboard"),
