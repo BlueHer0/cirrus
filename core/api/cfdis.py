@@ -79,7 +79,8 @@ def _error(msg: str, status: int = 400):
     )
 
 
-def _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante):
+def _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante,
+                    fecha_desde=None, fecha_hasta=None):
     """Apply query filters, always scoped to API key's allowed empresas."""
     allowed_ids = list(request.api_empresas.values_list("id", flat=True))
     qs = qs.filter(empresa_id__in=allowed_ids)
@@ -96,12 +97,229 @@ def _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprob
         qs = qs.filter(tipo_relacion=tipo)
     if tipo_comprobante:
         qs = qs.filter(tipo_comprobante=tipo_comprobante.upper())
+    if fecha_desde:
+        qs = qs.filter(fecha__gte=fecha_desde)
+    if fecha_hasta:
+        qs = qs.filter(fecha__lte=fecha_hasta)
     return qs
 
 
-# ── Public endpoints (stateless conversion) ──────────────────────────
-# IMPORTANT: These MUST be registered before /{uuid}/ routes, otherwise
-# Django Ninja matches "convert" as the {uuid} parameter → 405.
+# ── List / Detail / Download endpoints (auth'd) ─────────────────────
+
+
+@router.get("/list/", auth=api_key_auth, summary="List CFDIs with filters")
+def list_cfdis(
+    request,
+    empresa_id: Optional[str] = None,
+    rfc: Optional[str] = None,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    tipo: Optional[str] = None,
+    tipo_comprobante: Optional[str] = None,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """List CFDIs with filters. Scoped to API key's empresas.
+
+    Query params:
+    - rfc: filter by empresa RFC
+    - year, month: filter by date
+    - tipo: 'emitido' or 'recibido'
+    - tipo_comprobante: I, E, T, N, P
+    - fecha_desde, fecha_hasta: YYYY-MM-DD
+    - limit (max 500), offset: pagination
+    """
+    from core.models import CFDI
+
+    limit = min(limit, 500)  # cap at 500
+    qs = CFDI.objects.all()
+    qs = _apply_filters(qs, request, empresa_id, rfc, year, month, tipo,
+                        tipo_comprobante, fecha_desde, fecha_hasta)
+
+    total = qs.count()
+    results = qs.order_by("-fecha")[offset:offset + limit]
+
+    return JsonResponse({
+        "count": total,
+        "limit": limit,
+        "offset": offset,
+        "results": [{
+            "uuid": str(c.uuid),
+            "rfc_emisor": c.rfc_emisor,
+            "nombre_emisor": c.nombre_emisor or "",
+            "rfc_receptor": c.rfc_receptor,
+            "nombre_receptor": c.nombre_receptor or "",
+            "fecha": str(c.fecha) if c.fecha else None,
+            "tipo_comprobante": c.tipo_comprobante,
+            "tipo_relacion": c.tipo_relacion,
+            "subtotal": float(c.subtotal or 0),
+            "iva": float(c.iva or 0),
+            "total": float(c.total or 0),
+            "moneda": c.moneda or "MXN",
+            "forma_pago": c.forma_pago or "",
+            "metodo_pago": c.metodo_pago or "",
+            "estado_sat": c.estado_sat or "",
+            "folio": c.folio or "",
+            "serie": c.serie or "",
+        } for c in results],
+    })
+
+
+@router.get("/detail/{uuid}/", auth=api_key_auth, summary="CFDI detail with parsed XML")
+def detail_cfdi(request, uuid: str):
+    """Get full CFDI detail, including parsed XML data (conceptos, impuestos, timbre)."""
+    cfdi, err = _lookup_cfdi_with_access(request, uuid)
+    if err:
+        return err
+
+    result = {
+        "uuid": str(cfdi.uuid),
+        "emisor": {
+            "rfc": cfdi.rfc_emisor,
+            "nombre": cfdi.nombre_emisor or "",
+        },
+        "receptor": {
+            "rfc": cfdi.rfc_receptor,
+            "nombre": cfdi.nombre_receptor or "",
+        },
+        "fecha": str(cfdi.fecha) if cfdi.fecha else None,
+        "tipo_comprobante": cfdi.tipo_comprobante,
+        "tipo_relacion": cfdi.tipo_relacion,
+        "subtotal": float(cfdi.subtotal or 0),
+        "iva": float(cfdi.iva or 0),
+        "isr_retenido": float(cfdi.isr_retenido or 0),
+        "iva_retenido": float(cfdi.iva_retenido or 0),
+        "total": float(cfdi.total or 0),
+        "moneda": cfdi.moneda or "MXN",
+        "forma_pago": cfdi.forma_pago or "",
+        "metodo_pago": cfdi.metodo_pago or "",
+        "uso_cfdi": cfdi.uso_cfdi or "",
+        "estado_sat": cfdi.estado_sat or "",
+        "folio": cfdi.folio or "",
+        "serie": cfdi.serie or "",
+        "version": cfdi.version or "",
+        "rfc_empresa": cfdi.rfc_empresa or "",
+    }
+
+    # Parse XML for rich detail
+    if cfdi.xml_minio_key:
+        try:
+            from sat_scrapper_core.cfdi_pdf.xml_parse import parse_cfdi_xml
+            xml_bytes = _download_xml(cfdi)
+            parsed = parse_cfdi_xml(xml_bytes)
+            result["emisor"]["regimen_fiscal"] = parsed.emisor.get("regimen_fiscal", "")
+            result["emisor"]["regimen_fiscal_desc"] = parsed.emisor.get("regimen_fiscal_desc", "")
+            result["receptor"]["regimen_fiscal"] = parsed.receptor.get("regimen_fiscal_receptor", "")
+            result["receptor"]["uso_cfdi"] = parsed.receptor.get("uso_cfdi", "")
+            result["receptor"]["uso_cfdi_desc"] = parsed.receptor.get("uso_cfdi_desc", "")
+            result["receptor"]["domicilio_fiscal"] = parsed.receptor.get("domicilio_fiscal", "")
+            result["conceptos"] = [
+                {
+                    "clave_prod_serv": c.get("clave_prod_serv", ""),
+                    "descripcion": c.get("descripcion", ""),
+                    "cantidad": c.get("cantidad", ""),
+                    "valor_unitario": c.get("valor_unitario", ""),
+                    "importe": c.get("importe", ""),
+                    "objeto_impuesto": c.get("objeto_impuesto", ""),
+                }
+                for c in (parsed.conceptos or [])
+            ]
+            result["timbre"] = {
+                "uuid": parsed.timbre.get("uuid", ""),
+                "fecha_timbrado": parsed.timbre.get("fecha_timbrado", ""),
+                "rfc_prov_certif": parsed.timbre.get("rfc_prov_certif", ""),
+                "no_certificado_sat": parsed.timbre.get("no_certificado_sat", ""),
+            }
+            result["lugar_expedicion"] = parsed.comprobante.get("lugar_expedicion", "")
+        except Exception as e:
+            logger.warning("XML parse failed for detail %s: %s", uuid, e)
+
+    return JsonResponse(result)
+
+
+@router.get("/detail/{uuid}/xml/", auth=api_key_auth, summary="Download raw XML")
+def download_xml(request, uuid: str):
+    """Download the original XML file for a CFDI."""
+    cfdi, err = _lookup_cfdi_with_access(request, uuid)
+    if err:
+        return err
+    if not cfdi.xml_minio_key:
+        return _error("CFDI has no XML stored", 404)
+
+    try:
+        xml_bytes = _download_xml(cfdi)
+    except Exception as e:
+        logger.error("XML download failed for %s: %s", uuid, e)
+        return _error("Failed to download XML", 500)
+
+    return HttpResponse(
+        xml_bytes,
+        content_type="application/xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="{uuid}.xml"',
+            "Content-Length": str(len(xml_bytes)),
+        },
+    )
+
+
+@router.get("/export/json/", auth=api_key_auth, summary="Export CFDIs as JSON")
+def export_cfdis_json(
+    request,
+    empresa_id: Optional[str] = None,
+    rfc: Optional[str] = None,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    tipo: Optional[str] = None,
+    tipo_comprobante: Optional[str] = None,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
+    limit: int = 1000,
+    offset: int = 0,
+):
+    """Export CFDIs as JSON with all fields. Max 5000 per request."""
+    from core.models import CFDI
+
+    limit = min(limit, 5000)
+    qs = CFDI.objects.all()
+    qs = _apply_filters(qs, request, empresa_id, rfc, year, month, tipo,
+                        tipo_comprobante, fecha_desde, fecha_hasta)
+
+    total = qs.count()
+    results = qs.order_by("-fecha")[offset:offset + limit]
+
+    return JsonResponse({
+        "count": total,
+        "limit": limit,
+        "offset": offset,
+        "results": [{
+            "uuid": str(c.uuid),
+            "rfc_emisor": c.rfc_emisor,
+            "nombre_emisor": c.nombre_emisor or "",
+            "rfc_receptor": c.rfc_receptor,
+            "nombre_receptor": c.nombre_receptor or "",
+            "rfc_empresa": c.rfc_empresa or "",
+            "fecha": str(c.fecha) if c.fecha else None,
+            "tipo_comprobante": c.tipo_comprobante,
+            "tipo_relacion": c.tipo_relacion,
+            "subtotal": float(c.subtotal or 0),
+            "iva": float(c.iva or 0),
+            "isr_retenido": float(c.isr_retenido or 0),
+            "iva_retenido": float(c.iva_retenido or 0),
+            "total": float(c.total or 0),
+            "moneda": c.moneda or "MXN",
+            "forma_pago": c.forma_pago or "",
+            "metodo_pago": c.metodo_pago or "",
+            "uso_cfdi": c.uso_cfdi or "",
+            "estado_sat": c.estado_sat or "",
+            "folio": c.folio or "",
+            "serie": c.serie or "",
+            "version": c.version or "",
+            "descargado_at": c.descargado_at.isoformat() if c.descargado_at else None,
+            "fuente": c.fuente or "",
+        } for c in results],
+    })
 
 
 @router.post("/convert/pdf/", summary="Convert XML to PDF (stateless, public)")
