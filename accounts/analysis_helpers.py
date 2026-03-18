@@ -25,8 +25,11 @@ def fmt(val):
     return f"{v:,.0f}"
 
 
-def get_empresa_and_qs(request, empresa_id, year, month):
-    """Validate access and return (empresa, base_qs) or (None, None)."""
+def get_empresa_and_qs(request, empresa_id, year=None, month=None):
+    """Validate access and return (empresa, base_qs) or (None, None).
+
+    year and month are optional — omitting widens the filter.
+    """
     from core.models import Empresa, CFDI
     try:
         empresa = Empresa.objects.get(id=empresa_id)
@@ -34,7 +37,11 @@ def get_empresa_and_qs(request, empresa_id, year, month):
         return None, None
     if empresa.owner_id != request.user.id and not request.user.is_staff:
         return None, None
-    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month)
+    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc)
+    if year:
+        qs = qs.filter(fecha__year=year)
+    if month:
+        qs = qs.filter(fecha__month=month)
     return empresa, qs
 
 
@@ -45,14 +52,19 @@ def prev_month(year, month):
     return y, m
 
 
-def _detectar_duplicados(empresa, year, month):
+def _detectar_duplicados(empresa, year=None, month=None):
     """Detect suspicious duplicate invoices: same emisor+monto within 3 days."""
     from core.models import CFDI
 
     qs = CFDI.objects.filter(
-        rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month,
+        rfc_empresa=empresa.rfc,
         rfc_receptor=empresa.rfc, tipo_comprobante="I",
     )
+    if year:
+        qs = qs.filter(fecha__year=year)
+    if month:
+        qs = qs.filter(fecha__month=month)
+
     # Group by (rfc_emisor, total) with 2+ occurrences
     grupos = qs.values("rfc_emisor", "total").annotate(
         count=Count("uuid"),
@@ -73,12 +85,19 @@ def _detectar_duplicados(empresa, year, month):
     return sospechosos
 
 
-def calcular_fiscscore(empresa, year, month):
-    """Calculate FiscScore for an empresa+period. Returns dict."""
+def calcular_fiscscore(empresa, year=None, month=None):
+    """Calculate FiscScore for an empresa+period. Returns dict.
+
+    year and month are optional — omitting widens the analysis range.
+    """
     from core.models import CFDI
     from core.services.efos_sync import verificar_proveedores_empresa
 
-    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month)
+    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc)
+    if year:
+        qs = qs.filter(fecha__year=year)
+    if month:
+        qs = qs.filter(fecha__month=month)
 
     # Components
     emitidos_i = qs.filter(tipo_relacion="emitido", tipo_comprobante="I")
@@ -179,4 +198,5 @@ def calcular_fiscscore(empresa, year, month):
             "duplicados": duplicados,
         },
     }
+
 

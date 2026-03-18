@@ -895,36 +895,68 @@ def app_cfdis_list(request):
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
     ]
     selected_empresa_rfc = ""
+    selected_empresa_obj = None
     if empresa_id and empresa_id != "__none__":
-        emp = Empresa.objects.filter(id=empresa_id).first()
-        selected_empresa_rfc = emp.rfc if emp else ""
+        selected_empresa_obj = Empresa.objects.filter(id=empresa_id).first()
+        selected_empresa_rfc = selected_empresa_obj.rfc if selected_empresa_obj else ""
     if filters.get("month"):
         filters["month_name"] = MONTH_NAMES[filters["month"]]
 
     now = datetime.now()
 
-    # Calculate FiscScore if filters active
+    # Show toolbar when at least empresa is selected (not just empresa+year+month)
+    show_toolbar = bool(empresa_id and empresa_id != "__none__" and selected_empresa_obj)
+
+    # Build period label for toolbar
+    if filters.get("year") and filters.get("month"):
+        periodo_label = f"{MONTH_NAMES[filters['month']]} {filters['year']}"
+    elif filters.get("year"):
+        periodo_label = f"Año {filters['year']}"
+    else:
+        periodo_label = "Todo el histórico"
+
+    # Build analysis query params
+    analysis_params = f"empresa={empresa_id}"
+    if filters.get("year"):
+        analysis_params += f"&year={filters['year']}"
+    if filters.get("month"):
+        analysis_params += f"&month={filters['month']}"
+
+    # Calculate FiscScore when empresa is selected
     fiscscore_ctx = None
-    if empresa_id and empresa_id != "__none__" and filters.get("year") and filters.get("month"):
+    if show_toolbar:
         try:
             from accounts.analysis_helpers import calcular_fiscscore
-            emp_obj = Empresa.objects.filter(id=empresa_id).first()
-            if emp_obj:
-                fs = calcular_fiscscore(emp_obj, filters["year"], filters["month"])
-                # Map color to rgba backgrounds
-                color_map = {
-                    "#34d399": ("16,185,129,0.15", "16,185,129,0.25"),
-                    "#fbbf24": ("251,191,36,0.15", "251,191,36,0.25"),
-                    "#f97316": ("249,115,22,0.15", "249,115,22,0.25"),
-                    "#f87171": ("248,113,113,0.15", "248,113,113,0.25"),
-                }
-                bg, border = color_map.get(fs["color"], ("99,102,241,0.15", "99,102,241,0.25"))
-                fiscscore_ctx = {
-                    "score": fs["score"], "color": fs["color"],
-                    "color_bg": bg, "color_border": border,
-                }
+            fs = calcular_fiscscore(
+                selected_empresa_obj,
+                filters.get("year"),
+                filters.get("month"),
+            )
+            color_map = {
+                "#34d399": ("16,185,129,0.15", "16,185,129,0.25"),
+                "#fbbf24": ("251,191,36,0.15", "251,191,36,0.25"),
+                "#f97316": ("249,115,22,0.15", "249,115,22,0.25"),
+                "#f87171": ("248,113,113,0.15", "248,113,113,0.25"),
+            }
+            bg, border = color_map.get(fs["color"], ("99,102,241,0.15", "99,102,241,0.25"))
+            fiscscore_ctx = {
+                "score": fs["score"], "color": fs["color"],
+                "color_bg": bg, "color_border": border,
+            }
         except Exception:
             pass
+
+    # EFOS 69-B flags
+    from core.models import EFOS as EFOSModel
+    rfcs_efos = set(EFOSModel.objects.values_list("rfc", flat=True))
+
+    # 69-B filter checkbox
+    solo_69b = request.GET.get("solo_69b", "")
+    if solo_69b:
+        qs = qs.filter(Q(rfc_emisor__in=rfcs_efos) | Q(rfc_receptor__in=rfcs_efos))
+        filters["solo_69b"] = True
+        total = qs.count()  # recount after filter
+        total_pages = (total + page_size - 1) // page_size
 
     return render(request, "app/cfdis_list.html", {
         "current_page": "cfdis",
@@ -946,6 +978,10 @@ def app_cfdis_list(request):
         "has_prev": page > 1,
         "has_next": offset + page_size < total,
         "fiscscore": fiscscore_ctx,
+        "show_toolbar": show_toolbar,
+        "periodo_label": periodo_label,
+        "analysis_params": analysis_params,
+        "rfcs_efos": rfcs_efos,
     })
 
 
@@ -986,12 +1022,23 @@ def app_cfdi_detail(request, uuid):
     tipo_names = {"I": "Ingreso", "E": "Egreso", "T": "Traslado", "N": "Nómina", "P": "Pago"}
     tipo_name = tipo_names.get(cfdi.tipo_comprobante, cfdi.tipo_comprobante)
 
+    # EFOS alerts
+    from core.models import EFOS as EFOSModel
+    efos_alerts = []
+    efos_emisor = EFOSModel.objects.filter(rfc=cfdi.rfc_emisor).first()
+    if efos_emisor:
+        efos_alerts.append({"rfc": cfdi.rfc_emisor, "situacion": efos_emisor.situacion, "tipo": "Emisor"})
+    efos_receptor = EFOSModel.objects.filter(rfc=cfdi.rfc_receptor).first()
+    if efos_receptor:
+        efos_alerts.append({"rfc": cfdi.rfc_receptor, "situacion": efos_receptor.situacion, "tipo": "Receptor"})
+
     return render(request, "app/cfdi_detail.html", {
         "current_page": "cfdis",
         "cfdi": cfdi,
         "xml": xml_data,
         "tipo_color": tipo_color,
         "tipo_name": tipo_name,
+        "efos_alerts": efos_alerts,
     })
 
 
@@ -1362,8 +1409,11 @@ def _fmt(val):
     return f"{v:,.0f}"
 
 
-def _analysis_base_qs(request, empresa_id, year, month):
-    """Validate access and return (empresa, base_qs) or redirect."""
+def _analysis_base_qs(request, empresa_id, year=None, month=None):
+    """Validate access and return (empresa, base_qs) or redirect.
+
+    year and month are now optional — omitting them widens the filter.
+    """
     from core.models import Empresa, CFDI
     try:
         empresa = Empresa.objects.get(id=empresa_id)
@@ -1371,8 +1421,32 @@ def _analysis_base_qs(request, empresa_id, year, month):
         return None, None
     if empresa.owner_id != request.user.id and not request.user.is_staff:
         return None, None
-    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=month)
+    qs = CFDI.objects.filter(rfc_empresa=empresa.rfc)
+    if year:
+        qs = qs.filter(fecha__year=year)
+    if month:
+        qs = qs.filter(fecha__month=month)
     return empresa, qs
+
+
+def _analysis_periodo(year, month):
+    """Build human-readable period string."""
+    if year and month:
+        return f"{MONTH_NAMES_ES[month]} {year}"
+    elif year:
+        return f"Año {year}"
+    else:
+        return "Todo el histórico"
+
+
+def _build_analysis_params(empresa_id, year=None, month=None):
+    """Build URL query string for analysis links."""
+    params = f"empresa={empresa_id}"
+    if year:
+        params += f"&year={year}"
+    if month:
+        params += f"&month={month}"
+    return params
 
 
 @login_required(login_url=APP_LOGIN_URL)
@@ -1382,8 +1456,8 @@ def analysis_summary_view(request):
     from django.db.models.functions import ExtractDay
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET.get("year", 2026))
-    month = int(request.GET.get("month", 3))
+    year = int(request.GET["year"]) if request.GET.get("year") else None
+    month = int(request.GET["month"]) if request.GET.get("month") else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1402,13 +1476,16 @@ def analysis_summary_view(request):
     ticket = float(facturado) / max(emitidos_i.count(), 1)
     factura_max = emitidos_i.aggregate(m=Max("total"))["m"] or 0
 
-    # Delta vs previous month
-    pm = month - 1 if month > 1 else 12
-    py = year if month > 1 else year - 1
-    _, prev_qs = _analysis_base_qs(request, empresa_id, py, pm)
-    prev_total = prev_qs.count() if prev_qs is not None else 0
-    prev_emit = prev_qs.filter(tipo_relacion="emitido").count() if prev_qs is not None else 0
-    prev_recv = prev_qs.filter(tipo_relacion="recibido").count() if prev_qs is not None else 0
+    # Delta vs previous month (only when month is specified)
+    if month:
+        pm = month - 1 if month > 1 else 12
+        py = year if month > 1 else year - 1
+        _, prev_qs = _analysis_base_qs(request, empresa_id, py, pm)
+        prev_total = prev_qs.count() if prev_qs is not None else 0
+        prev_emit = prev_qs.filter(tipo_relacion="emitido").count() if prev_qs is not None else 0
+        prev_recv = prev_qs.filter(tipo_relacion="recibido").count() if prev_qs is not None else 0
+    else:
+        prev_total = prev_emit = prev_recv = 0
 
     # Por tipo comprobante
     por_tipo_raw = qs.values("tipo_comprobante").annotate(count=Count("uuid")).order_by("-count")
@@ -1435,20 +1512,24 @@ def analysis_summary_view(request):
         for i, r in enumerate(por_fp_raw)
     ]
 
-    # Actividad diaria
-    daily_raw = qs.annotate(dia=ExtractDay("fecha")).values("dia").annotate(count=Count("uuid"), monto=Sum("total")).order_by("dia")
-    days = calendar.monthrange(year, month)[1]
-    dmap = {r["dia"]: r for r in daily_raw}
-    max_daily = max((dmap[d]["count"] for d in dmap), default=1)
-    actividad_diaria = [
-        {
-            "dia": d,
-            "count": dmap[d]["count"] if d in dmap else 0,
-            "pct": round((dmap[d]["count"] / max_daily) * 100) if d in dmap else 2,
-            "monto_fmt": _fmt(dmap[d]["monto"]) if d in dmap else "0",
-        }
-        for d in range(1, days + 1)
-    ]
+    # Actividad diaria (only when month is specified)
+    if month and year:
+        daily_raw = qs.annotate(dia=ExtractDay("fecha")).values("dia").annotate(count=Count("uuid"), monto=Sum("total")).order_by("dia")
+        days = calendar.monthrange(year, month)[1]
+        dmap = {r["dia"]: r for r in daily_raw}
+        max_daily = max((dmap[d]["count"] for d in dmap), default=1)
+        actividad_diaria = [
+            {
+                "dia": d,
+                "count": dmap[d]["count"] if d in dmap else 0,
+                "pct": round((dmap[d]["count"] / max_daily) * 100) if d in dmap else 2,
+                "monto_fmt": _fmt(dmap[d]["monto"]) if d in dmap else "0",
+            }
+            for d in range(1, days + 1)
+        ]
+    else:
+        actividad_diaria = []
+        days = 0
 
     # Top 5 clients + providers
     top_clientes = [
@@ -1478,8 +1559,9 @@ def analysis_summary_view(request):
     return render(request, "app/analysis_summary.html", {
         "titulo": "📊 Resumen Rápido",
         "empresa": empresa, "year": year, "month": month,
-        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "periodo": _analysis_periodo(year, month),
         "data": data, "now": datetime.now(),
+        "analysis_params": _build_analysis_params(empresa_id, year, month),
     })
 
 
@@ -1489,8 +1571,8 @@ def analysis_fiscal_view(request):
     from django.db.models import Sum
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET.get("year", 2026))
-    month = int(request.GET.get("month", 3))
+    year = int(request.GET["year"]) if request.GET.get("year") else None
+    month = int(request.GET["month"]) if request.GET.get("month") else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1525,11 +1607,14 @@ def analysis_fiscal_view(request):
         })
 
     # Delta
-    pm = month - 1 if month > 1 else 12
-    py = year if month > 1 else year - 1
-    _, prev_qs = _analysis_base_qs(request, empresa_id, py, pm)
-    prev_ing = float((prev_qs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)) if prev_qs is not None else 0
-    prev_gas = float((prev_qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)) if prev_qs is not None else 0
+    if month:
+        pm = month - 1 if month > 1 else 12
+        py = year if month > 1 else year - 1
+        _, prev_qs = _analysis_base_qs(request, empresa_id, py, pm)
+        prev_ing = float((prev_qs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)) if prev_qs is not None else 0
+        prev_gas = float((prev_qs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)) if prev_qs is not None else 0
+    else:
+        prev_ing = prev_gas = 0
     delta_ing = round((ingresos - prev_ing) / prev_ing * 100) if prev_ing else 0
     delta_gas = round((gastos_total - prev_gas) / prev_gas * 100) if prev_gas else 0
 
@@ -1543,8 +1628,9 @@ def analysis_fiscal_view(request):
     return render(request, "app/analysis_fiscal.html", {
         "titulo": "💰 Análisis Fiscal",
         "empresa": empresa, "year": year, "month": month,
-        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "periodo": _analysis_periodo(year, month),
         "data": data, "now": datetime.now(),
+        "analysis_params": _build_analysis_params(empresa_id, year, month),
     })
 
 
@@ -1554,8 +1640,8 @@ def analysis_iva_view(request):
     from django.db.models import Sum, F
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET.get("year", 2026))
-    month = int(request.GET.get("month", 3))
+    year = int(request.GET["year"]) if request.GET.get("year") else None
+    month = int(request.GET["month"]) if request.GET.get("month") else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1582,24 +1668,34 @@ def analysis_iva_view(request):
         {"tasa": "0%", "monto_fmt": _fmt(iva_0), "pct": round(iva_0 / max_tasa * 100), "bar_class": "bg-blue"},
     ]
 
-    # Tendencia 6 meses
+    # Tendencia
     tendencia = []
     max_tend = 1
-    for i in range(5, -1, -1):
-        m = month - i
-        y = year
-        while m <= 0:
-            m += 12
-            y -= 1
-        _, tqs = _analysis_base_qs(request, empresa_id, y, m)
-        if tqs is not None:
-            tt = float(tqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("iva"))["s"] or 0)
-            ta = float(tqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("iva"))["s"] or 0)
-        else:
-            tt, ta = 0, 0
-        v = tt - ta
-        max_tend = max(max_tend, abs(v))
-        tendencia.append({"mes": f"{MONTH_NAMES_ES[m][:3]} {y}", "valor": v, "valor_fmt": _fmt(v)})
+    if month:
+        for i in range(5, -1, -1):
+            m = month - i
+            y = year
+            while m <= 0:
+                m += 12
+                y -= 1
+            _, tqs = _analysis_base_qs(request, empresa_id, y, m)
+            if tqs is not None:
+                tt = float(tqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("iva"))["s"] or 0)
+                ta = float(tqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("iva"))["s"] or 0)
+            else:
+                tt, ta = 0, 0
+            v = tt - ta
+            max_tend = max(max_tend, abs(v))
+            tendencia.append({"mes": f"{MONTH_NAMES_ES[m][:3]} {y}", "valor": v, "valor_fmt": _fmt(v)})
+    elif year:
+        from core.models import CFDI
+        for m in range(1, 13):
+            mqs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=m)
+            tt = float(mqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("iva"))["s"] or 0)
+            ta = float(mqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("iva"))["s"] or 0)
+            v = tt - ta
+            max_tend = max(max_tend, abs(v))
+            tendencia.append({"mes": f"{MONTH_NAMES_ES[m][:3]} {year}", "valor": v, "valor_fmt": _fmt(v)})
 
     for t in tendencia:
         t["pct"] = round(abs(t["valor"]) / max_tend * 100) if max_tend > 0 else 0
@@ -1614,8 +1710,9 @@ def analysis_iva_view(request):
     return render(request, "app/analysis_iva.html", {
         "titulo": "🧾 IVA del Periodo",
         "empresa": empresa, "year": year, "month": month,
-        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "periodo": _analysis_periodo(year, month),
         "data": data, "now": datetime.now(),
+        "analysis_params": _build_analysis_params(empresa_id, year, month),
     })
 
 
@@ -1626,8 +1723,8 @@ def analysis_income_view(request):
     from django.db.models import Sum
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET.get("year", 2026))
-    month = int(request.GET.get("month", 3))
+    year = int(request.GET["year"]) if request.GET.get("year") else None
+    month = int(request.GET["month"]) if request.GET.get("month") else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1643,26 +1740,39 @@ def analysis_income_view(request):
     gastos_pct = round(gastos / ingresos * 100) if ingresos > 0 else 0
     utilidad_pct_abs = max(round(abs(utilidad) / max(ingresos, 1) * 100), 3)
 
-    # 6-month trend
+    # 6-month trend (only when month is specified)
     tendencia = []
     max_val = 1
-    for i in range(5, -1, -1):
-        m = month - i
-        y = year
-        while m <= 0:
-            m += 12
-            y -= 1
-        _, tqs = _analysis_base_qs(request, empresa_id, y, m)
-        if tqs is not None:
-            ing = float(tqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)
-            gas = float(tqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)
-        else:
-            ing, gas = 0, 0
-        max_val = max(max_val, ing, gas)
-        tendencia.append({
-            "mes_nombre": MONTH_NAMES_ES[m][:3], "year": y, "month": m,
-            "ingresos": ing, "gastos": gas, "ing_fmt": _fmt(ing), "gas_fmt": _fmt(gas),
-        })
+    if month:
+        for i in range(5, -1, -1):
+            m = month - i
+            y = year
+            while m <= 0:
+                m += 12
+                y -= 1
+            _, tqs = _analysis_base_qs(request, empresa_id, y, m)
+            if tqs is not None:
+                ing = float(tqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)
+                gas = float(tqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)
+            else:
+                ing, gas = 0, 0
+            max_val = max(max_val, ing, gas)
+            tendencia.append({
+                "mes_nombre": MONTH_NAMES_ES[m][:3], "year": y, "month": m,
+                "ingresos": ing, "gastos": gas, "ing_fmt": _fmt(ing), "gas_fmt": _fmt(gas),
+            })
+    elif year:
+        # Show monthly for the full year
+        from core.models import CFDI
+        for m in range(1, 13):
+            mqs = CFDI.objects.filter(rfc_empresa=empresa.rfc, fecha__year=year, fecha__month=m)
+            ing = float(mqs.filter(tipo_relacion="emitido", tipo_comprobante="I").aggregate(s=Sum("total"))["s"] or 0)
+            gas = float(mqs.filter(tipo_relacion="recibido", tipo_comprobante__in=["I", "E"]).aggregate(s=Sum("total"))["s"] or 0)
+            max_val = max(max_val, ing, gas)
+            tendencia.append({
+                "mes_nombre": MONTH_NAMES_ES[m][:3], "year": year, "month": m,
+                "ingresos": ing, "gastos": gas, "ing_fmt": _fmt(ing), "gas_fmt": _fmt(gas),
+            })
 
     for t in tendencia:
         t["ing_pct"] = round(t["ingresos"] / max_val * 100) if max_val > 0 else 0
@@ -1678,8 +1788,9 @@ def analysis_income_view(request):
     return render(request, "app/analysis_income.html", {
         "titulo": "📈 Estado de Resultados",
         "empresa": empresa, "year": year, "month": month,
-        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "periodo": _analysis_periodo(year, month),
         "data": data, "now": datetime.now(),
+        "analysis_params": _build_analysis_params(empresa_id, year, month),
     })
 
 
@@ -1688,8 +1799,8 @@ def analysis_top_rfc_view(request):
     from django.db.models import Sum, Count
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET.get("year", 2026))
-    month = int(request.GET.get("month", 3))
+    year = int(request.GET["year"]) if request.GET.get("year") else None
+    month = int(request.GET["month"]) if request.GET.get("month") else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1745,8 +1856,9 @@ def analysis_top_rfc_view(request):
     return render(request, "app/analysis_top_rfc.html", {
         "titulo": "🏢 Top RFC — Clientes y Proveedores",
         "empresa": empresa, "year": year, "month": month,
-        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "periodo": _analysis_periodo(year, month),
         "data": data, "now": datetime.now(),
+        "analysis_params": _build_analysis_params(empresa_id, year, month),
     })
 
 
@@ -1755,8 +1867,8 @@ def analysis_risks_view(request):
     from accounts.analysis_helpers import calcular_fiscscore
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET.get("year", 2026))
-    month = int(request.GET.get("month", 3))
+    year = int(request.GET["year"]) if request.GET.get("year") else None
+    month = int(request.GET["month"]) if request.GET.get("month") else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1779,8 +1891,9 @@ def analysis_risks_view(request):
     return render(request, "app/analysis_risks.html", {
         "titulo": "⚠️ Riesgos Fiscales — FiscScore",
         "empresa": empresa, "year": year, "month": month,
-        "periodo": f"{MONTH_NAMES_ES[month]} {year}",
+        "periodo": _analysis_periodo(year, month),
         "data": data, "now": datetime.now(),
+        "analysis_params": _build_analysis_params(empresa_id, year, month),
     })
 
 

@@ -39,6 +39,13 @@
     <a href="{% url 'app:cfdi_xml' cfdi.uuid %}" style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: #a0aec0; text-decoration: none; font-size: 13px;">📥 XML</a>
   </div>
 </div>
+<!-- EFOS 69-B Alerts -->
+{% for alert in efos_alerts %}
+<div style="background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+  ⚠️ <strong style="color: #f87171;">Alerta EFOS:</strong>
+  <span style="color: #e2e8f0;">El {{ alert.tipo }} con RFC <strong style="color: #f87171;">{{ alert.rfc }}</strong> aparece en el listado 69-B del SAT como "<em>{{ alert.situacion }}</em>".</span>
+</div>
+{% endfor %}
 
 <!-- Emisor -->
 <div class="detail-card">
