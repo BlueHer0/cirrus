@@ -667,6 +667,24 @@ def app_empresa_subir_csd(request, empresa_id):
 
 
 @login_required(login_url=APP_LOGIN_URL)
+def app_empresa_descargar_csf(request, empresa_id):
+    """Download the latest CSF PDF from MinIO."""
+    empresa = _get_empresa_or_404(request, empresa_id)
+    if not empresa.csf_minio_key:
+        messages.error(request, "No hay CSF descargada para esta empresa.")
+        return redirect("app:empresa_detail", empresa_id=empresa_id)
+    from core.services.storage_minio import download_bytes
+    try:
+        pdf = download_bytes(empresa.csf_minio_key)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        periodo = empresa.csf_ultima_descarga.strftime("%Y-%m") if empresa.csf_ultima_descarga else "latest"
+        response["Content-Disposition"] = f'inline; filename="CSF_{empresa.rfc}_{periodo}.pdf"'
+        return response
+    except Exception as e:
+        messages.error(request, f"Error al descargar CSF: {e}")
+        return redirect("app:empresa_detail", empresa_id=empresa_id)
+
+@login_required(login_url=APP_LOGIN_URL)
 @require_POST
 def app_empresa_descargar(request, empresa_id):
     empresa = _get_empresa_or_404(request, empresa_id)

@@ -250,7 +250,7 @@
                     <tr>
                         <td class="py-2.5 text-white">{{ empresa.csf_ultima_descarga|date:"F Y"|default:"Marzo 2026" }}</td>
                         <td class="py-2.5 text-gray-400 text-xs">{{ empresa.csf_ultima_descarga|date:"d/m/Y"|default:"—" }}</td>
-                        <td class="py-2.5 text-right"><span class="text-indigo-400 text-xs">📄 Almacenada</span></td>
+                        <td class="py-2.5 text-right"><a href="{% url 'app:empresa_descargar_csf' empresa.id %}" target="_blank" class="text-indigo-400 hover:text-indigo-300 text-xs transition-colors">📄 Descargar</a></td>
                     </tr>
                 </tbody>
             </table>

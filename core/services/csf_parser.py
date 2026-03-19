@@ -48,7 +48,7 @@ def _parsear_con_pdfplumber(pdf_bytes):
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             text = ""
             for page in pdf.pages:
-                text += (page.extract_text() or "") + "\n"
+                text += (page.extract_text(x_tolerance=2, y_tolerance=3) or "") + "\n"
     except Exception as e:
         logger.error("Failed to open PDF with pdfplumber: %s", e)
         return datos
@@ -65,57 +65,69 @@ def _parsear_con_pdfplumber(pdf_bytes):
         datos["rfc"] = rfc_match.group(1)
 
     # ── Razón Social / Denominación ──
+    # Priority: match the data line "Denominación/Razón Social: VALUE"
+    # NOT the header "Nombre, denominación o razón social"
     for pattern in [
-        r"(?:Denominación|Razón Social)[:/]?\s*(.+)",
-        r"Nombre[\s,]*Denominación[\s,]*o[\s,]*Razón Social[:/]?\s*(.+)",
-        r"(?:Nombre del Contribuyente)[:/]?\s*(.+)",
+        r"Denominación/Razón Social:\s*(.+)",
+        r"Denominación\s*/\s*Razón\s+Social\s*:\s*(.+)",
+        r"(?:Nombre del Contribuyente)\s*:\s*(.+)",
     ]:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             val = match.group(1).strip()
-            # Clean trailing labels
             val = re.split(r"\s{2,}|Régimen|Nombre Comercial", val)[0].strip()
             if val and len(val) > 2:
                 datos["razon_social"] = val
                 break
 
+    # If no structured match, try from the header block (line after RFC in header)
+    if "razon_social" not in datos:
+        header_match = re.search(
+            r"Registro Federal de Contribuyentes\n(.+?)\n",
+            text,
+        )
+        if header_match:
+            val = header_match.group(1).strip()
+            if val and len(val) > 2 and "nombre" not in val.lower():
+                datos["razon_social"] = val
+
     # ── Régimen Capital ──
-    regcap = re.search(r"Régimen Capital[:/]?\s*(.+)", text, re.IGNORECASE)
+    regcap = re.search(r"Régimen Capital:\s*(.+)", text, re.IGNORECASE)
     if regcap:
         datos["regimen_capital"] = regcap.group(1).strip().split("\n")[0].strip()
 
     # ── Nombre Comercial ──
-    nomcom = re.search(r"Nombre Comercial[:/]?\s*(.+)", text, re.IGNORECASE)
+    nomcom = re.search(r"Nombre Comercial:\s*(.+)", text, re.IGNORECASE)
     if nomcom:
-        datos["nombre_comercial"] = nomcom.group(1).strip().split("\n")[0].strip()
+        val = nomcom.group(1).strip().split("\n")[0].strip()
+        if val and val.lower() not in ("", "---", "n/a"):
+            datos["nombre_comercial"] = val
 
     # ── Código Postal ──
-    cp = re.search(r"Código Postal[:/]?\s*(\d{5})", text, re.IGNORECASE)
+    cp = re.search(r"Código Postal:\s*(\d{5})", text, re.IGNORECASE)
     if cp:
         datos["codigo_postal"] = cp.group(1)
 
     # ── Dirección fields ──
     address_fields = [
-        ("calle", r"(?:Nombre de Vialidad|Calle|Tipo de Vialidad.*?Nombre)[:/]?\s*(.+)"),
-        ("num_exterior", r"Número Exterior[:/]?\s*(.+)"),
-        ("num_interior", r"Número Interior[:/]?\s*(.+)"),
-        ("colonia", r"(?:Nombre de la Colonia|Colonia)[:/]?\s*(.+)"),
-        ("localidad", r"(?:Nombre de la Localidad|Localidad)[:/]?\s*(.+)"),
-        ("municipio", r"(?:Municipio|Demarcación Territorial|Alcaldía)[:/]?\s*(.+)"),
-        ("estado", r"(?:Entidad Federativa|Nombre de la Entidad|Estado)[:/]?\s*(.+)"),
+        ("calle", r"Nombre de Vialidad:\s*(.+?)(?:\s{2,}|Número)", re.IGNORECASE),
+        ("num_exterior", r"Número Exterior:\s*(.+?)(?:\s{2,}|\n|Número Interior)", re.IGNORECASE),
+        ("num_interior", r"Número Interior:\s*(.+?)(?:\s{2,}|\n|Nombre de la Colonia)", re.IGNORECASE),
+        ("colonia", r"Nombre de la Colonia:\s*(.+?)(?:\s{2,}|\n)", re.IGNORECASE),
+        ("localidad", r"Nombre de la Localidad:\s*(.+?)(?:\s{2,}|\n|Nombre del Municipio)", re.IGNORECASE),
+        ("municipio", r"(?:Nombre del Municipio o Demarcación Territorial|Municipio):\s*(.+?)(?:\s{2,}|\n)", re.IGNORECASE),
+        ("estado", r"(?:Nombre de la Entidad Federativa|Entidad Federativa):\s*(.+?)(?:\s{2,}|\n|Entre)", re.IGNORECASE),
     ]
-    for field_name, pattern in address_fields:
-        match = re.search(pattern, text, re.IGNORECASE)
+    for field_name, pattern, flags in address_fields:
+        match = re.search(pattern, text, flags)
         if match:
-            val = match.group(1).strip().split("\n")[0].strip()
-            # Clean trailing labels
-            val = re.split(r"\s{2,}", val)[0].strip()
+            val = match.group(1).strip()
             if val and val.lower() not in ("", "---", "n/a"):
                 datos[field_name] = val
 
     # ── Fecha inicio operaciones ──
     fecha = re.search(
-        r"(?:Fecha de Inicio|Fecha inicio de operaciones)[:/]?\s*(\d{1,2}[\s/.-]\w+[\s/.-]\d{4}|\d{4}[\s/.-]\d{2}[\s/.-]\d{2})",
+        r"Fecha inicio de operaciones:\s*(.+?)(?:\n|$)",
         text,
         re.IGNORECASE,
     )
@@ -124,30 +136,29 @@ def _parsear_con_pdfplumber(pdf_bytes):
 
     # ── Estatus en el padrón ──
     estatus = re.search(
-        r"(?:Estatus en el padrón|Situación del contribuyente)[:/]?\s*(.+)",
+        r"Estatus en el padrón:\s*(.+?)(?:\n|$)",
         text,
         re.IGNORECASE,
     )
     if estatus:
-        datos["estatus_padron"] = estatus.group(1).strip().split("\n")[0].strip()
+        datos["estatus_padron"] = estatus.group(1).strip()
 
     # ── Régimen fiscal ──
     regimen = re.search(
-        r"(?:Régimen|Regímenes)[^:]*?[:/]?\s*(\d{3}\s*[-—–]\s*.+)",
+        r"Régimen\s+Fecha\s+Inicio.*?\n(.+?)\s+\d{2}/\d{2}/\d{4}",
         text,
     )
     if regimen:
-        datos["regimen_fiscal"] = regimen.group(1).strip().split("\n")[0].strip()
+        datos["regimen_fiscal"] = regimen.group(1).strip()
 
     # ── Actividades económicas ──
     actividades = []
     for match in re.finditer(
-        r"(\d{4,6})\s*[-—–]\s*(.+?)(?:\n|$)", text
+        r"\d+\s+(.+?)\s+(\d{1,3})\s+(\d{2}/\d{2}/\d{4})", text
     ):
-        code = match.group(1).strip()
-        desc = match.group(2).strip()
-        if len(code) >= 4:
-            actividades.append(f"{code} — {desc}")
+        desc = match.group(1).strip()
+        if desc and len(desc) > 5:
+            actividades.append(desc)
     if actividades:
         datos["actividades"] = actividades
 
