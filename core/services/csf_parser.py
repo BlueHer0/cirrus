@@ -11,7 +11,7 @@ import re
 logger = logging.getLogger("core.csf_parser")
 
 # Docling endpoint — to be confirmed
-DOCLING_URL = "http://10.20.0.6:5001/api/parse"
+DOCLING_URL = "http://10.20.0.5:8000/extract"
 
 
 def parsear_csf_con_docling(pdf_bytes):
