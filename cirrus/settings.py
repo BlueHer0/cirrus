@@ -156,6 +156,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(day_of_month="2", hour="6", minute="0"),
         "options": {"queue": "descarga"},
     },
+    "alertas-fiel-vencimiento": {
+        "task": "core.tasks.alertas_vencimiento_fiel",
+        "schedule": crontab(hour="8", minute="0"),
+        "options": {"queue": "sistema"},
+    },
 }
 
 CELERY_TASK_ROUTES = {
@@ -171,6 +176,7 @@ CELERY_TASK_ROUTES = {
     "core.tasks.verificar_fiel_y_descargar_csf": {"queue": "descarga"},
     "core.tasks.descargar_csf_mensual": {"queue": "descarga"},
     "core.tasks.descargar_csf_empresa": {"queue": "descarga"},
+    "core.tasks.alertas_vencimiento_fiel": {"queue": "sistema"},
 }
 CELERY_TASK_DEFAULT_QUEUE = "sistema"
 

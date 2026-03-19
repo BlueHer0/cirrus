@@ -9,6 +9,16 @@
 <span class="px-3 py-2 rounded-lg text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 animate-pulse">⏳ Verificando FIEL...</span>
 {% elif empresa.fiel_status == 'rechazada' %}
 <span class="px-3 py-2 rounded-lg text-xs text-red-400 bg-red-500/10 border border-red-500/20">❌ FIEL rechazada</span>
+{% elif empresa.fiel_status == 'expirada' %}
+<span class="px-3 py-2 rounded-lg text-xs text-red-400 bg-red-500/10 border border-red-500/20 animate-pulse">🔴 FIEL EXPIRADA — descargas detenidas</span>
+{% elif fiel_dias_restantes is not None %}
+    {% if fiel_dias_restantes > 90 %}
+    <span class="px-3 py-2 rounded-lg text-xs text-green-400 bg-green-500/10 border border-green-500/20">FIEL vigente hasta {{ empresa.fiel_expira|date:"d/M/Y" }}</span>
+    {% elif fiel_dias_restantes >= 30 %}
+    <span class="px-3 py-2 rounded-lg text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20">FIEL vence en {{ fiel_dias_restantes }} días</span>
+    {% elif fiel_dias_restantes > 0 %}
+    <span class="px-3 py-2 rounded-lg text-xs text-red-400 bg-red-500/10 border border-red-500/20">⚠️ FIEL vence en {{ fiel_dias_restantes }} días — renuévala</span>
+    {% endif %}
 {% endif %}
 <button onclick="document.getElementById('edit-form').classList.toggle('hidden')" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-400">✏️</button>
 {% endblock %}
@@ -44,34 +54,87 @@
         </div>
     </div>
 
-    <!-- FIEL -->
+    <!-- Credenciales (FIEL + CSD) -->
     <div class="glass rounded-xl p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Credenciales FIEL</h3>
-        <div class="space-y-3">
-            <div>
-                {% if empresa.fiel_status == 'verificada' %}
-                <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Verificada</span>
-                {% elif empresa.fiel_status == 'verificando' %}
-                <span class="badge-warning px-2.5 py-1 rounded-full text-xs animate-pulse">⏳ Verificando contra el SAT...</span>
-                {% elif empresa.fiel_status == 'rechazada' %}
-                <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ Rechazada — intenta subir de nuevo</span>
-                {% else %}
-                <span class="badge-error px-2.5 py-1 rounded-full text-xs">📤 Sube tu FIEL</span>
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">🔑 Credenciales</h3>
+
+        <!-- FIEL -->
+        <div class="mb-4">
+            <div class="text-[11px] text-gray-500 uppercase font-semibold mb-2">e.firma (FIEL)</div>
+            <div class="space-y-2">
+                <div>
+                    {% if empresa.fiel_status == 'verificada' %}
+                    <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Verificada</span>
+                    {% elif empresa.fiel_status == 'expirada' %}
+                    <span class="badge-error px-2.5 py-1 rounded-full text-xs animate-pulse">🔴 Expirada</span>
+                    {% elif empresa.fiel_status == 'verificando' %}
+                    <span class="badge-warning px-2.5 py-1 rounded-full text-xs animate-pulse">⏳ Verificando...</span>
+                    {% elif empresa.fiel_status == 'rechazada' %}
+                    <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ Rechazada</span>
+                    {% else %}
+                    <span class="badge-error px-2.5 py-1 rounded-full text-xs">📤 Sube tu FIEL</span>
+                    {% endif %}
+                </div>
+                {% if empresa.fiel_expira %}
+                <div class="flex justify-between text-xs">
+                    <span class="text-gray-500">Vence</span>
+                    <span class="{% if fiel_dias_restantes is not None and fiel_dias_restantes <= 30 %}text-red-400{% elif fiel_dias_restantes is not None and fiel_dias_restantes <= 90 %}text-amber-400{% else %}text-gray-400{% endif %}">{{ empresa.fiel_expira|date:"d/M/Y" }}</span>
+                </div>
+                {% endif %}
+                {% if empresa.fiel_verificada_at %}
+                <div class="flex justify-between text-xs"><span class="text-gray-500">Verificada</span><span class="text-gray-400">{{ empresa.fiel_verificada_at|date:"d/M/Y" }}</span></div>
                 {% endif %}
             </div>
-            {% if empresa.fiel_verificada_at %}
-            <div><div class="text-[11px] text-gray-500 uppercase">Verificada</div><div class="text-gray-400 text-sm">{{ empresa.fiel_verificada_at|date:"d/M/Y H:i" }}</div></div>
-            {% endif %}
-            {% if empresa.fiel_expira %}
-            <div><div class="text-[11px] text-gray-500 uppercase">Expira</div><div class="text-gray-400 text-sm">{{ empresa.fiel_expira|date:"d/M/Y" }}</div></div>
-            {% endif %}
-            <p class="text-[10px] text-gray-600 mt-2">🔒 Tus credenciales se encriptan y almacenan de forma segura.</p>
+            <div class="mt-2">
+                <a href="{% url 'app:empresa_fiel' empresa.id %}" class="btn-ghost px-3 py-1.5 rounded-lg text-[11px] text-gray-300 block text-center">
+                    {% if empresa.fiel_status == 'sin_fiel' %}📤 Configurar FIEL{% else %}🔄 Actualizar FIEL{% endif %}
+                </a>
+            </div>
         </div>
-        <div class="mt-4 pt-4 border-t border-white/5">
-            <a href="{% url 'app:empresa_fiel' empresa.id %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-gray-300 block text-center">
-                {% if empresa.fiel_status == 'sin_fiel' %}📤 Configurar FIEL{% else %}🔄 Actualizar FIEL{% endif %}
-            </a>
+
+        <!-- CSD -->
+        <div class="pt-3 border-t border-white/5">
+            <div class="text-[11px] text-gray-500 uppercase font-semibold mb-2">🔏 Sello Digital (CSD)</div>
+            {% if empresa.csd_activo %}
+            <div class="space-y-2">
+                <div><span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Configurado</span></div>
+                {% if empresa.csd_serial %}
+                <div class="flex justify-between text-xs"><span class="text-gray-500">Serial</span><span class="text-gray-400 font-mono text-[10px]">{{ empresa.csd_serial }}</span></div>
+                {% endif %}
+                {% if empresa.csd_expira %}
+                <div class="flex justify-between text-xs"><span class="text-gray-500">Vence</span><span class="text-gray-400">{{ empresa.csd_expira|date:"d/M/Y" }}</span></div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="space-y-2">
+                <div><span class="text-gray-500 text-xs">No configurado</span></div>
+                <button onclick="document.getElementById('csd-form').classList.toggle('hidden')" class="btn-ghost px-3 py-1.5 rounded-lg text-[11px] text-indigo-300 block text-center w-full">📤 Subir CSD</button>
+                <p class="text-[10px] text-gray-600">Necesario para facturación electrónica (disponible próximamente)</p>
+            </div>
+            {% endif %}
+
+            <!-- CSD Upload Form (hidden) -->
+            <div id="csd-form" class="hidden mt-3 pt-3 border-t border-white/5">
+                <form method="post" action="{% url 'app:empresa_subir_csd' empresa.id %}" enctype="multipart/form-data" class="space-y-2">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">.cer del CSD</label>
+                        <input type="file" name="csd_cer" accept=".cer" required class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-white/10 file:text-gray-300">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">.key del CSD</label>
+                        <input type="file" name="csd_key" accept=".key" required class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-white/10 file:text-gray-300">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">Contraseña del CSD</label>
+                        <input type="password" name="csd_password" required class="w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500/50">
+                    </div>
+                    <button type="submit" class="btn-primary w-full px-3 py-1.5 rounded-lg text-xs text-white">Subir CSD</button>
+                </form>
+            </div>
         </div>
+
+        <p class="text-[10px] text-gray-600 mt-3">🔒 Tus credenciales se encriptan y almacenan de forma segura.</p>
     </div>
 
     <!-- Stats -->

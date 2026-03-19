@@ -532,6 +532,11 @@ def app_empresa_detail(request, empresa_id):
     has_running = downloads_qs.filter(estado="ejecutando").exists()
     recent_downloads = downloads_qs[:10]
 
+    # FIEL expiry days
+    fiel_dias_restantes = None
+    if empresa.fiel_expira:
+        fiel_dias_restantes = (empresa.fiel_expira.date() - now.date()).days
+
     return render(request, "app/empresa_detail.html", {
         "current_page": "empresas",
         "empresa": empresa,
@@ -547,6 +552,7 @@ def app_empresa_detail(request, empresa_id):
         "current_month": now.month,
         "recent_downloads": recent_downloads,
         "has_running": has_running,
+        "fiel_dias_restantes": fiel_dias_restantes,
     })
 
 
@@ -603,6 +609,60 @@ def app_empresa_verificar(request, empresa_id):
     from core.tasks import verificar_fiel
     verificar_fiel.delay(str(empresa.id))
     messages.info(request, f"Verificación iniciada para {empresa.rfc}")
+    return redirect("app:empresa_detail", empresa_id=empresa_id)
+
+
+@login_required(login_url=APP_LOGIN_URL)
+@require_POST
+def app_empresa_subir_csd(request, empresa_id):
+    """Upload CSD (Certificado de Sello Digital) for future invoicing."""
+    empresa = _get_empresa_or_404(request, empresa_id)
+
+    cer_file = request.FILES.get('csd_cer')
+    key_file = request.FILES.get('csd_key')
+    csd_password = request.POST.get('csd_password', '')
+
+    if not all([cer_file, key_file, csd_password]):
+        messages.error(request, 'Los 3 campos son obligatorios.')
+        return redirect("app:empresa_detail", empresa_id=empresa_id)
+
+    try:
+        from core.services.fiel_encryption import validate_fiel_local, encrypt_password
+        from core.services.storage_minio import upload_bytes
+
+        cer_bytes = cer_file.read()
+        key_bytes = key_file.read()
+
+        csd_data = validate_fiel_local(cer_bytes, key_bytes, csd_password)
+
+        # Guardar en MinIO
+        cer_key = f'csd/{empresa.rfc}/{empresa.rfc}_csd.cer'
+        key_key = f'csd/{empresa.rfc}/{empresa.rfc}_csd.key'
+        upload_bytes(cer_bytes, cer_key)
+        upload_bytes(key_bytes, key_key)
+
+        empresa.csd_cer_key = cer_key
+        empresa.csd_key_key = key_key
+        empresa.csd_password_encrypted = encrypt_password(csd_password).decode() if isinstance(encrypt_password(csd_password), bytes) else encrypt_password(csd_password)
+        empresa.csd_serial = csd_data.get('serial', '')
+        empresa.csd_expira = csd_data.get('valid_to')
+        empresa.csd_activo = True
+        empresa.save(update_fields=[
+            'csd_cer_key', 'csd_key_key', 'csd_password_encrypted',
+            'csd_serial', 'csd_expira', 'csd_activo',
+        ])
+
+        from core.services.monitor import log_info
+        log_info("fiel", f"CSD configurado para {empresa.rfc}",
+                 user_email=request.user.email)
+
+        messages.success(request, 'Sello Digital configurado correctamente.')
+    except Exception as e:
+        from core.services.monitor import log_error
+        log_error("fiel", f"Error CSD para {empresa.rfc}: {e}",
+                  user_email=request.user.email)
+        messages.error(request, f'Error al validar CSD: {e}')
+
     return redirect("app:empresa_detail", empresa_id=empresa_id)
 
 

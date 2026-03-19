@@ -1074,6 +1074,71 @@ def benchmark_hourly_report():
 
 
 @shared_task(queue="sistema")
+def alertas_vencimiento_fiel():
+    """Revisa FIELs y CSDs por vencer y envía alertas."""
+    from core.models import Empresa
+    from django.core.mail import send_mail
+    from core.services.alerts import send_telegram
+
+    now = datetime.now().date()
+    alerta_dias = [90, 60, 30, 15, 7, 3, 1]
+
+    for empresa in Empresa.objects.filter(fiel_verificada=True, fiel_expira__isnull=False):
+        dias_restantes = (empresa.fiel_expira.date() - now).days
+
+        # Alertas a 90, 60, 30, 15, 7, 3, 1 días
+        if dias_restantes in alerta_dias:
+            send_mail(
+                f'⚠️ Tu FIEL de {empresa.rfc} vence en {dias_restantes} días — Cirrus',
+                f'La e.firma (FIEL) de {empresa.nombre} ({empresa.rfc}) '
+                f'vence el {empresa.fiel_expira.strftime("%d/%m/%Y")}.\n\n'
+                f'Te quedan {dias_restantes} días para renovarla en el portal del SAT.\n\n'
+                f'Si la FIEL vence, Cirrus no podrá descargar tus CFDIs ni tu '
+                f'Constancia de Situación Fiscal.\n\n'
+                f'Renueva tu FIEL en: https://www.sat.gob.mx\n\n'
+                f'— Equipo Cirrus',
+                'Cirrus <cirrus@nubex.me>',
+                [empresa.owner.email],
+                fail_silently=True,
+            )
+            send_telegram(
+                f"⚠️ FIEL vence en {dias_restantes}d: {empresa.rfc} ({empresa.owner.email})",
+                "warning",
+            )
+
+        # Si ya venció
+        if dias_restantes <= 0:
+            empresa.fiel_status = 'expirada'
+            empresa.sync_activa = False
+            empresa.save(update_fields=['fiel_status', 'sync_activa'])
+            send_telegram(
+                f"🔴 FIEL EXPIRADA: {empresa.rfc} — sync desactivada",
+                "critical",
+            )
+
+        # Alertas CSD
+        if empresa.csd_expira:
+            dias_csd = (empresa.csd_expira - now).days
+            if dias_csd in alerta_dias:
+                send_mail(
+                    f'⚠️ Tu Sello Digital de {empresa.rfc} vence en {dias_csd} días',
+                    f'El CSD de {empresa.nombre} vence el {empresa.csd_expira.strftime("%d/%m/%Y")}.\n'
+                    f'Renuévalo en el portal del SAT para poder seguir facturando.\n\n'
+                    f'— Equipo Cirrus',
+                    'Cirrus <cirrus@nubex.me>',
+                    [empresa.owner.email],
+                    fail_silently=True,
+                )
+                send_telegram(
+                    f"⚠️ CSD vence en {dias_csd}d: {empresa.rfc} ({empresa.owner.email})",
+                    "warning",
+                )
+
+    logger.info("✅ Alertas de vencimiento FIEL/CSD ejecutadas")
+    return "OK"
+
+
+@shared_task(queue="sistema")
 def sync_efos_task():
     """Sincroniza la lista 69-B del SAT. Corre mensual."""
     from core.services.efos_sync import sync_efos

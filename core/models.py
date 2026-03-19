@@ -40,6 +40,7 @@ class Empresa(models.Model):
         ("verificando", "Verificando"),
         ("verificada", "Verificada"),
         ("rechazada", "Rechazada"),
+        ("expirada", "Expirada"),
     ]
     fiel_status = models.CharField(
         max_length=20, default="sin_fiel", choices=FIEL_STATUS_CHOICES,
@@ -47,6 +48,23 @@ class Empresa(models.Model):
     )
     fiel_verificada_at = models.DateTimeField(null=True, blank=True)
     fiel_expira = models.DateTimeField(null=True, blank=True)
+
+    # CSD para facturación (futuro)
+    csd_cer_key = models.CharField(
+        max_length=500, blank=True,
+        help_text="MinIO key del .cer del CSD",
+    )
+    csd_key_key = models.CharField(
+        max_length=500, blank=True,
+        help_text="MinIO key del .key del CSD",
+    )
+    csd_password_encrypted = models.TextField(
+        blank=True,
+        help_text="Password del CSD encriptado con Fernet",
+    )
+    csd_serial = models.CharField(max_length=50, blank=True)
+    csd_expira = models.DateField(null=True, blank=True)
+    csd_activo = models.BooleanField(default=False)
 
     # Scheduling
     descarga_activa = models.BooleanField(default=True)
