@@ -1343,11 +1343,41 @@ def app_facturacion(request):
     plan_actual = profile.get_plan()
     pagos = StripePayment.objects.filter(user=request.user).order_by("-created_at")[:20]
 
+    # Fiscal data read/edit toggle
+    tiene_datos_fiscales = bool(profile.rfc_facturacion)
+    editar_fiscal = request.GET.get("editar_fiscal") == "1"
+    mostrar_form_fiscal = not tiene_datos_fiscales or editar_fiscal
+
+    # Display labels for regimen fiscal and uso CFDI
+    REGIMEN_LABELS = {
+        "601": "601 — General de Ley PM", "603": "603 — PM Fines no Lucrativos",
+        "605": "605 — Sueldos y Salarios", "606": "606 — Arrendamiento",
+        "607": "607 — Enajenación/Adquisición", "608": "608 — Demás ingresos",
+        "610": "610 — Residentes Extranjero", "611": "611 — Dividendos",
+        "612": "612 — Actividades Empresariales", "614": "614 — Intereses",
+        "616": "616 — Sin obligaciones fiscales", "620": "620 — Soc. Cooperativas",
+        "621": "621 — Incorporación Fiscal", "622": "622 — Agrícolas/Ganaderas",
+        "625": "625 — Plataformas Tecnológicas", "626": "626 — RESICO",
+    }
+    USO_LABELS = {
+        "G01": "G01 — Adquisición de mercancías", "G02": "G02 — Devoluciones/descuentos",
+        "G03": "G03 — Gastos en general", "I01": "I01 — Construcciones",
+        "I02": "I02 — Mobiliario y equipo", "I03": "I03 — Equipo de transporte",
+        "I04": "I04 — Equipo de cómputo", "I06": "I06 — Comunicaciones telefónicas",
+        "I08": "I08 — Otra maquinaria", "D01": "D01 — Honorarios médicos",
+        "D04": "D04 — Donativos", "D05": "D05 — Intereses hipotecarios",
+        "D10": "D10 — Pagos educativos", "S01": "S01 — Sin efectos fiscales",
+        "CP01": "CP01 — Pagos", "P01": "P01 — Por definir",
+    }
+
     return render(request, "app/facturacion.html", {
         "current_page": "facturacion",
         "profile": profile,
         "plan_actual": plan_actual,
         "pagos": pagos,
+        "mostrar_form_fiscal": mostrar_form_fiscal,
+        "regimen_display": REGIMEN_LABELS.get(profile.regimen_fiscal, profile.regimen_fiscal),
+        "uso_cfdi_display": USO_LABELS.get(profile.uso_cfdi, profile.uso_cfdi),
     })
 
 
@@ -1456,8 +1486,10 @@ def analysis_summary_view(request):
     from django.db.models.functions import ExtractDay
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET["year"]) if request.GET.get("year") else None
-    month = int(request.GET["month"]) if request.GET.get("month") else None
+    year_str = request.GET.get("year", "")
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month_str = request.GET.get("month", "")
+    month = int(month_str) if month_str and month_str.isdigit() else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1571,8 +1603,10 @@ def analysis_fiscal_view(request):
     from django.db.models import Sum
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET["year"]) if request.GET.get("year") else None
-    month = int(request.GET["month"]) if request.GET.get("month") else None
+    year_str = request.GET.get("year", "")
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month_str = request.GET.get("month", "")
+    month = int(month_str) if month_str and month_str.isdigit() else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1640,8 +1674,10 @@ def analysis_iva_view(request):
     from django.db.models import Sum, F
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET["year"]) if request.GET.get("year") else None
-    month = int(request.GET["month"]) if request.GET.get("month") else None
+    year_str = request.GET.get("year", "")
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month_str = request.GET.get("month", "")
+    month = int(month_str) if month_str and month_str.isdigit() else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1723,8 +1759,10 @@ def analysis_income_view(request):
     from django.db.models import Sum
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET["year"]) if request.GET.get("year") else None
-    month = int(request.GET["month"]) if request.GET.get("month") else None
+    year_str = request.GET.get("year", "")
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month_str = request.GET.get("month", "")
+    month = int(month_str) if month_str and month_str.isdigit() else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1799,8 +1837,10 @@ def analysis_top_rfc_view(request):
     from django.db.models import Sum, Count
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET["year"]) if request.GET.get("year") else None
-    month = int(request.GET["month"]) if request.GET.get("month") else None
+    year_str = request.GET.get("year", "")
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month_str = request.GET.get("month", "")
+    month = int(month_str) if month_str and month_str.isdigit() else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:
@@ -1867,8 +1907,10 @@ def analysis_risks_view(request):
     from accounts.analysis_helpers import calcular_fiscscore
 
     empresa_id = request.GET.get("empresa", "")
-    year = int(request.GET["year"]) if request.GET.get("year") else None
-    month = int(request.GET["month"]) if request.GET.get("month") else None
+    year_str = request.GET.get("year", "")
+    year = int(year_str) if year_str and year_str.isdigit() else None
+    month_str = request.GET.get("month", "")
+    month = int(month_str) if month_str and month_str.isdigit() else None
 
     empresa, qs = _analysis_base_qs(request, empresa_id, year, month)
     if not empresa:

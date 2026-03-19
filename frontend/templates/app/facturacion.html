@@ -158,6 +158,44 @@
         <span>🧾</span> Datos de Facturación
     </h3>
 
+    {% if not mostrar_form_fiscal %}
+    {# ── READ MODE: Static display ── #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
+        <div>
+            <span class="block text-[11px] text-gray-500 uppercase tracking-wider mb-1">RFC</span>
+            <div class="text-[15px] text-white font-medium" style="letter-spacing: 0.5px;">{{ profile.rfc_facturacion }}</div>
+        </div>
+        <div>
+            <span class="block text-[11px] text-gray-500 uppercase tracking-wider mb-1">Razón Social</span>
+            <div class="text-[15px] text-white">{{ profile.razon_social|default:"—" }}</div>
+        </div>
+        <div>
+            <span class="block text-[11px] text-gray-500 uppercase tracking-wider mb-1">Régimen Fiscal</span>
+            <div class="text-[15px] text-white">{{ regimen_display|default:"—" }}</div>
+        </div>
+        <div>
+            <span class="block text-[11px] text-gray-500 uppercase tracking-wider mb-1">Código Postal</span>
+            <div class="text-[15px] text-white">{{ profile.codigo_postal|default:"—" }}</div>
+        </div>
+        <div>
+            <span class="block text-[11px] text-gray-500 uppercase tracking-wider mb-1">Uso CFDI</span>
+            <div class="text-[15px] text-white">{{ uso_cfdi_display|default:"—" }}</div>
+        </div>
+        <div>
+            <span class="block text-[11px] text-gray-500 uppercase tracking-wider mb-1">Email para Factura</span>
+            <div class="text-[15px] text-white">{{ profile.email_facturacion|default:"—" }}</div>
+        </div>
+    </div>
+
+    <div class="mt-2">
+        <a href="?editar_fiscal=1"
+           class="text-indigo-400 hover:text-indigo-300 text-[13px] font-medium transition inline-flex items-center gap-1.5">
+            ✏️ Editar datos fiscales
+        </a>
+    </div>
+
+    {% else %}
+    {# ── EDIT MODE: Form ── #}
     {% if not profile.rfc_facturacion %}
     <p class="text-sm text-gray-400 mb-4">Agrega tus datos fiscales para recibir factura en cada pago.</p>
     {% endif %}
@@ -251,10 +289,16 @@
             </div>
         </div>
 
-        <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm font-semibold text-white cursor-pointer">
-            Guardar datos fiscales
-        </button>
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm font-semibold text-white cursor-pointer">
+                Guardar datos fiscales
+            </button>
+            {% if profile.rfc_facturacion %}
+            <a href="{% url 'app:facturacion' %}" class="text-gray-500 hover:text-gray-300 text-sm transition">Cancelar</a>
+            {% endif %}
+        </div>
     </form>
+    {% endif %}
 
     <p class="text-xs text-gray-600 mt-4">
         Si no proporcionas datos fiscales, tus recibos se generan con RFC genérico XAXX010101000 (público en general).
