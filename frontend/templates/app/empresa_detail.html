@@ -43,228 +43,387 @@
     </form>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-    <!-- Info -->
-    <div class="glass rounded-xl p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Información</h3>
-        <div class="space-y-3">
-            <div><div class="text-[11px] text-gray-500 uppercase">RFC</div><div class="text-white font-mono font-semibold">{{ empresa.rfc }}</div></div>
-            <div><div class="text-[11px] text-gray-500 uppercase">Nombre</div><div class="text-white">{{ empresa.nombre }}</div></div>
-            <div><div class="text-[11px] text-gray-500 uppercase">Notas</div><div class="text-gray-400 text-sm">{{ empresa.notas|default:"—" }}</div></div>
-        </div>
-    </div>
+<!-- ── TABS ── -->
+<div class="flex gap-1 mb-6 overflow-x-auto" id="tab-nav">
+    <button onclick="switchTab('resumen')" data-tab="resumen" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-white/10 border border-white/10">Resumen</button>
+    <button onclick="switchTab('sat')" data-tab="sat" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-500 hover:text-gray-300">SAT</button>
+    <button onclick="switchTab('descargas')" data-tab="descargas" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-500 hover:text-gray-300">Descargas</button>
+    <button onclick="switchTab('cfdis')" data-tab="cfdis" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-500 hover:text-gray-300">CFDIs</button>
+    <button onclick="switchTab('analisis')" data-tab="analisis" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-500 hover:text-gray-300">Análisis</button>
+</div>
 
-    <!-- Credenciales (FIEL + CSD) -->
-    <div class="glass rounded-xl p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">🔑 Credenciales</h3>
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: RESUMEN                                                       -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div id="tab-resumen" class="tab-content">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        <!-- FIEL -->
-        <div class="mb-4">
-            <div class="text-[11px] text-gray-500 uppercase font-semibold mb-2">e.firma (FIEL)</div>
-            <div class="space-y-2">
+        <!-- Datos Oficiales (SAT) -->
+        <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">📋 Datos Oficiales (SAT)</h3>
+            {% if empresa.razon_social %}
+            <div class="space-y-2.5">
+                <div><div class="text-[11px] text-gray-500 uppercase">RFC</div><div class="text-white font-mono font-semibold">{{ empresa.rfc }}</div></div>
+                <div><div class="text-[11px] text-gray-500 uppercase">Razón Social</div><div class="text-white text-sm">{{ empresa.razon_social }}</div></div>
+                {% if empresa.regimen_capital %}
+                <div><div class="text-[11px] text-gray-500 uppercase">Régimen Capital</div><div class="text-gray-300 text-sm">{{ empresa.regimen_capital }}</div></div>
+                {% endif %}
+                {% if empresa.nombre_comercial %}
+                <div><div class="text-[11px] text-gray-500 uppercase">Nombre Comercial</div><div class="text-gray-300 text-sm">{{ empresa.nombre_comercial }}</div></div>
+                {% endif %}
+                {% if empresa.regimen_fiscal %}
+                <div><div class="text-[11px] text-gray-500 uppercase">Régimen Fiscal</div><div class="text-gray-300 text-sm">{{ empresa.regimen_fiscal }}</div></div>
+                {% endif %}
+                {% if empresa.codigo_postal %}
+                <div><div class="text-[11px] text-gray-500 uppercase">Código Postal</div><div class="text-gray-300 text-sm font-mono">{{ empresa.codigo_postal }}</div></div>
+                {% endif %}
+                {% if empresa.direccion_calle %}
                 <div>
-                    {% if empresa.fiel_status == 'verificada' %}
-                    <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Verificada</span>
-                    {% elif empresa.fiel_status == 'expirada' %}
-                    <span class="badge-error px-2.5 py-1 rounded-full text-xs animate-pulse">🔴 Expirada</span>
-                    {% elif empresa.fiel_status == 'verificando' %}
-                    <span class="badge-warning px-2.5 py-1 rounded-full text-xs animate-pulse">⏳ Verificando...</span>
-                    {% elif empresa.fiel_status == 'rechazada' %}
-                    <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ Rechazada</span>
-                    {% else %}
-                    <span class="badge-error px-2.5 py-1 rounded-full text-xs">📤 Sube tu FIEL</span>
+                    <div class="text-[11px] text-gray-500 uppercase">Dirección Fiscal</div>
+                    <div class="text-gray-300 text-sm">
+                        {{ empresa.direccion_calle }}
+                        {% if empresa.direccion_num_ext %} #{{ empresa.direccion_num_ext }}{% endif %}
+                        {% if empresa.direccion_num_int %} Int. {{ empresa.direccion_num_int }}{% endif %}
+                        {% if empresa.direccion_colonia %}<br>Col. {{ empresa.direccion_colonia }}{% endif %}
+                        {% if empresa.direccion_municipio %}, {{ empresa.direccion_municipio }}{% endif %}
+                        {% if empresa.direccion_estado %}, {{ empresa.direccion_estado }}{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if empresa.fecha_inicio_operaciones %}
+                <div><div class="text-[11px] text-gray-500 uppercase">Inicio Operaciones</div><div class="text-gray-300 text-sm">{{ empresa.fecha_inicio_operaciones|date:"d/M/Y" }}</div></div>
+                {% endif %}
+                {% if empresa.estatus_padron %}
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Estatus en el Padrón</div>
+                    <div class="text-sm">
+                        {% if "ACTIVO" in empresa.estatus_padron|upper %}
+                        <span class="text-green-400 font-medium">● {{ empresa.estatus_padron }}</span>
+                        {% else %}
+                        <span class="text-amber-400 font-medium">{{ empresa.estatus_padron }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% if empresa.actividades_economicas %}
+            <div class="mt-3 pt-3 border-t border-white/5">
+                <div class="text-[11px] text-gray-500 uppercase mb-2">Actividades Económicas</div>
+                <div class="space-y-1">
+                    {% for act in empresa.actividades_economicas %}
+                    <div class="text-gray-300 text-xs bg-white/5 rounded-lg px-3 py-1.5">{{ act }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if empresa.csf_ultima_descarga %}
+            <p class="text-[10px] text-gray-600 mt-3">📄 Fuente: CSF del SAT ({{ empresa.csf_ultima_descarga|date:"M Y" }})</p>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-6">
+                <p class="text-gray-500 text-sm">Pendiente</p>
+                <p class="text-gray-600 text-xs mt-1">Se llenarán automáticamente al descargar tu CSF</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Credenciales (FIEL + CSD) -->
+        <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">🔑 Credenciales</h3>
+
+            <!-- FIEL -->
+            <div class="mb-4">
+                <div class="text-[11px] text-gray-500 uppercase font-semibold mb-2">e.firma (FIEL)</div>
+                <div class="space-y-2">
+                    <div>
+                        {% if empresa.fiel_status == 'verificada' %}
+                        <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Verificada</span>
+                        {% elif empresa.fiel_status == 'expirada' %}
+                        <span class="badge-error px-2.5 py-1 rounded-full text-xs animate-pulse">🔴 Expirada</span>
+                        {% elif empresa.fiel_status == 'verificando' %}
+                        <span class="badge-warning px-2.5 py-1 rounded-full text-xs animate-pulse">⏳ Verificando...</span>
+                        {% elif empresa.fiel_status == 'rechazada' %}
+                        <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ Rechazada</span>
+                        {% else %}
+                        <span class="badge-error px-2.5 py-1 rounded-full text-xs">📤 Sube tu FIEL</span>
+                        {% endif %}
+                    </div>
+                    {% if empresa.fiel_expira %}
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">Vence</span>
+                        <span class="{% if fiel_dias_restantes is not None and fiel_dias_restantes < 31 %}text-red-400{% elif fiel_dias_restantes is not None and fiel_dias_restantes < 91 %}text-amber-400{% else %}text-gray-400{% endif %}">{{ empresa.fiel_expira|date:"d/M/Y" }}</span>
+                    </div>
+                    {% endif %}
+                    {% if empresa.fiel_verificada_at %}
+                    <div class="flex justify-between text-xs"><span class="text-gray-500">Verificada</span><span class="text-gray-400">{{ empresa.fiel_verificada_at|date:"d/M/Y" }}</span></div>
                     {% endif %}
                 </div>
-                {% if empresa.fiel_expira %}
-                <div class="flex justify-between text-xs">
-                    <span class="text-gray-500">Vence</span>
-                    <span class="{% if fiel_dias_restantes is not None and fiel_dias_restantes < 31 %}text-red-400{% elif fiel_dias_restantes is not None and fiel_dias_restantes < 91 %}text-amber-400{% else %}text-gray-400{% endif %}">{{ empresa.fiel_expira|date:"d/M/Y" }}</span>
+                <div class="mt-2">
+                    <a href="{% url 'app:empresa_fiel' empresa.id %}" class="btn-ghost px-3 py-1.5 rounded-lg text-[11px] text-gray-300 block text-center">
+                        {% if empresa.fiel_status == 'sin_fiel' %}📤 Configurar FIEL{% else %}🔄 Actualizar FIEL{% endif %}
+                    </a>
+                </div>
+            </div>
+
+            <!-- CSD -->
+            <div class="pt-3 border-t border-white/5">
+                <div class="text-[11px] text-gray-500 uppercase font-semibold mb-2">🔏 Sello Digital (CSD)</div>
+                {% if empresa.csd_activo %}
+                <div class="space-y-2">
+                    <div><span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Configurado</span></div>
+                    {% if empresa.csd_serial %}
+                    <div class="flex justify-between text-xs"><span class="text-gray-500">Serial</span><span class="text-gray-400 font-mono text-[10px]">{{ empresa.csd_serial }}</span></div>
+                    {% endif %}
+                    {% if empresa.csd_expira %}
+                    <div class="flex justify-between text-xs"><span class="text-gray-500">Vence</span><span class="text-gray-400">{{ empresa.csd_expira|date:"d/M/Y" }}</span></div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="space-y-2">
+                    <div><span class="text-gray-500 text-xs">No configurado</span></div>
+                    <button onclick="document.getElementById('csd-form').classList.toggle('hidden')" class="btn-ghost px-3 py-1.5 rounded-lg text-[11px] text-indigo-300 block text-center w-full">📤 Subir CSD</button>
+                    <p class="text-[10px] text-gray-600">Necesario para facturación electrónica (próximamente)</p>
                 </div>
                 {% endif %}
-                {% if empresa.fiel_verificada_at %}
-                <div class="flex justify-between text-xs"><span class="text-gray-500">Verificada</span><span class="text-gray-400">{{ empresa.fiel_verificada_at|date:"d/M/Y" }}</span></div>
-                {% endif %}
+                <!-- CSD Upload Form -->
+                <div id="csd-form" class="hidden mt-3 pt-3 border-t border-white/5">
+                    <form method="post" action="{% url 'app:empresa_subir_csd' empresa.id %}" enctype="multipart/form-data" class="space-y-2">
+                        {% csrf_token %}
+                        <div>
+                            <label class="block text-[11px] text-gray-500 mb-1">.cer del CSD</label>
+                            <input type="file" name="csd_cer" accept=".cer" required class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-white/10 file:text-gray-300">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-gray-500 mb-1">.key del CSD</label>
+                            <input type="file" name="csd_key" accept=".key" required class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-white/10 file:text-gray-300">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-gray-500 mb-1">Contraseña del CSD</label>
+                            <input type="password" name="csd_password" required class="w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500/50">
+                        </div>
+                        <button type="submit" class="btn-primary w-full px-3 py-1.5 rounded-lg text-xs text-white">Subir CSD</button>
+                    </form>
+                </div>
             </div>
-            <div class="mt-2">
-                <a href="{% url 'app:empresa_fiel' empresa.id %}" class="btn-ghost px-3 py-1.5 rounded-lg text-[11px] text-gray-300 block text-center">
-                    {% if empresa.fiel_status == 'sin_fiel' %}📤 Configurar FIEL{% else %}🔄 Actualizar FIEL{% endif %}
-                </a>
-            </div>
+
+            <p class="text-[10px] text-gray-600 mt-3">🔒 Tus credenciales se encriptan y almacenan de forma segura.</p>
         </div>
 
-        <!-- CSD -->
-        <div class="pt-3 border-t border-white/5">
-            <div class="text-[11px] text-gray-500 uppercase font-semibold mb-2">🔏 Sello Digital (CSD)</div>
-            {% if empresa.csd_activo %}
+        <!-- Estadísticas -->
+        <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">📊 Estadísticas</h3>
             <div class="space-y-2">
-                <div><span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ Configurado</span></div>
-                {% if empresa.csd_serial %}
-                <div class="flex justify-between text-xs"><span class="text-gray-500">Serial</span><span class="text-gray-400 font-mono text-[10px]">{{ empresa.csd_serial }}</span></div>
-                {% endif %}
-                {% if empresa.csd_expira %}
-                <div class="flex justify-between text-xs"><span class="text-gray-500">Vence</span><span class="text-gray-400">{{ empresa.csd_expira|date:"d/M/Y" }}</span></div>
-                {% endif %}
+                <div class="flex justify-between"><span class="text-gray-500 text-sm">Total CFDIs</span><span class="text-white font-semibold">{{ cfdi_count }}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500 text-sm">Recibidos</span><span class="text-blue-400 font-semibold">{{ recibidos }}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500 text-sm">Emitidos</span><span class="text-purple-400 font-semibold">{{ emitidos }}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500 text-sm">Monto Total</span><span class="text-green-400 font-semibold">${{ monto_total|floatformat:2|default:"0" }}</span></div>
             </div>
-            {% else %}
-            <div class="space-y-2">
-                <div><span class="text-gray-500 text-xs">No configurado</span></div>
-                <button onclick="document.getElementById('csd-form').classList.toggle('hidden')" class="btn-ghost px-3 py-1.5 rounded-lg text-[11px] text-indigo-300 block text-center w-full">📤 Subir CSD</button>
-                <p class="text-[10px] text-gray-600">Necesario para facturación electrónica (disponible próximamente)</p>
+            {% if empresa.notas %}
+            <div class="mt-4 pt-4 border-t border-white/5">
+                <div class="text-[11px] text-gray-500 uppercase mb-1">Notas</div>
+                <p class="text-gray-400 text-sm">{{ empresa.notas }}</p>
             </div>
             {% endif %}
-
-            <!-- CSD Upload Form (hidden) -->
-            <div id="csd-form" class="hidden mt-3 pt-3 border-t border-white/5">
-                <form method="post" action="{% url 'app:empresa_subir_csd' empresa.id %}" enctype="multipart/form-data" class="space-y-2">
-                    {% csrf_token %}
-                    <div>
-                        <label class="block text-[11px] text-gray-500 mb-1">.cer del CSD</label>
-                        <input type="file" name="csd_cer" accept=".cer" required class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-white/10 file:text-gray-300">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] text-gray-500 mb-1">.key del CSD</label>
-                        <input type="file" name="csd_key" accept=".key" required class="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-white/10 file:text-gray-300">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] text-gray-500 mb-1">Contraseña del CSD</label>
-                        <input type="password" name="csd_password" required class="w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500/50">
-                    </div>
-                    <button type="submit" class="btn-primary w-full px-3 py-1.5 rounded-lg text-xs text-white">Subir CSD</button>
-                </form>
-            </div>
         </div>
+    </div>
+</div>
 
-        <p class="text-[10px] text-gray-600 mt-3">🔒 Tus credenciales se encriptan y almacenan de forma segura.</p>
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: SAT                                                            -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div id="tab-sat" class="tab-content hidden">
+    <!-- CSFs -->
+    <div class="glass rounded-xl p-5 mb-4">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">📂 Constancias de Situación Fiscal</h3>
+        <p class="text-gray-600 text-xs mb-4">Descargadas automáticamente cada mes</p>
+        {% if empresa.csf_minio_key %}
+        <div class="overflow-x-auto">
+            <table class="glass-table w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="pb-3 font-semibold">Periodo</th>
+                        <th class="pb-3 font-semibold">Fecha</th>
+                        <th class="pb-3 font-semibold text-right">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="py-2.5 text-white">{{ empresa.csf_ultima_descarga|date:"F Y"|default:"Marzo 2026" }}</td>
+                        <td class="py-2.5 text-gray-400 text-xs">{{ empresa.csf_ultima_descarga|date:"d/m/Y"|default:"—" }}</td>
+                        <td class="py-2.5 text-right"><span class="text-indigo-400 text-xs">📄 Almacenada</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="text-[10px] text-gray-600 mt-3">Próxima descarga automática: 2 del próximo mes</p>
+        {% else %}
+        <div class="text-center py-6">
+            <p class="text-gray-500 text-sm">Sin constancias descargadas</p>
+            <p class="text-gray-600 text-xs mt-1">Se descargará automáticamente al verificar tu FIEL</p>
+        </div>
+        {% endif %}
     </div>
 
-    <!-- Stats -->
+    <!-- Opinión de Cumplimiento -->
+    <div class="glass rounded-xl p-5 mb-4">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">📂 Opinión de Cumplimiento</h3>
+        <div class="text-center py-4">
+            <span class="text-gray-500 text-sm">🕐 Disponible próximamente</span>
+        </div>
+    </div>
+
+    <!-- Buzón Tributario -->
     <div class="glass rounded-xl p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Estadísticas</h3>
-        <div class="space-y-2">
-            <div class="flex justify-between"><span class="text-gray-500 text-sm">Total CFDIs</span><span class="text-white font-semibold">{{ cfdi_count }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500 text-sm">Recibidos</span><span class="text-blue-400 font-semibold">{{ recibidos }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500 text-sm">Emitidos</span><span class="text-purple-400 font-semibold">{{ emitidos }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500 text-sm">Monto Total</span><span class="text-green-400 font-semibold">${{ monto_total|floatformat:2|default:"0" }}</span></div>
-        </div>
-        <div class="mt-4 pt-4 border-t border-white/5 space-y-2">
-            <a href="{% url 'app:cfdis' %}?empresa={{ empresa.id }}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-indigo-300 block text-center">📄 Ver CFDIs de esta empresa</a>
-            {% if empresa.fiel_status == 'verificada' %}
-            <a href="{% url 'app:descargas' %}" class="btn-ghost px-3 py-2 rounded-lg text-xs text-indigo-300 block text-center">📥 Ir a Descargas</a>
-            {% endif %}
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">📂 Buzón Tributario</h3>
+        <div class="text-center py-4">
+            <span class="text-gray-500 text-sm">🕐 Disponible próximamente</span>
         </div>
     </div>
 </div>
 
-{% if empresa.razon_social or empresa.csf_minio_key %}
-<!-- Datos Oficiales CSF -->
-<div class="glass rounded-xl p-5 mb-6">
-    <div class="flex items-center justify-between mb-3">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Datos Oficiales (SAT)</h3>
-        {% if empresa.csf_ultima_descarga %}
-        <span class="text-[10px] text-gray-500">📄 CSF {{ empresa.csf_ultima_descarga|date:"M Y" }}</span>
-        {% endif %}
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% if empresa.razon_social %}
-        <div><div class="text-[11px] text-gray-500 uppercase">Razón Social</div><div class="text-white text-sm">{{ empresa.razon_social }}</div></div>
-        {% endif %}
-        {% if empresa.regimen_capital %}
-        <div><div class="text-[11px] text-gray-500 uppercase">Régimen Capital</div><div class="text-gray-300 text-sm">{{ empresa.regimen_capital }}</div></div>
-        {% endif %}
-        {% if empresa.nombre_comercial %}
-        <div><div class="text-[11px] text-gray-500 uppercase">Nombre Comercial</div><div class="text-gray-300 text-sm">{{ empresa.nombre_comercial }}</div></div>
-        {% endif %}
-        {% if empresa.regimen_fiscal %}
-        <div><div class="text-[11px] text-gray-500 uppercase">Régimen Fiscal</div><div class="text-gray-300 text-sm">{{ empresa.regimen_fiscal }}</div></div>
-        {% endif %}
-        {% if empresa.codigo_postal %}
-        <div><div class="text-[11px] text-gray-500 uppercase">Código Postal</div><div class="text-gray-300 text-sm font-mono">{{ empresa.codigo_postal }}</div></div>
-        {% endif %}
-        {% if empresa.direccion_calle %}
-        <div class="md:col-span-2">
-            <div class="text-[11px] text-gray-500 uppercase">Dirección Fiscal</div>
-            <div class="text-gray-300 text-sm">
-                {{ empresa.direccion_calle }}
-                {% if empresa.direccion_num_ext %} #{{ empresa.direccion_num_ext }}{% endif %}
-                {% if empresa.direccion_num_int %} Int. {{ empresa.direccion_num_int }}{% endif %}
-                {% if empresa.direccion_colonia %}, Col. {{ empresa.direccion_colonia }}{% endif %}
-                {% if empresa.direccion_municipio %}, {{ empresa.direccion_municipio }}{% endif %}
-                {% if empresa.direccion_estado %}, {{ empresa.direccion_estado }}{% endif %}
-            </div>
-        </div>
-        {% endif %}
-        {% if empresa.estatus_padron %}
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Estatus en el Padrón</div>
-            <div class="text-sm">
-                {% if "ACTIVO" in empresa.estatus_padron|upper %}
-                <span class="text-green-400 font-medium">● {{ empresa.estatus_padron }}</span>
-                {% else %}
-                <span class="text-amber-400 font-medium">{{ empresa.estatus_padron }}</span>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-        {% if empresa.fecha_inicio_operaciones %}
-        <div><div class="text-[11px] text-gray-500 uppercase">Inicio Operaciones</div><div class="text-gray-300 text-sm">{{ empresa.fecha_inicio_operaciones|date:"d/M/Y" }}</div></div>
-        {% endif %}
-    </div>
-    {% if empresa.actividades_economicas %}
-    <div class="mt-4 pt-4 border-t border-white/5">
-        <div class="text-[11px] text-gray-500 uppercase mb-2">Actividades Económicas</div>
-        <div class="space-y-1">
-            {% for act in empresa.actividades_economicas %}
-            <div class="text-gray-300 text-xs bg-white/5 rounded-lg px-3 py-1.5">{{ act }}</div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-</div>
-{% endif %}
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: DESCARGAS                                                     -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div id="tab-descargas" class="tab-content hidden">
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            📥 Descargas de CFDIs
+            {% if has_running %}<span class="ml-2 inline-flex items-center"><span class="animate-pulse w-2 h-2 bg-green-400 rounded-full mr-1"></span><span class="text-[10px] text-green-400 font-normal uppercase">en progreso</span></span>{% endif %}
+        </h3>
 
-<!-- Recent Downloads for this empresa -->
-{% if recent_downloads %}
-<div class="glass rounded-xl p-5">
-    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        Descargas Recientes
-        {% if has_running %}<span class="ml-2 inline-flex items-center"><span class="animate-pulse w-2 h-2 bg-green-400 rounded-full mr-1"></span><span class="text-[10px] text-green-400 font-normal uppercase">en progreso</span></span>{% endif %}
-    </h3>
-    <div class="overflow-x-auto">
-        <table class="glass-table w-full text-sm">
-            <thead>
-                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                    <th class="pb-3 font-semibold">Estado</th>
-                    <th class="pb-3 font-semibold">Periodo</th>
-                    <th class="pb-3 font-semibold text-right">CFDIs</th>
-                    <th class="pb-3 font-semibold text-right">Duración</th>
-                    <th class="pb-3 font-semibold">Fecha</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in recent_downloads %}
-                <tr>
-                    <td class="py-2.5">
-                        {% if d.estado == 'completado' %}
-                        <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ OK</span>
-                        {% elif d.estado == 'ejecutando' %}
-                        <span class="badge-warning px-2 py-0.5 rounded-full text-[10px] animate-pulse">⏳</span>
-                        {% elif d.estado == 'error' %}
-                        <span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2.5 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
-                    <td class="py-2.5 text-right text-white font-medium">{% if d.estado == 'completado' %}{{ d.cfdis_nuevos|default:"0" }}{% else %}—{% endif %}</td>
-                    <td class="py-2.5 text-right text-gray-400 text-xs">{% if d.duracion_segundos %}{{ d.duracion_segundos }}s{% else %}—{% endif %}</td>
-                    <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% if recent_downloads %}
+        <div class="overflow-x-auto">
+            <table class="glass-table w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="pb-3 font-semibold">Estado</th>
+                        <th class="pb-3 font-semibold">Periodo</th>
+                        <th class="pb-3 font-semibold text-right">CFDIs</th>
+                        <th class="pb-3 font-semibold text-right">Duración</th>
+                        <th class="pb-3 font-semibold">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in recent_downloads %}
+                    <tr>
+                        <td class="py-2.5">
+                            {% if d.estado == 'completado' %}
+                            <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ OK</span>
+                            {% elif d.estado == 'ejecutando' %}
+                            <span class="badge-warning px-2 py-0.5 rounded-full text-[10px] animate-pulse">⏳</span>
+                            {% elif d.estado == 'error' %}
+                            <span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌</span>
+                            {% else %}
+                            <span class="text-gray-500 text-[10px]">{{ d.estado }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
+                        <td class="py-2.5 text-right text-white font-medium">{% if d.estado == 'completado' %}{{ d.cfdis_nuevos|default:"0" }}{% else %}—{% endif %}</td>
+                        <td class="py-2.5 text-right text-gray-400 text-xs">{% if d.duracion_segundos %}{{ d.duracion_segundos }}s{% else %}—{% endif %}</td>
+                        <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-8">
+            <p class="text-gray-500 text-sm">Sin descargas registradas</p>
+            <p class="text-gray-600 text-xs mt-1">Las descargas se programan automáticamente según tu plan</p>
+        </div>
+        {% endif %}
+
+        <div class="mt-4 pt-4 border-t border-white/5">
+            <a href="{% url 'app:descargas' %}" class="btn-ghost px-4 py-2 rounded-lg text-xs text-indigo-300 block text-center">📥 Ir al centro de descargas</a>
+        </div>
     </div>
 </div>
-{% endif %}
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: CFDIs                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div id="tab-cfdis" class="tab-content hidden">
+    <div class="glass rounded-xl p-5">
+        <div class="text-center py-8">
+            <div class="text-4xl mb-4">📄</div>
+            <h3 class="text-white text-lg font-semibold mb-2">{{ cfdi_count }} CFDIs registrados</h3>
+            <p class="text-gray-400 text-sm mb-1">{{ recibidos }} recibidos · {{ emitidos }} emitidos</p>
+            <p class="text-gray-500 text-sm mb-6">Monto total: <span class="text-green-400 font-semibold">${{ monto_total|floatformat:2|default:"0" }}</span></p>
+            <a href="{% url 'app:cfdis' %}?empresa={{ empresa.id }}" class="btn-primary px-8 py-3 rounded-xl text-sm text-white inline-block">
+                Ver todos los CFDIs de {{ empresa.rfc }} →
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: ANÁLISIS                                                      -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div id="tab-analisis" class="tab-content hidden">
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">🔬 Herramientas de Análisis</h3>
+        <p class="text-gray-500 text-xs mb-6">Pre-filtrado para {{ empresa.rfc }}. Selecciona periodo en la vista de CFDIs para análisis más específicos.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <a href="{% url 'app:analysis_summary' %}?empresa={{ empresa.id }}" class="glass rounded-xl p-4 hover:bg-white/10 transition-all group block">
+                <div class="text-2xl mb-2">📊</div>
+                <div class="text-white text-sm font-medium group-hover:text-indigo-300 transition-colors">Resumen General</div>
+                <div class="text-gray-500 text-xs mt-1">Ingresos, egresos y balance</div>
+            </a>
+            <a href="{% url 'app:analysis_fiscal' %}?empresa={{ empresa.id }}" class="glass rounded-xl p-4 hover:bg-white/10 transition-all group block">
+                <div class="text-2xl mb-2">🏛️</div>
+                <div class="text-white text-sm font-medium group-hover:text-indigo-300 transition-colors">Estado Fiscal</div>
+                <div class="text-gray-500 text-xs mt-1">Resultado del ejercicio</div>
+            </a>
+            <a href="{% url 'app:analysis_iva' %}?empresa={{ empresa.id }}" class="glass rounded-xl p-4 hover:bg-white/10 transition-all group block">
+                <div class="text-2xl mb-2">💰</div>
+                <div class="text-white text-sm font-medium group-hover:text-indigo-300 transition-colors">Análisis IVA</div>
+                <div class="text-gray-500 text-xs mt-1">Trasladado vs acreditable</div>
+            </a>
+            <a href="{% url 'app:analysis_income' %}?empresa={{ empresa.id }}" class="glass rounded-xl p-4 hover:bg-white/10 transition-all group block">
+                <div class="text-2xl mb-2">📈</div>
+                <div class="text-white text-sm font-medium group-hover:text-indigo-300 transition-colors">Estado de Resultados</div>
+                <div class="text-gray-500 text-xs mt-1">Tendencias de ingresos</div>
+            </a>
+            <a href="{% url 'app:analysis_top_rfc' %}?empresa={{ empresa.id }}" class="glass rounded-xl p-4 hover:bg-white/10 transition-all group block">
+                <div class="text-2xl mb-2">🏆</div>
+                <div class="text-white text-sm font-medium group-hover:text-indigo-300 transition-colors">Top Contrapartes</div>
+                <div class="text-gray-500 text-xs mt-1">Principales proveedores y clientes</div>
+            </a>
+            <a href="{% url 'app:analysis_risks' %}?empresa={{ empresa.id }}" class="glass rounded-xl p-4 hover:bg-white/10 transition-all group block">
+                <div class="text-2xl mb-2">⚠️</div>
+                <div class="text-white text-sm font-medium group-hover:text-indigo-300 transition-colors">Alertas y Riesgos</div>
+                <div class="text-gray-500 text-xs mt-1">Anomalías y señales</div>
+            </a>
+        </div>
+    </div>
+</div>
 
 {% if has_running %}
 <script>setTimeout(() => location.reload(), 10000);</script>
 {% endif %}
+
+<script>
+function switchTab(tabName) {
+    // Hide all tab content
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    // Reset all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-white', 'bg-white/10', 'border', 'border-white/10');
+        btn.classList.add('text-gray-500');
+    });
+    // Show selected tab
+    document.getElementById('tab-' + tabName).classList.remove('hidden');
+    // Highlight selected button
+    const activeBtn = document.querySelector('[data-tab="' + tabName + '"]');
+    activeBtn.classList.add('text-white', 'bg-white/10', 'border', 'border-white/10');
+    activeBtn.classList.remove('text-gray-500');
+    // Update URL without reload
+    history.replaceState(null, '', '?tab=' + tabName);
+}
+// Init: check URL param
+const urlTab = new URLSearchParams(window.location.search).get('tab');
+if (urlTab && document.getElementById('tab-' + urlTab)) {
+    switchTab(urlTab);
+}
+</script>
 {% endblock %}
