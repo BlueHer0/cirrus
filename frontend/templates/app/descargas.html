@@ -2,7 +2,7 @@
 
 {% block title %}Descargas{% endblock %}
 {% block page_title %}Descargas del SAT{% endblock %}
-{% block page_subtitle %}Cirrus descarga tus CFDIs automáticamente según tu plan{% endblock %}
+{% block page_subtitle %}Estado de sincronización automática de CFDIs{% endblock %}
 
 {% block content %}
 {% if not has_empresas %}
@@ -24,137 +24,84 @@
 </div>
 {% endif %}
 
-<!-- Sync Cards per empresa -->
-{% for ed in empresas_data %}
-<div style="background: rgba(30,30,50,0.6); border: 1px solid rgba(255,255,255,0.1);
-     border-radius: 12px; padding: 20px; margin-bottom: 16px;">
-
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-    <div>
-      <h3 style="margin:0; color: white; font-size: 16px; font-weight: 600;">{{ ed.empresa.rfc }}</h3>
-      <p style="margin:2px 0; color: #a0aec0; font-size: 13px;">{{ ed.empresa.nombre }}</p>
-    </div>
-    <div style="text-align: right;">
-      {% if plan %}
-      <span style="font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.05em;">Plan {{ plan.nombre }}</span>
-      {% endif %}
-      {% if ed.empresa.fiel_verificada %}
-      <div style="font-size: 11px; color: #34d399; margin-top: 2px;">🔐 FIEL verificada</div>
-      {% else %}
-      <div style="font-size: 11px; color: #f87171; margin-top: 2px;">🔓 FIEL pendiente</div>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Cobertura -->
-  <div style="font-size: 13px; color: #a0aec0; margin-bottom: 8px;">
-    📅 Cobertura: <span style="color: #e2e8f0;">{{ ed.cobertura }}</span>
-  </div>
-
-  <!-- Progress bar -->
-  <div style="background: rgba(255,255,255,0.05); border-radius: 6px; height: 8px; margin-bottom: 8px; overflow: hidden;">
-    <div style="background: linear-gradient(90deg, #6366f1, #818cf8); height: 100%; border-radius: 6px; width: {{ ed.progreso }}%; transition: width 0.4s ease;"></div>
-  </div>
-  <div style="font-size: 12px; color: #718096; margin-bottom: 14px;">
-    {{ ed.progreso|floatformat:0 }}% sincronizado ({{ ed.completados }}/{{ ed.total_meses }} periodos)
-  </div>
-
-  <!-- Info grid -->
-  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px;">
-      <div style="font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.03em;">Última descarga</div>
-      <div style="font-size: 14px; color: white; margin-top: 4px;">
-        {% if ed.ultima %}
-          {{ ed.ultima.completado_at|date:"d/m/Y" }}
-          <span style="color: {% if ed.ultima.cfdis_nuevos %}#34d399{% else %}#718096{% endif %}; font-size: 12px;">({{ ed.ultima.cfdis_nuevos }} CFDIs)</span>
-        {% else %}
-          <span style="color: #718096;">Pendiente</span>
-        {% endif %}
-      </div>
-    </div>
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px;">
-      <div style="font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.03em;">Próxima descarga</div>
-      <div style="font-size: 14px; color: white; margin-top: 4px;">{{ ed.proxima }}</div>
-    </div>
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px;">
-      <div style="font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.03em;">Total CFDIs</div>
-      <div style="font-size: 14px; color: #34d399; font-weight: 600; margin-top: 4px;">{{ ed.total_cfdis }}</div>
-    </div>
-  </div>
-
-  <!-- Buy historic year -->
-  {% if ed.anno_comprable %}
-  <div style="background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3);
-       border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
-    <div>
-      <div style="font-size: 13px; color: #a78bfa;">
-        📦 ¿Necesitas {{ ed.anno_comprable.year }}?
-      </div>
-      <div style="font-size: 12px; color: #718096;">
-        Descarga el año completo para esta empresa
-      </div>
-    </div>
-    <a href="{% url 'app:comprar_historico' %}?empresa={{ ed.empresa.id }}&year={{ ed.anno_comprable.year }}"
-       style="padding: 8px 20px; background: #6366f1; border-radius: 8px;
-       color: white; text-decoration: none; font-size: 13px; font-weight: 500;">
-       ${{ ed.anno_comprable.precio }} MXN
-    </a>
-  </div>
-  {% endif %}
+<div style="background: rgba(30,30,50,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;">
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <th style="padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Empresa</th>
+        <th style="padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Cobertura</th>
+        <th style="padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; min-width: 160px;">Progreso</th>
+        <th style="padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Última descarga</th>
+        <th style="padding: 12px 16px; text-align: center; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Próxima</th>
+        <th style="padding: 12px 16px; text-align: right; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">CFDIs</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ed in empresas %}
+      <tr onclick="window.location='/app/empresas/{{ ed.empresa.id }}/?tab=descargas'"
+          style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.15s;"
+          onmouseover="this.style.background='rgba(255,255,255,0.04)'"
+          onmouseout="this.style.background='transparent'">
+        <!-- Empresa -->
+        <td style="padding: 14px 16px;">
+          <div style="font-size: 13px; font-weight: 600; color: white;">{{ ed.empresa.nombre|truncatechars:28 }}</div>
+          <div style="font-size: 11px; color: #64748b; font-family: monospace; margin-top: 2px;">{{ ed.empresa.rfc }}</div>
+        </td>
+        <!-- Cobertura -->
+        <td style="padding: 14px 16px;">
+          <span style="font-size: 11px; color: #94a3b8;">{{ ed.cobertura }}</span>
+        </td>
+        <!-- Progreso -->
+        <td style="padding: 14px 16px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="flex: 1; background: rgba(255,255,255,0.06); border-radius: 3px; height: 6px; overflow: hidden;">
+              <div style="height: 100%; border-radius: 3px; width: {{ ed.pct }}%;
+                   background: {% if ed.pct == 100 %}#34d399{% else %}#fbbf24{% endif %};
+                   transition: width 0.4s ease;"></div>
+            </div>
+            <span style="font-size: 11px; color: {% if ed.pct == 100 %}#34d399{% else %}#fbbf24{% endif %}; white-space: nowrap; min-width: 38px; text-align: right;">
+              {{ ed.completados }}/{{ ed.total_jobs }}
+            </span>
+          </div>
+          {% if ed.en_cola %}
+          <div style="font-size: 10px; color: #818cf8; margin-top: 3px;">⏳ {{ ed.en_cola }} en cola</div>
+          {% endif %}
+          {% if ed.errores %}
+          <div style="font-size: 10px; color: #f87171; margin-top: 3px;">⚠ {{ ed.errores }} con error</div>
+          {% endif %}
+        </td>
+        <!-- Última descarga -->
+        <td style="padding: 14px 16px;">
+          {% if ed.ultimo_job %}
+          <div style="font-size: 12px; color: #e2e8f0;">{{ ed.ultimo_job.completado_at|date:"d/m/Y" }}</div>
+          <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 500;
+                background: rgba(52,211,153,0.12); color: #34d399; margin-top: 3px;">OK</span>
+          {% elif ed.ultimo_error %}
+          <div style="font-size: 12px; color: #e2e8f0;">{{ ed.ultimo_error.completado_at|date:"d/m/Y"|default:"—" }}</div>
+          <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 500;
+                background: rgba(248,113,113,0.12); color: #f87171; margin-top: 3px;">Error</span>
+          {% else %}
+          <span style="font-size: 12px; color: #64748b;">Pendiente</span>
+          {% endif %}
+        </td>
+        <!-- Próxima -->
+        <td style="padding: 14px 16px; text-align: center;">
+          <span style="display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 500;
+                background: rgba(99,102,241,0.12); color: #a5b4fc; letter-spacing: 0.02em;">{{ ed.proxima }}</span>
+        </td>
+        <!-- CFDIs -->
+        <td style="padding: 14px 16px; text-align: right;">
+          <span style="font-size: 14px; font-weight: 600; color: #34d399;">{{ ed.cfdis|default:"0" }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
-{% endfor %}
 
-<!-- Download history table -->
-{% if recent_downloads %}
-<div class="glass rounded-xl p-5 mt-4">
-    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-        Historial Reciente
-        {% if has_running %}<span class="ml-2 inline-flex items-center"><span class="animate-pulse w-2 h-2 bg-green-400 rounded-full mr-1"></span><span class="text-[10px] text-green-400 font-normal uppercase">en progreso</span></span>{% endif %}
-    </h3>
-    <div class="overflow-x-auto">
-        <table class="glass-table w-full text-sm">
-            <thead>
-                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                    <th class="pb-3 font-semibold">Empresa</th>
-                    <th class="pb-3 font-semibold">Periodo</th>
-                    <th class="pb-3 font-semibold">Estado</th>
-                    <th class="pb-3 font-semibold text-right">CFDIs</th>
-                    <th class="pb-3 font-semibold">Fecha</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in recent_downloads %}
-                <tr>
-                    <td class="py-2.5 font-mono text-xs text-indigo-300">{{ d.empresa.rfc }}</td>
-                    <td class="py-2.5 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
-                    <td class="py-2.5">
-                        {% if d.estado == 'completado' %}
-                        <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ Completado</span>
-                        {% elif d.estado == 'ejecutando' or d.estado == 'pendiente' %}
-                        <span class="badge-warning px-2 py-0.5 rounded-full text-[10px] animate-pulse">⏳ En proceso</span>
-                        {% elif d.estado == 'error' %}
-                        <span class="px-2 py-0.5 rounded-full text-[10px] text-amber-400 bg-amber-500/10">⚠️ Error</span>
-                        {% else %}
-                        <span class="px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ d.estado }}</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2.5 text-right text-white font-medium">
-                        {% if d.estado == 'completado' %}<span class="{% if d.cfdis_nuevos %}text-green-400{% else %}text-gray-500{% endif %}">{{ d.cfdis_nuevos|default:"0" }}</span>{% else %}—{% endif %}
-                    </td>
-                    <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-<!-- Info message -->
-<div style="padding: 20px; font-size: 12px; color: #718096; text-align: center; line-height: 1.6;">
-  Las descargas se procesan en segundo plano y dependen de la disponibilidad
-  del portal del SAT. En horarios de alta demanda (11AM–3PM) pueden tardar más.
-  <br>Cirrus programa automáticamente las descargas en horarios óptimos.
+<!-- Footer hint -->
+<div style="padding: 16px; font-size: 12px; color: #64748b; text-align: center;">
+  Click en una empresa para ver detalle de periodos
 </div>
 
 {% endif %}

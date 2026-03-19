@@ -735,8 +735,8 @@ def app_empresa_descargar(request, empresa_id):
 
 @login_required(login_url=APP_LOGIN_URL)
 def app_descargas(request):
-    """Automatic sync dashboard — no manual download form."""
-    from core.models import Empresa, DescargaLog
+    """Automatic sync dashboard — compact table view."""
+    from core.models import Empresa, DescargaJob
     from datetime import datetime
 
     empresas = Empresa.objects.filter(owner=request.user).order_by("rfc")
@@ -744,42 +744,42 @@ def app_descargas(request):
     if not empresas.exists():
         return render(request, "app/descargas.html", {
             "current_page": "descargas",
-            "empresas_data": [],
-            "plan": None,
+            "empresas": [],
             "has_empresas": False,
         })
 
     perfil = getattr(request.user, "perfil", None)
     plan = perfil.get_plan() if perfil else None
+    slug = plan.slug if plan else "free"
 
     MONTH_NAMES = [
         "", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
         "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
     ]
+    PROXIMA_LABELS = {
+        "owner": "Cada 3 días", "enterprise": "Cada 3 días",
+        "pro": "Semanal", "basico": "Quincenal", "free": "Mensual",
+    }
 
     empresas_data = []
     now = datetime.now()
 
     for emp in empresas:
-        # Total expected months (×2 for recibidos+emitidos)
-        total_meses = _calc_total_meses(emp, now)
-        completados = DescargaLog.objects.filter(
-            empresa=emp, estado="completado"
-        ).values("year", "month_start").distinct().count()
-        progreso = min((completados / total_meses * 100) if total_meses > 0 else 0, 100)
+        total_jobs = DescargaJob.objects.filter(empresa=emp).count()
+        completados = DescargaJob.objects.filter(empresa=emp, estado="completado").count()
+        en_cola = DescargaJob.objects.filter(empresa=emp, estado="en_cola").count()
+        errores = DescargaJob.objects.filter(empresa=emp, estado="error").count()
 
-        # Last download
-        ultima = DescargaLog.objects.filter(
+        ultimo_job = DescargaJob.objects.filter(
             empresa=emp, estado="completado"
         ).order_by("-completado_at").first()
 
-        # Next download estimate
-        proxima = _calc_proxima_descarga(emp, plan, now)
+        ultimo_error = DescargaJob.objects.filter(
+            empresa=emp, estado="error"
+        ).order_by("-completado_at").first()
 
-        # Purchasable historic year
-        anno_comprable = _calc_anno_comprable(emp, plan)
+        pct = int(completados / total_jobs * 100) if total_jobs else 0
 
-        # Coverage label
         if emp.sync_desde_year and emp.sync_desde_month:
             cobertura = f"{MONTH_NAMES[emp.sync_desde_month]} {emp.sync_desde_year} → Presente"
         else:
@@ -787,30 +787,26 @@ def app_descargas(request):
 
         empresas_data.append({
             "empresa": emp,
-            "progreso": round(progreso, 0),
-            "total_meses": total_meses,
+            "total_jobs": total_jobs,
             "completados": completados,
-            "total_cfdis": emp.cfdis.count(),
-            "ultima": ultima,
-            "proxima": proxima,
-            "anno_comprable": anno_comprable,
+            "en_cola": en_cola,
+            "errores": errores,
+            "pct": pct,
+            "ultimo_job": ultimo_job,
+            "ultimo_error": ultimo_error,
+            "proxima": PROXIMA_LABELS.get(slug, "Auto"),
             "cobertura": cobertura,
+            "cfdis": emp.cfdis.count(),
         })
 
-    # Recent download history (last 20)
-    recent = DescargaLog.objects.filter(
-        empresa__owner=request.user
-    ).select_related("empresa").order_by("-iniciado_at")[:20]
-    has_running = DescargaLog.objects.filter(
-        empresa__owner=request.user, estado__in=["ejecutando", "pendiente"]
+    has_running = DescargaJob.objects.filter(
+        empresa__owner=request.user, estado="en_cola"
     ).exists()
 
     return render(request, "app/descargas.html", {
         "current_page": "descargas",
-        "empresas_data": empresas_data,
-        "plan": plan,
+        "empresas": empresas_data,
         "has_empresas": True,
-        "recent_downloads": recent,
         "has_running": has_running,
     })
 
