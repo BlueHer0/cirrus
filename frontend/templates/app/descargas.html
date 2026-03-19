@@ -66,7 +66,7 @@
       <div style="font-size: 14px; color: white; margin-top: 4px;">
         {% if ed.ultima %}
           {{ ed.ultima.completado_at|date:"d/m/Y" }}
-          <span style="color: #34d399; font-size: 12px;">({{ ed.ultima.cfdis_nuevos }} CFDIs)</span>
+          <span style="color: {% if ed.ultima.cfdis_nuevos %}#34d399{% else %}#718096{% endif %}; font-size: 12px;">({{ ed.ultima.cfdis_nuevos }} CFDIs)</span>
         {% else %}
           <span style="color: #718096;">Pendiente</span>
         {% endif %}
@@ -139,7 +139,7 @@
                         {% endif %}
                     </td>
                     <td class="py-2.5 text-right text-white font-medium">
-                        {% if d.estado == 'completado' %}{{ d.cfdis_nuevos|default:"0" }}{% else %}—{% endif %}
+                        {% if d.estado == 'completado' %}<span class="{% if d.cfdis_nuevos %}text-green-400{% else %}text-gray-500{% endif %}">{{ d.cfdis_nuevos|default:"0" }}</span>{% else %}—{% endif %}
                     </td>
                     <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
                 </tr>

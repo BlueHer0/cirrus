@@ -836,18 +836,22 @@ def _calc_proxima_descarga(empresa, plan, now):
         return "FIEL pendiente"
     slug = plan.slug if plan else "free"
     if slug == "free":
-        return "Al cierre del mes"
+        nm = now.month + 1 if now.month < 12 else 1
+        ny = now.year if now.month < 12 else now.year + 1
+        return f"Mensual — 02/{nm:02d}/{ny}"
     elif slug == "basico":
-        if now.day < 15:
-            return f"15/{now.month:02d}/{now.year}"
+        if now.day < 10:
+            return f"~10/{now.month:02d}/{now.year}"
+        elif now.day < 20:
+            return f"~20/{now.month:02d}/{now.year}"
         else:
             nm = now.month + 1 if now.month < 12 else 1
             ny = now.year if now.month < 12 else now.year + 1
-            return f"01/{nm:02d}/{ny}"
+            return f"~10/{nm:02d}/{ny}"
     elif slug == "pro":
         return "Semanal (auto)"
     elif slug in ("enterprise", "owner"):
-        return "Cada ~2.5 días (auto)"
+        return "Cada 3 días (auto)"
     return "Automática"
 
 

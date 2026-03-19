@@ -7,7 +7,7 @@ import logging
 import shutil
 from datetime import datetime, timedelta, timezone
 
-from core.models import DescargaLog, Empresa
+from core.models import DescargaJob, DescargaLog, Empresa
 
 logger = logging.getLogger("core.supervisor")
 
@@ -26,6 +26,7 @@ class CirrusSupervisor:
 
         self.limpiar_zombies()
         self.verificar_empresas_sin_descargas()
+        self.detectar_huecos_descarga()
         self.detectar_sat_lento()
         self.verificar_espacio_disco()
         self.detectar_errores_repetidos()
@@ -65,6 +66,49 @@ class CirrusSupervisor:
                 self.acciones.append(
                     f"⚠️ {emp.rfc} lleva {dias} día(s) con sync activa y 0 descargas"
                 )
+
+    def detectar_huecos_descarga(self):
+        """Detect months without a DescargaJob and create them automatically."""
+        total_creados = 0
+
+        for empresa in Empresa.objects.filter(sync_activa=True, fiel_verificada=True):
+            plan = empresa.owner.perfil.get_plan() if hasattr(empresa.owner, "perfil") else None
+            slug = plan.slug if plan else "free"
+            prioridad = {"owner": 1, "enterprise": 1, "pro": 3, "basico": 5, "free": 9}.get(slug, 9)
+
+            start_y = empresa.sync_desde_year or 2025
+            start_m = empresa.sync_desde_month or 1
+            delay_minutes = total_creados * 5
+
+            y, m = start_y, start_m
+            while (y < self.now.year) or (y == self.now.year and m <= self.now.month):
+                for tipo in ["recibidos", "emitidos"]:
+                    job, created = DescargaJob.objects.get_or_create(
+                        empresa=empresa, year=y, month=m, tipo=tipo,
+                        defaults={
+                            "estado": "en_cola",
+                            "prioridad": prioridad,
+                            "programado_para": self.now + timedelta(minutes=delay_minutes),
+                        },
+                    )
+                    if created:
+                        total_creados += 1
+                        delay_minutes += 5
+                    elif job.estado == "error" and job.intentos < job.max_intentos:
+                        job.estado = "en_cola"
+                        job.programado_para = self.now + timedelta(minutes=30)
+                        job.save(update_fields=["estado", "programado_para"])
+                        total_creados += 1
+
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+
+        if total_creados > 0:
+            self.acciones.append(
+                f"🔧 {total_creados} jobs creados/re-encolados (huecos detectados)"
+            )
 
     def detectar_sat_lento(self):
         """Alert if recent downloads are 2x slower than historical average."""

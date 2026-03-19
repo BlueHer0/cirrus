@@ -318,7 +318,7 @@
                             {% endif %}
                         </td>
                         <td class="py-2.5 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
-                        <td class="py-2.5 text-right text-white font-medium">{% if d.estado == 'completado' %}{{ d.cfdis_nuevos|default:"0" }}{% else %}—{% endif %}</td>
+                        <td class="py-2.5 text-right font-medium">{% if d.estado == 'completado' %}<span class="{% if d.cfdis_nuevos %}text-green-400{% else %}text-gray-500{% endif %}">{{ d.cfdis_nuevos|default:"0" }}</span>{% else %}—{% endif %}</td>
                         <td class="py-2.5 text-right text-gray-400 text-xs">{% if d.duracion_segundos %}{{ d.duracion_segundos }}s{% else %}—{% endif %}</td>
                         <td class="py-2.5 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
                     </tr>
