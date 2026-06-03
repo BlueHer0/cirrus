@@ -1,0 +1,118 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Stripe Events{% endblock %}
+{% block page_title %}💳 Stripe Webhook Events{% endblock %}
+{% block page_subtitle %}Auditoría e idempotencia de eventos de billing{% endblock %}
+
+{% block content %}
+
+<!-- Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #6366f1;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Total recibidos</div>
+        <div class="text-2xl font-bold text-white">{{ stats.total }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #22c55e;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Procesados 24h</div>
+        <div class="text-2xl font-bold text-green-400">{{ stats.procesados_24h }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #ef4444;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">En error</div>
+        <div class="text-2xl font-bold {% if stats.errores > 0 %}text-red-400{% else %}text-white{% endif %}">{{ stats.errores }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #64748b;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Ignorados</div>
+        <div class="text-2xl font-bold text-gray-400">{{ stats.ignorados }}</div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="glass rounded-xl p-4 mb-4">
+    <form method="get" class="flex flex-wrap items-center gap-3">
+        <select name="estado" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Estado: Todos</option>
+            <option value="recibido" {% if filters.estado == 'recibido' %}selected{% endif %}>Recibido (pendiente)</option>
+            <option value="procesado" {% if filters.estado == 'procesado' %}selected{% endif %}>Procesado</option>
+            <option value="error" {% if filters.estado == 'error' %}selected{% endif %}>Error</option>
+            <option value="ignorado" {% if filters.estado == 'ignorado' %}selected{% endif %}>Ignorado</option>
+        </select>
+        <select name="type" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Tipo: Todos</option>
+            {% for t in types %}
+            <option value="{{ t }}" {% if filters.type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500">Filtrar</button>
+        {% if filters.estado or filters.type %}
+        <a href="{% url 'panel:stripe_events' %}" class="text-xs text-gray-500 hover:text-white">Limpiar</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Lista -->
+<div class="glass rounded-xl p-5">
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">Recibido</th>
+                <th class="pb-3 font-semibold">Tipo</th>
+                <th class="pb-3 font-semibold">Event ID</th>
+                <th class="pb-3 font-semibold">Customer</th>
+                <th class="pb-3 font-semibold">Estado</th>
+                <th class="pb-3 font-semibold text-right">Intentos</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ev in events %}
+            <tr class="hover:bg-white/5 {% if ev.estado == 'error' %}bg-red-500/[0.03]{% endif %}">
+                <td class="py-2 text-xs text-gray-500 whitespace-nowrap">{{ ev.recibido_en|date:"d/m H:i:s" }}</td>
+                <td class="py-2 text-xs text-gray-300"><code>{{ ev.event_type }}</code></td>
+                <td class="py-2 text-xs text-gray-500 font-mono">{{ ev.stripe_event_id|truncatechars:24 }}</td>
+                <td class="py-2 text-xs text-gray-500 font-mono">{{ ev.customer_id|truncatechars:18|default:"—" }}</td>
+                <td class="py-2">
+                    {% if ev.estado == 'procesado' %}
+                    <span class="badge-success px-2 py-0.5 rounded-full text-xs">✓ procesado</span>
+                    {% elif ev.estado == 'error' %}
+                    <span class="badge-error px-2 py-0.5 rounded-full text-xs" title="{{ ev.error_detalle }}">✗ error</span>
+                    {% elif ev.estado == 'ignorado' %}
+                    <span class="px-2 py-0.5 rounded-full text-xs" style="background:rgba(100,116,139,.2);color:#94a3b8;">⊘ ignorado</span>
+                    {% else %}
+                    <span class="badge-warning px-2 py-0.5 rounded-full text-xs animate-pulse">● recibido</span>
+                    {% endif %}
+                </td>
+                <td class="py-2 text-right text-xs text-gray-400">{{ ev.intentos }}</td>
+                <td class="py-2 text-right">
+                    {% if ev.estado == 'error' %}
+                    <form method="post" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reprocess">
+                        <input type="hidden" name="event_id" value="{{ ev.id }}">
+                        <button type="submit" class="px-2 py-1 rounded text-xs text-indigo-300 hover:bg-indigo-500/20" title="Re-procesar">🔄</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% if ev.error_detalle %}
+            <tr class="bg-red-500/[0.02]">
+                <td></td>
+                <td colspan="6" class="py-1 text-[11px] text-red-300 italic">↳ {{ ev.error_detalle|truncatechars:250 }}</td>
+            </tr>
+            {% endif %}
+            {% empty %}
+            <tr><td colspan="7" class="py-8 text-center text-gray-600">Sin eventos</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="glass rounded-xl p-4 mt-6 border-l-4 border-indigo-500/50">
+    <h3 class="text-sm font-semibold text-white mb-2">Idempotencia</h3>
+    <p class="text-xs text-gray-400">
+        Cada evento Stripe se registra por <code>stripe_event_id</code>. Si Stripe reenvía el mismo
+        evento (retry), se devuelve 200 sin reprocesar. Los eventos en <strong>error</strong> se
+        pueden re-disparar manualmente con 🔄 después de corregir la causa raíz (ej. crear el
+        Plan faltante en BD).
+    </p>
+</div>
+{% endblock %}

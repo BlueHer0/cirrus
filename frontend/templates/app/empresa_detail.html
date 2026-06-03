@@ -43,6 +43,27 @@
     </form>
 </div>
 
+<!-- ═══════ PIPELINE AGENT PANEL ═══════ -->
+<div id="pipeline-agent" style="display:none; background:linear-gradient(135deg,rgba(34,197,94,0.04),rgba(59,130,246,0.04)); border:1px solid rgba(34,197,94,0.15); border-radius:16px; padding:20px 24px; margin-bottom:20px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <div id="agent-dot" style="width:10px; height:10px; border-radius:50%; background:#22c55e; animation:agentPulse 2s infinite;"></div>
+        <h3 id="agent-title" style="margin:0; font-size:14px; color:rgba(255,255,255,0.9); font-weight:600;"></h3>
+        <span id="agent-badge" style="margin-left:auto; padding:3px 10px; border-radius:12px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;"></span>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <div style="flex:1; height:5px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">
+            <div id="agent-bar" style="height:100%; background:linear-gradient(90deg,#22c55e,#3b82f6); border-radius:3px; transition:width 0.6s ease; width:0%;"></div>
+        </div>
+        <span id="agent-pct" style="font-size:12px; color:rgba(255,255,255,0.5); min-width:32px; text-align:right;"></span>
+    </div>
+    <div id="agent-steps" style="display:flex; flex-direction:column; gap:6px;"></div>
+    <div id="agent-msg" style="margin-top:14px; padding:10px 14px; background:rgba(255,255,255,0.025); border-radius:8px; font-size:12px; color:rgba(255,255,255,0.55); border-left:3px solid #22c55e;"></div>
+</div>
+<style>
+@keyframes agentPulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.35)}50%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}
+@keyframes agentSpin{100%{transform:rotate(360deg)}}
+</style>
+
 <!-- ── TABS ── -->
 <div class="flex gap-1 mb-6 overflow-x-auto" id="tab-nav">
     <button onclick="switchTab('resumen')" data-tab="resumen" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-white/10 border border-white/10">Resumen</button>
@@ -398,32 +419,94 @@
     </div>
 </div>
 
-{% if has_running %}
-<script>setTimeout(() => location.reload(), 10000);</script>
-{% endif %}
-
 <script>
+/* ── Pipeline Agent Polling ── */
+const EMPRESA_ID = '{{ empresa.id }}';
+let _pipInt = null;
+
+function startPipelinePolling() {
+    pollPipeline();
+    _pipInt = setInterval(pollPipeline, 5000);
+}
+
+async function pollPipeline() {
+    try {
+        const r = await fetch('/api/v1/pipelines/' + EMPRESA_ID + '/');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data || !data.length) { document.getElementById('pipeline-agent').style.display='none'; return; }
+        const active = data.find(p => ['en_proceso','reintentando','esperando_sat','pendiente'].includes(p.estado));
+        renderAgent(active || data[0]);
+        if (!active && data[0].estado === 'completado') {
+            setTimeout(() => { clearInterval(_pipInt); }, 30000);
+        }
+    } catch(e) { /* silent */ }
+}
+
+function renderAgent(p) {
+    const el = document.getElementById('pipeline-agent');
+    el.style.display = 'block';
+    const titles = {alta_empresa:'Agente de Verificación',descarga_cfdis:'Agente de Descargas',csf_mensual:'Agente CSF'};
+    const isDone = p.estado === 'completado';
+    const isErr = p.estado === 'error';
+    document.getElementById('agent-title').textContent = (titles[p.tipo]||'Agente') + (isDone ? ' — ¡Completado!' : isErr ? ' — Error' : ' en proceso');
+
+    const badge = document.getElementById('agent-badge');
+    badge.textContent = p.estado.replace(/_/g,' ');
+    const bColors = {en_proceso:'rgba(34,197,94,0.15);color:#22c55e',completado:'rgba(34,197,94,0.2);color:#22c55e',error:'rgba(239,68,68,0.15);color:#ef4444',reintentando:'rgba(234,179,8,0.15);color:#eab308',esperando_sat:'rgba(234,179,8,0.15);color:#eab308',pendiente:'rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)'};
+    badge.style.cssText = 'margin-left:auto;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:' + (bColors[p.estado]||bColors.pendiente);
+
+    document.getElementById('agent-bar').style.width = p.progreso_pct + '%';
+    document.getElementById('agent-pct').textContent = p.progreso_pct + '%';
+
+    const dot = document.getElementById('agent-dot');
+    dot.style.background = isDone ? '#22c55e' : isErr ? '#ef4444' : p.bloqueado_por_sat ? '#eab308' : '#22c55e';
+    dot.style.animation = (isDone || isErr) ? 'none' : 'agentPulse 2s infinite';
+
+    const icons = {completado:'✅',en_proceso:'⏳',pendiente:'⬜',error:'❌',reintentando:'🔄'};
+    const sc = document.getElementById('agent-steps');
+    sc.innerHTML = (p.pasos||[]).map(s => {
+        const t = s.timestamp ? new Date(s.timestamp).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+        const bg = s.status==='en_proceso'?'rgba(34,197,94,0.06)':s.status==='error'?'rgba(239,68,68,0.06)':s.status==='reintentando'?'rgba(234,179,8,0.06)':'transparent';
+        const col = s.status==='completado'?'rgba(255,255,255,0.6)':s.status==='pendiente'?'rgba(255,255,255,0.25)':'rgba(255,255,255,0.85)';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;font-size:12px;background:'+bg+';color:'+col+';">'
+            +'<span'+(s.status==='en_proceso'?' style="animation:agentSpin 1s linear infinite;display:inline-block"':'')+'>'+( icons[s.status]||'⬜')+'</span>'
+            +'<span style="flex:1">'+s.nombre+'</span>'
+            +'<span style="font-size:10px;color:rgba(255,255,255,0.3)">'+(s.mensaje||'')+'</span>'
+            +'<span style="font-size:10px;color:rgba(255,255,255,0.2);font-family:monospace">'+t+'</span>'
+            +'</div>';
+    }).join('');
+
+    const msg = document.getElementById('agent-msg');
+    msg.textContent = p.mensaje;
+    msg.style.borderLeftColor = isDone ? '#22c55e' : isErr ? '#ef4444' : p.bloqueado_por_sat ? '#eab308' : '#3b82f6';
+
+    if (isDone) {
+        el.style.borderColor = 'rgba(34,197,94,0.25)';
+    } else if (isErr) {
+        el.style.background = 'linear-gradient(135deg,rgba(239,68,68,0.04),rgba(239,68,68,0.02))';
+        el.style.borderColor = 'rgba(239,68,68,0.15)';
+    }
+}
+
+/* ── Tab Switching ── */
 function switchTab(tabName) {
-    // Hide all tab content
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    // Reset all tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('text-white', 'bg-white/10', 'border', 'border-white/10');
         btn.classList.add('text-gray-500');
     });
-    // Show selected tab
     document.getElementById('tab-' + tabName).classList.remove('hidden');
-    // Highlight selected button
     const activeBtn = document.querySelector('[data-tab="' + tabName + '"]');
     activeBtn.classList.add('text-white', 'bg-white/10', 'border', 'border-white/10');
     activeBtn.classList.remove('text-gray-500');
-    // Update URL without reload
     history.replaceState(null, '', '?tab=' + tabName);
 }
-// Init: check URL param
-const urlTab = new URLSearchParams(window.location.search).get('tab');
-if (urlTab && document.getElementById('tab-' + urlTab)) {
-    switchTab(urlTab);
-}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const urlTab = new URLSearchParams(window.location.search).get('tab');
+    if (urlTab && document.getElementById('tab-' + urlTab)) switchTab(urlTab);
+    startPipelinePolling();
+});
 </script>
 {% endblock %}

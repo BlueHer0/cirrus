@@ -342,6 +342,7 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
     from core.services.storage_minio import upload_bytes
     from core.services.monitor import log_info, log_error
     from core.services.alerts import send_telegram
+    from core.services.pipeline_manager import iniciar_pipeline, avanzar_paso, marcar_error
     from pathlib import Path
 
     try:
@@ -349,6 +350,7 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
     except Empresa.DoesNotExist:
         return {"error": f"Empresa {empresa_id} not found"}
 
+    pipeline = iniciar_pipeline(empresa, 'alta_empresa')
     fiel_ctx = None
     try:
         # Step 1: Get FIEL files
@@ -363,6 +365,7 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
             empresa.fiel_status = "rechazada"
             empresa.save(update_fields=["fiel_status"])
             send_telegram(f"❌ FIEL inválida: {empresa.rfc}", "warning")
+            marcar_error(pipeline.id, 'FIEL inválida criptográficamente', reintentable=False)
             return {"error": "FIEL invalid"}
 
         # Mark as verified
@@ -371,6 +374,8 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
         empresa.fiel_verificada_at = datetime.now(timezone.utc)
         empresa.save(update_fields=["fiel_verificada", "fiel_status", "fiel_verificada_at"])
         log_info("fiel", f"FIEL verificada localmente: {empresa.rfc}")
+        avanzar_paso(pipeline.id, 'FIEL válida')  # paso 1→2
+        avanzar_paso(pipeline.id, f'FIEL verificada, expira {empresa.fiel_expira}')  # paso 2→3
 
         # Step 3: Download CSF from SAT
         try:
@@ -390,6 +395,7 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
                 f"⚠️ FIEL OK pero CSF falló: {empresa.rfc}\n{str(csf_err)[:200]}",
                 "warning",
             )
+            marcar_error(pipeline.id, f'CSF download: {csf_err}', reintentable=True)
             return {"verified": True, "csf": False, "error": str(csf_err)}
 
         if not csf_pdf_bytes:
@@ -401,6 +407,7 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
         upload_bytes(csf_pdf_bytes, csf_key, content_type="application/pdf")
         empresa.csf_minio_key = csf_key
         empresa.csf_ultima_descarga = datetime.now(timezone.utc)
+        avanzar_paso(pipeline.id, 'CSF descargada del SAT')  # paso 3→4
 
         # Step 5: Parse CSF
         datos = parsear_csf_con_docling(csf_pdf_bytes)
@@ -431,17 +438,20 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
                 except Exception:
                     pass
             empresa.estatus_padron = datos.get("estatus_padron", "")
+        avanzar_paso(pipeline.id, f'Datos extraídos: {empresa.razon_social or empresa.rfc}')  # paso 4→5
 
         # Step 6: Activate sync
         empresa.sync_activa = True
         empresa.sync_desde_year = 2025
         empresa.sync_desde_month = 1
         empresa.save()
+        avanzar_paso(pipeline.id, 'Empresa actualizada con datos oficiales')  # paso 5→6
 
         # Step 7: Generate download jobs
         from core.services.job_scheduler import generar_jobs_iniciales
         jobs_count = generar_jobs_iniciales(empresa)
         log_info("csf", f"Empresa registrada con CSF: {empresa.rfc} — {empresa.nombre} ({jobs_count} jobs)")
+        avanzar_paso(pipeline.id, f'{jobs_count} periodos programados')  # paso 6 → completado
         send_telegram(
             f"✅ Empresa registrada con CSF: {empresa.rfc}\n{empresa.nombre}",
             "success",
@@ -470,11 +480,13 @@ def verificar_fiel_y_descargar_csf(self, empresa_id):
         log_error("csf", f"Error CSF {empresa.rfc}: {error_str}")
 
         if "login" in error_str.lower() or "timeout" in error_str.lower():
+            marcar_error(pipeline.id, f'SAT: {error_str[:200]}', reintentable=True)
             raise self.retry(exc=exc, countdown=300)
 
         empresa.fiel_status = "rechazada"
         empresa.save(update_fields=["fiel_status"])
         send_telegram(f"❌ CSF falló: {empresa.rfc} — {error_str[:200]}", "warning")
+        marcar_error(pipeline.id, error_str[:200], reintentable=False)
         return {"error": error_str}
 
     finally:
@@ -580,6 +592,42 @@ def health_check_playwright():
         return {"ok": False, "error": str(e)}
 
 
+# ── Temp FIEL Cleanup ────────────────────────────────────────────────
+
+
+@shared_task(soft_time_limit=60, time_limit=90)
+def limpiar_tmp_fiel():
+    """Remove stale FIEL temp dirs older than 1 hour.
+
+    Protects against FIEL files left on disk when workers die (OOM, SIGKILL).
+    Runs every 30 minutes via Celery Beat.
+    """
+    import glob
+    import os
+    import time
+
+    cutoff = time.time() - 3600  # 1 hour ago
+    patterns = ["/tmp/cirrus_*", "/tmp/tmp*cirrus*"]
+    removed = 0
+
+    for pattern in patterns:
+        for path in glob.glob(pattern):
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    if os.path.isdir(path):
+                        import shutil
+                        shutil.rmtree(path, ignore_errors=True)
+                    else:
+                        os.remove(path)
+                    removed += 1
+            except OSError:
+                pass
+
+    if removed > 0:
+        logger.info("🧹 Limpieza /tmp: %d archivos/dirs FIEL eliminados", removed)
+    return {"removed": removed}
+
+
 # ── Job Queue Worker ──────────────────────────────────────────────────
 
 
@@ -597,6 +645,7 @@ def procesar_cola_descargas():
     from core.models import DescargaJob, DescargaLog
     from core.services.monitor import log_info, log_error
     from core.services.alerts import send_telegram
+    from core.services.pipeline_manager import iniciar_pipeline, avanzar_paso, marcar_error
     from django.db.models import F
 
     now = datetime.now(timezone.utc)
@@ -662,6 +711,9 @@ def procesar_cola_descargas():
             iniciado_at=now,
         )
 
+        pipeline = iniciar_pipeline(empresa, 'descarga_cfdis')
+        avanzar_paso(pipeline.id, f'{empresa.rfc} {job.year}-{job.month:02d} {job.tipo}')  # paso 1→2
+
         result = ejecutar_descarga(empresa, dl)
 
         # Success
@@ -672,6 +724,51 @@ def procesar_cola_descargas():
         job.cfdis_nuevos = getattr(result, "total_cfdis", 0)
         job.cfdis_descargados = getattr(result, "total_files", 0)
         job.save()
+
+        # Verificar que realmente se descargaron CFDIs
+        from core.models import CFDI
+        cfdi_count = CFDI.objects.filter(
+            rfc_empresa=job.empresa.rfc,
+            fecha__year=job.year,
+            fecha__month=job.month
+        ).count()
+
+        if cfdi_count == 0 and job.intentos < 3:
+            # Completó pero sin datos — puede ser mes sin actividad
+            # o fallo silencioso del SAT. Reintentar hasta 3 veces.
+            job.estado = 'en_cola'
+            job.intentos += 1
+            from django.utils import timezone as dj_timezone
+            job.programado_para = dj_timezone.now() + timedelta(hours=6)
+            job.save()
+            logger.warning(f"Job {job.empresa.rfc} {job.year}-{job.month:02d} completó con 0 CFDIs, reintentando ({job.intentos}/3)")
+        elif cfdi_count == 0 and job.intentos >= 3:
+            # Validación secundaria: verificar si hay CFDIs en meses adyacentes.
+            # Si los hay, este mes vacío es sospechoso (posible fallo silencioso SAT).
+            prev_m = 12 if job.month == 1 else job.month - 1
+            next_m = 1 if job.month == 12 else job.month + 1
+            adjacent_count = CFDI.objects.filter(
+                rfc_empresa=job.empresa.rfc,
+                fecha__year=job.year,
+                fecha__month__in=[prev_m, next_m],
+            ).count()
+
+            if adjacent_count > 0:
+                # RFC activo en meses vecinos — mes vacío es sospechoso
+                job.estado = 'en_cola'
+                job.programado_para = dj_timezone.now() + timedelta(hours=48)
+                job.max_intentos = max(job.max_intentos, job.intentos + 2)
+                job.save()
+                logger.warning(
+                    f"Job {job.empresa.rfc} {job.year}-{job.month:02d}: 0 CFDIs pero "
+                    f"{adjacent_count} en meses adyacentes — re-encolando (sospecha fallo SAT)"
+                )
+            else:
+                # Sin actividad en meses vecinos tampoco — genuinamente vacío
+                job.estado = 'completado_vacio'
+                job.save()
+                logger.info(f"Job {job.empresa.rfc} {job.year}-{job.month:02d} confirmado sin CFDIs tras 3 intentos")
+
 
         # Update DescargaLog too
         dl.estado = "completado"
@@ -690,6 +787,9 @@ def procesar_cola_descargas():
             f"✅ {empresa.rfc} {job.year}-{job.month:02d} {job.tipo}: "
             f"{job.cfdis_nuevos} nuevos en {job.duracion_segundos}s",
         )
+        avanzar_paso(pipeline.id, f'Login SAT OK')  # paso 2→3
+        avanzar_paso(pipeline.id, f'{job.cfdis_nuevos} CFDIs descargados')  # paso 3→4
+        avanzar_paso(pipeline.id, f'{job.cfdis_descargados} archivos procesados en {job.duracion_segundos}s')  # paso 4→completado
         return f"OK: {job}"
 
     except Exception as e:
@@ -712,6 +812,11 @@ def procesar_cola_descargas():
 
         job.save()
         log_error("download", f"Job failed: {job} — {error_str[:200]}")
+        marcar_error(
+            pipeline.id if 'pipeline' in dir() else None,
+            error_str[:200],
+            reintentable=(job.intentos < job.max_intentos),
+        ) if 'pipeline' in dir() else None
         return f"Error: {job}"
 
 
@@ -721,6 +826,87 @@ def generar_jobs_mes():
     from core.services.job_scheduler import generar_jobs_mensuales
     count = generar_jobs_mensuales()
     return f"Generated {count} monthly jobs"
+
+
+@shared_task(queue="sistema")
+def refetch_meses_recientes_vacios():
+    """Re-encola jobs marcados completado/completado_vacio con 0 CFDIs para los
+    meses recientes (últimos 3 meses incluyendo el actual).
+
+    Soluciona el bug donde un job corrido al inicio del mes encuentra 0 CFDIs
+    (los emisores aún no han timbrado) y queda marcado como "hecho" para siempre,
+    ignorando uploads posteriores. Re-fetch máximo 1 vez cada 5 días por job
+    para no saturar al SAT.
+
+    Corre diario; cada mes vacío se re-consulta ~6 veces antes de salir de la
+    ventana de 3 meses — suficiente para capturar timbres tardíos del SAT.
+    """
+    from core.models import DescargaJob
+    from django.db.models import Q
+    from django.utils import timezone as djtz
+    from datetime import date
+
+    hoy = date.today()
+    meses = []
+    y, m = hoy.year, hoy.month
+    for _ in range(3):
+        meses.append((y, m))
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+
+    qcond = Q()
+    for y, m in meses:
+        qcond |= Q(year=y, month=m)
+
+    desde = djtz.now() - timedelta(days=5)
+    qs = DescargaJob.objects.filter(
+        empresa__sync_activa=True,
+        empresa__fiel_verificada=True,
+        estado__in=["completado", "completado_vacio"],
+        cfdis_descargados=0,
+        completado_at__lte=desde,
+    ).filter(qcond)
+
+    n = qs.update(
+        estado="en_cola",
+        intentos=0,
+        programado_para=djtz.now(),
+        completado_at=None,
+        ultimo_error="auto-refetch: posible timbre tardío del SAT",
+    )
+    logger.info("refetch_meses_recientes_vacios: %d jobs re-encolados", n)
+    return f"re-fetched {n} jobs vacíos de meses recientes"
+
+
+@shared_task(soft_time_limit=300, time_limit=360)
+def auditoria_nocturna_periodos():
+    """Ejecuta el auditor de huecos en todas las empresas activas cada noche.
+    
+    Asegura que no se omitan meses ni queden periodos de por vida en estado 'error'.
+    """
+    from core.models import Empresa
+    from core.services.job_scheduler import auditar_y_reparar_jobs
+    from core.services.monitor import log_info
+
+    empresas = Empresa.objects.filter(sync_activa=True, fiel_verificada=True)
+    count_empresas = empresas.count()
+    total_reparados = 0
+
+    log_info("system", f"Iniciando auditoría nocturna de periodos en {count_empresas} empresas...")
+
+    for emp in empresas:
+        reparados = auditar_y_reparar_jobs(emp)
+        if reparados > 0:
+            total_reparados += reparados
+
+    if total_reparados > 0:
+        log_info("system", f"Auditoría finalizada. Se repararon/reprogramaron {total_reparados} huecos.")
+    else:
+        log_info("system", "Auditoría finalizada. Historial perfecto, sin huecos.")
+
+    return f"Audited {count_empresas} empresas, repaired {total_reparados} gaps"
+
 
 
 @shared_task(soft_time_limit=60, time_limit=90)
@@ -971,33 +1157,23 @@ def _telemetry_for_telegram(descarga_log):
 
 
 def _send_client_email_success(empresa, descarga_log):
-    """Send email to client when download completes successfully."""
+    """Trigger the new AI Executive Report email when download completes."""
+    from reportes.tasks import enviar_reporte_mensual_email
+
+    user = empresa.owner
+    if not user or not user.email:
+        return
+
+    # Trigger the full report process asynchronously
     try:
-        from django.core.mail import send_mail
-        from django.conf import settings
-
-        user = empresa.owner
-        if not user or not user.email:
-            return
-
-        periodo = f"{descarga_log.year}/{descarga_log.month_start:02d}-{descarga_log.month_end:02d}"
-        send_mail(
-            subject=f"Tus CFDIs están listos — {empresa.rfc}",
-            message=(
-                f"Hola {user.first_name or user.email},\n\n"
-                f"Descargamos {descarga_log.cfdis_nuevos} CFDIs de {empresa.rfc} "
-                f"del periodo {periodo}.\n\n"
-                f"Ya puedes verlos en tu panel:\n"
-                f"https://cirrus.nubex.me/app/cfdis/\n\n"
-                f"Saludos,\nEquipo Cirrus"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=True,
+        enviar_reporte_mensual_email.delay(
+            str(empresa.id),
+            descarga_log.year,
+            descarga_log.month_start
         )
-        logger.info("📧 Email sent to %s: download complete", user.email)
+        logger.info("📧 AI Report generation triggered for %s", user.email)
     except Exception as e:
-        logger.warning("Failed to send success email: %s", e)
+        logger.warning("Failed to trigger report generation: %s", e)
 
 
 def _send_client_email_failure(empresa, descarga_log):
@@ -1151,3 +1327,631 @@ def supervisor_cirrus():
     from core.services.supervisor import CirrusSupervisor
     sup = CirrusSupervisor()
     return sup.ejecutar()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  SAT HEALTH MONITOR — Probes distribuidos de disponibilidad del SAT
+# ══════════════════════════════════════════════════════════════════════════
+
+# Configuración de nodos
+SAT_HEALTH_NODES = [
+    {'id': 'vps2',  'ip': '10.20.0.2',   'url': 'http://10.20.0.2:8300'},
+    {'id': 'vpsx',  'ip': '10.20.0.100', 'url': 'http://10.20.0.100:8300'},
+    {'id': 'spark', 'ip': '10.20.0.6',   'url': 'http://10.20.0.6:8300'},
+]
+
+# RFCs en orden de rotación (empresas con FIEL válida)
+SAT_HEALTH_RFCS = [
+    'AIPF760625HF5',
+    'VEN191127M21',
+    'LUF250407A86',
+    'AFE090605PQ0',
+]
+
+
+@shared_task(queue='sistema', name='core.tasks.sat_health_probe')
+def sat_health_probe():
+    """
+    Orquestador: selecciona nodo + FIEL en round-robin y envía probe.
+    Se ejecuta cada 5 minutos via Celery Beat.
+    """
+    import base64
+    import uuid as uuid_mod
+
+    import httpx
+    from django.core.cache import cache
+    from django.utils import timezone as tz
+
+    from core.models import SATHealthProbe, Empresa
+    from core.services.fiel_encryption import decrypt_password
+    from core.services.storage_minio import download_bytes, upload_bytes
+    from core.services.alerts import send_telegram
+
+    # Obtener índice actual de rotación
+    rotation_index = cache.get('sat_health_rotation_index', 0)
+
+    # Seleccionar nodo y FIEL
+    node = SAT_HEALTH_NODES[rotation_index % len(SAT_HEALTH_NODES)]
+    rfc = SAT_HEALTH_RFCS[rotation_index % len(SAT_HEALTH_RFCS)]
+
+    # Avanzar rotación
+    next_index = (rotation_index + 1) % max(len(SAT_HEALTH_NODES), len(SAT_HEALTH_RFCS))
+    cache.set('sat_health_rotation_index', next_index, timeout=None)
+
+    # Obtener empresa
+    try:
+        empresa = Empresa.objects.get(rfc=rfc)
+    except Empresa.DoesNotExist:
+        return f"RFC {rfc} no encontrado, saltando probe"
+
+    # Leer archivos FIEL de MinIO
+    if not empresa.fiel_cer_key or not empresa.fiel_key_key:
+        return f"FIEL no configurada para {rfc}"
+
+    try:
+        cer_data = download_bytes(empresa.fiel_cer_key)
+        cer_b64 = base64.b64encode(cer_data).decode()
+
+        key_data = download_bytes(empresa.fiel_key_key)
+        key_b64 = base64.b64encode(key_data).decode()
+    except Exception as e:
+        return f"Error leyendo FIEL de {rfc} en MinIO: {e}"
+
+    # Desencriptar password
+    try:
+        fiel_password = decrypt_password(empresa.fiel_password_encrypted)
+    except Exception as e:
+        return f"Error desencriptando password de {rfc}: {e}"
+
+    # Generar probe_id
+    probe_id = str(uuid_mod.uuid4())
+
+    # Auth token (from Django settings or env)
+    from django.conf import settings
+    sat_health_token = getattr(settings, 'SAT_HEALTH_TOKEN', '')
+    headers = {}
+    if sat_health_token:
+        headers['Authorization'] = f'Bearer {sat_health_token}'
+
+    # Enviar probe al worker
+    try:
+        with httpx.Client(timeout=120) as client:
+            response = client.post(
+                f"{node['url']}/probe",
+                json={
+                    'probe_id': probe_id,
+                    'rfc': rfc,
+                    'cer_b64': cer_b64,
+                    'key_b64': key_b64,
+                    'fiel_password': fiel_password,
+                    'timeout_seconds': 90,
+                },
+                headers=headers,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+
+                # Si hay screenshot, guardar en MinIO
+                screenshot_path = ''
+                if data.get('screenshot_b64'):
+                    screenshot_bytes = base64.b64decode(data['screenshot_b64'])
+                    ts = tz.now().strftime('%Y%m%d_%H%M%S')
+                    screenshot_path = f"sat_health/screenshots/{rfc}/{ts}_{node['id']}.png"
+                    upload_bytes(
+                        screenshot_bytes,
+                        screenshot_path,
+                        content_type='image/png',
+                    )
+
+                # Guardar probe en BD
+                SATHealthProbe.objects.create(
+                    id=probe_id,
+                    node_id=data['node_id'],
+                    node_ip=data['node_ip'],
+                    rfc_used=rfc,
+                    empresa=empresa,
+                    result=data['result'],
+                    last_phase_reached=data['last_phase_reached'],
+                    error_message=data.get('error_message', ''),
+                    http_status=data.get('http_status'),
+                    time_dns_ms=data.get('time_dns_ms'),
+                    time_page_load_ms=data.get('time_page_load_ms'),
+                    time_form_visible_ms=data.get('time_form_visible_ms'),
+                    time_fiel_upload_ms=data.get('time_fiel_upload_ms'),
+                    time_login_submit_ms=data.get('time_login_submit_ms'),
+                    time_session_active_ms=data.get('time_session_active_ms'),
+                    time_total_ms=data.get('time_total_ms', 0),
+                    screenshot_path=screenshot_path,
+                    user_agent=data.get('user_agent', ''),
+                )
+
+                # Alertar en cambio de estado
+                _check_state_change(rfc, data['result'])
+
+                return (
+                    f"Probe OK: {node['id']} → {rfc} = {data['result']} "
+                    f"({data.get('time_total_ms', 0)}ms)"
+                )
+
+            else:
+                SATHealthProbe.objects.create(
+                    id=probe_id,
+                    node_id=node['id'],
+                    node_ip=node['ip'],
+                    rfc_used=rfc,
+                    empresa=empresa,
+                    result='browser_error',
+                    last_phase_reached='dns',
+                    error_message=f"Worker respondió HTTP {response.status_code}: {response.text[:200]}",
+                    time_total_ms=0,
+                )
+                return f"Worker {node['id']} respondió {response.status_code}"
+
+    except httpx.TimeoutException:
+        SATHealthProbe.objects.create(
+            id=probe_id,
+            node_id=node['id'],
+            node_ip=node['ip'],
+            rfc_used=rfc,
+            empresa=empresa,
+            result='network_error',
+            last_phase_reached='dns',
+            error_message=f"Timeout conectando a worker {node['id']} ({node['url']})",
+            time_total_ms=120000,
+        )
+        return f"Timeout conectando a worker {node['id']}"
+
+    except Exception as e:
+        SATHealthProbe.objects.create(
+            id=probe_id,
+            node_id=node['id'],
+            node_ip=node['ip'],
+            rfc_used=rfc,
+            empresa=empresa,
+            result='network_error',
+            last_phase_reached='dns',
+            error_message=f"Error conectando a worker: {str(e)[:300]}",
+            time_total_ms=0,
+        )
+        return f"Error: {e}"
+
+
+def _check_state_change(rfc, current_result):
+    """
+    Envía alerta a Telegram si el estado del SAT cambió.
+    Solo alerta en transiciones ok→fallo o fallo→ok.
+    """
+    from django.core.cache import cache
+    from core.services.alerts import send_telegram
+
+    cache_key = f'sat_health_last_state_{rfc}'
+    last_state = cache.get(cache_key, 'unknown')
+
+    is_ok = current_result == 'success'
+    was_ok = last_state == 'success'
+
+    if last_state != 'unknown':
+        if was_ok and not is_ok:
+            send_telegram(
+                f"🔴 SAT Health: Login {rfc} FALLÓ\n"
+                f"Error: {current_result}\n"
+                f"El SAT puede estar experimentando problemas.",
+                level='warning',
+            )
+        elif not was_ok and is_ok:
+            send_telegram(
+                f"🟢 SAT Health: Login {rfc} RECUPERADO\n"
+                f"El SAT está respondiendo correctamente.",
+                level='info',
+            )
+
+    cache.set(cache_key, current_result, timeout=3600)
+
+
+@shared_task(queue='sistema', name='core.tasks.sat_health_summarize')
+def sat_health_summarize():
+    """
+    Genera resumen horario de disponibilidad. Se ejecuta cada hora.
+    """
+    from collections import Counter
+
+    from django.db.models import Avg, Min, Max
+    from django.utils import timezone as tz
+
+    from core.models import SATHealthProbe, SATHealthSummary
+    from core.services.alerts import send_telegram
+
+    now = tz.now()
+    hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
+    hour_end = hour_start + timedelta(hours=1)
+
+    probes = SATHealthProbe.objects.filter(
+        timestamp__gte=hour_start,
+        timestamp__lt=hour_end,
+    )
+
+    total = probes.count()
+    if total == 0:
+        return "No probes en la última hora"
+
+    successful = probes.filter(result='success').count()
+    failed = total - successful
+
+    # Agregar por nodo
+    results_by_node = {}
+    for node in SAT_HEALTH_NODES:
+        node_probes = probes.filter(node_id=node['id'])
+        results_by_node[node['id']] = {
+            'success': node_probes.filter(result='success').count(),
+            'failed': node_probes.exclude(result='success').count(),
+        }
+
+    # Error más común
+    errors = probes.exclude(result='success').values_list('result', flat=True)
+    most_common = Counter(errors).most_common(1)
+    most_common_error = most_common[0][0] if most_common else ''
+
+    # Tiempos
+    time_stats = probes.filter(result='success').aggregate(
+        avg_total=Avg('time_total_ms'),
+        min_total=Min('time_total_ms'),
+        max_total=Max('time_total_ms'),
+        avg_login=Avg('time_login_submit_ms'),
+    )
+
+    summary, _created = SATHealthSummary.objects.update_or_create(
+        hour=hour_start,
+        defaults={
+            'total_probes': total,
+            'successful_probes': successful,
+            'failed_probes': failed,
+            'availability_pct': round((successful / total) * 100, 1),
+            'avg_total_time_ms': int(time_stats['avg_total']) if time_stats['avg_total'] else None,
+            'avg_login_time_ms': int(time_stats['avg_login']) if time_stats['avg_login'] else None,
+            'min_total_time_ms': time_stats['min_total'],
+            'max_total_time_ms': time_stats['max_total'],
+            'most_common_error': most_common_error,
+            'results_by_node': results_by_node,
+        },
+    )
+
+    # Alerta horaria a Telegram
+    emoji = "🟢" if (successful / total) >= 0.8 else "🟡" if (successful / total) >= 0.5 else "🔴"
+
+    send_telegram(
+        f"{emoji} SAT Health {hour_start:%H:00}-{hour_end:%H:00}\n"
+        f"Disponibilidad: {summary.availability_pct:.0f}%\n"
+        f"Probes: {successful}/{total} exitosos\n"
+        f"{'Error más común: ' + most_common_error if most_common_error else ''}\n"
+        f"Tiempo promedio: {summary.avg_total_time_ms or 'N/A'}ms",
+        level='info',
+    )
+
+    return f"Resumen {hour_start:%H:00}: {summary.availability_pct:.0f}% up"
+
+
+@shared_task(soft_time_limit=60, time_limit=90)
+def supervisor_pipelines():
+    """Pipeline supervisor — runs every 5 min.
+
+    1. Desbloquea pipelines cuando SAT Health mejora
+    2. Re-dispara tasks para pipelines con reintento vencido
+    3. Limpia pipelines abandonados (>2h sin update)
+    4. Auto re-parse de empresas con CSF pero sin datos (Gap #1)
+    """
+    from core.models import PipelineState, Empresa
+    from core.services.pipeline_manager import desbloquear_por_sat_health
+    from core.services.monitor import log_info
+
+    now = datetime.now(timezone.utc)
+
+    # 1. Desbloquear por SAT Health
+    desbloqueados = desbloquear_por_sat_health()
+
+    # 2. Pipelines con reintento vencido — re-disparar task
+    vencidos = PipelineState.objects.filter(
+        estado='reintentando',
+        proximo_intento__lte=now,
+    ).select_related('empresa')
+
+    re_dispatched = 0
+    for p in vencidos:
+        if p.pipeline_type == 'alta_empresa':
+            verificar_fiel_y_descargar_csf.delay(str(p.empresa.id))
+            re_dispatched += 1
+        # descarga_cfdis: procesar_cola_descargas handles its own queue
+
+    # 3. Pipelines abandonados (activos sin update en 2h)
+    cutoff = now - timedelta(hours=2)
+    abandonados = PipelineState.objects.filter(
+        estado__in=['en_proceso', 'reintentando'],
+        actualizado__lt=cutoff,
+    )
+    abandon_count = abandonados.count()
+    for p in abandonados:
+        p.estado = 'error'
+        p.mensaje_cliente = 'Proceso interrumpido. Nuestro equipo fue notificado.'
+        p.ultimo_error = 'Pipeline abandonado — sin actividad por más de 2 horas'
+        p.save(update_fields=['estado', 'mensaje_cliente', 'ultimo_error'])
+
+    # 4. Auto re-parse de empresas con CSF pero sin datos
+    from core.models import Empresa
+    empresas_sin_datos = Empresa.objects.filter(
+        fiel_verificada=True,
+    ).exclude(csf_minio_key='').filter(razon_social='')
+
+    reparse_count = 0
+    for emp in empresas_sin_datos[:5]:  # max 5 per cycle
+        try:
+            from core.services.storage_minio import download_bytes
+            from core.services.csf_parser import parsear_csf_con_docling
+
+            pdf = download_bytes(emp.csf_minio_key)
+            datos = parsear_csf_con_docling(pdf)
+            if datos and datos.get('razon_social'):
+                emp.nombre = datos.get('razon_social', emp.nombre)
+                emp.razon_social = datos.get('razon_social', '')
+                emp.regimen_fiscal = datos.get('regimen_fiscal', '')
+                emp.regimen_capital = datos.get('regimen_capital', '')
+                emp.codigo_postal = datos.get('codigo_postal', '')
+                emp.save()
+                reparse_count += 1
+                log_info("csf", f"Auto re-parse OK: {emp.rfc} → {emp.razon_social}")
+        except Exception as e:
+            logger.warning("Auto re-parse failed for %s: %s", emp.rfc, e)
+
+    summary = (
+        f"Pipelines: {desbloqueados} desbloqueados, "
+        f"{re_dispatched} re-dispatched, "
+        f"{abandon_count} abandonados, "
+        f"{reparse_count} re-parsed"
+    )
+    if any([desbloqueados, re_dispatched, abandon_count, reparse_count]):
+        log_info("system", f"Supervisor pipelines: {summary}")
+    return summary
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  FIEL POR VENCER — aviso automático al CLIENTE (no al admin)
+# ══════════════════════════════════════════════════════════════════════════
+
+@shared_task(queue="sistema")
+def verificar_fiel_por_vencer():
+    """Aviso al DUEÑO de cada empresa cuya FIEL vence en 30/15/7 días.
+
+    - Envía email al owner de la empresa (no al admin).
+    - Registra el aviso en SystemLog.
+    - NO notifica al admin por Telegram (el vencimiento de FIEL es proceso
+      del cliente, no del stack).
+
+    Corre diario a las 09:00 CST (15:00 UTC).
+    """
+    from core.models import Empresa
+    from django.core.mail import send_mail
+    from core.services.monitor import log_info, log_warning
+
+    hoy = datetime.now(timezone.utc).date()
+    umbrales = [30, 15, 7]
+    avisados = 0
+
+    qs = Empresa.objects.filter(
+        fiel_verificada=True, fiel_expira__isnull=False,
+    ).select_related("owner")
+
+    for empresa in qs:
+        dias = (empresa.fiel_expira.date() - hoy).days
+        if dias not in umbrales:
+            continue
+
+        owner_email = getattr(empresa.owner, "email", "") or ""
+        if not owner_email:
+            log_warning(
+                "fiel",
+                f"FIEL de {empresa.rfc} vence en {dias}d pero el owner no tiene email",
+            )
+            continue
+
+        urgencia = "pronto" if dias > 7 else "MUY pronto"
+        send_mail(
+            f"Tu e.firma (FIEL) de {empresa.rfc} vence en {dias} días",
+            (
+                f"Hola,\n\n"
+                f"La e.firma (FIEL) de {empresa.nombre} ({empresa.rfc}) "
+                f"vence {urgencia}: el {empresa.fiel_expira.strftime('%d/%m/%Y')} "
+                f"(te quedan {dias} días).\n\n"
+                f"Qué tienes que hacer:\n"
+                f"1. Entra al portal del SAT (https://www.sat.gob.mx) con tu "
+                f"e.firma actual o tu RFC y contraseña.\n"
+                f"2. Renueva tu e.firma (servicio 'CERTISAT' o en un módulo del SAT).\n"
+                f"3. Sube tus nuevos archivos .cer y .key a Cirrus desde tu panel.\n\n"
+                f"Si tu FIEL vence, Cirrus dejará de poder descargar tus CFDIs y tu "
+                f"Constancia de Situación Fiscal de forma automática.\n\n"
+                f"— Equipo Cirrus"
+            ),
+            "Cirrus <cirrus@nubex.me>",
+            [owner_email],
+            fail_silently=True,
+        )
+        log_info(
+            "fiel",
+            f"Aviso de vencimiento FIEL enviado a {owner_email} "
+            f"({empresa.rfc}, {dias}d)",
+        )
+        avisados += 1
+
+    # ── FIEL ya vencida: marcar expirada y desactivar sync ────────────
+    # (sin notificar al admin: es proceso del cliente). Reemplaza el
+    # comportamiento de la antigua tarea alertas_vencimiento_fiel.
+    expiradas = 0
+    for empresa in Empresa.objects.filter(
+        fiel_verificada=True, fiel_expira__isnull=False, sync_activa=True,
+    ).select_related("owner"):
+        if (empresa.fiel_expira.date() - hoy).days <= 0:
+            empresa.fiel_status = "expirada"
+            empresa.sync_activa = False
+            empresa.save(update_fields=["fiel_status", "sync_activa"])
+            log_warning(
+                "fiel",
+                f"FIEL EXPIRADA: {empresa.rfc} — sync desactivada",
+            )
+            expiradas += 1
+
+    # ── CSD por vencer: aviso al cliente (30/15/7) ────────────────────
+    for empresa in Empresa.objects.filter(csd_expira__isnull=False).select_related("owner"):
+        dias_csd = (empresa.csd_expira - hoy).days
+        if dias_csd not in umbrales:
+            continue
+        owner_email = getattr(empresa.owner, "email", "") or ""
+        if not owner_email:
+            continue
+        send_mail(
+            f"Tu Sello Digital (CSD) de {empresa.rfc} vence en {dias_csd} días",
+            (
+                f"Hola,\n\n"
+                f"El Certificado de Sello Digital (CSD) de {empresa.nombre} "
+                f"({empresa.rfc}) vence el "
+                f"{empresa.csd_expira.strftime('%d/%m/%Y')} "
+                f"(te quedan {dias_csd} días).\n\n"
+                f"Renuévalo en el portal del SAT para poder seguir facturando.\n\n"
+                f"— Equipo Cirrus"
+            ),
+            "Cirrus <cirrus@nubex.me>",
+            [owner_email],
+            fail_silently=True,
+        )
+        log_info("fiel", f"Aviso CSD enviado a {owner_email} ({empresa.rfc}, {dias_csd}d)")
+        avisados += 1
+
+    return f"Avisos enviados: {avisados}; FIEL expiradas: {expiradas}"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  VIGILANCIA DE STACK + INCIDENTES — únicas alertas que llegan al admin
+# ══════════════════════════════════════════════════════════════════════════
+
+def _ya_alertado(category: str, horas: int) -> bool:
+    """True si ya se envió (status=sent) una alerta de esta categoría
+    dentro de las últimas `horas` (anti-spam)."""
+    from core.models import TelegramAlert
+    desde = datetime.now(timezone.utc) - timedelta(hours=horas)
+    return TelegramAlert.objects.filter(
+        category=category, status="sent", created_at__gte=desde,
+    ).exists()
+
+
+def _clasificar_incidente(ultimo_error: str) -> str:
+    """Mapea el ultimo_error de un job a un tipo de DescargaIncidente."""
+    e = (ultimo_error or "").lower()
+    if "timeout" in e or "timed out" in e:
+        return "timeout"
+    if "fiel" in e or "login" in e or "sesión" in e or "sesion" in e:
+        return "fiel_error"
+    if "sat" in e or "portal" in e or "page" in e or "captcha" in e:
+        return "sat_error"
+    return "otro"
+
+
+@shared_task(queue="sistema")
+def vigilancia_stack():
+    """Vigilancia de stack: única fuente de alertas Telegram al admin.
+
+    Chequeos (cada uno con anti-spam por categoría):
+    1. SAT con tasa de éxito <60% en ventana móvil de 24h  → sat_health
+    2. 3+ descargas fallidas (DescargaLog estado=error) en 24h → job_failures
+    3. Detecta DescargaJobs stuck (>48h sin completar) → crea DescargaIncidente
+    4. 3+ incidentes nuevos en 24h → incidentes
+    5. Worker/web caído → service_down (critical)
+
+    Corre cada hora.
+    """
+    from core.models import (
+        SATHealthProbe, DescargaLog, DescargaJob, DescargaIncidente,
+    )
+    from django.db.models import Q
+    from core.services.alerts import send_telegram
+
+    now = datetime.now(timezone.utc)
+    hace_24h = now - timedelta(hours=24)
+    resultados = []
+
+    # ── 1. Salud SAT (ventana móvil 24h) ──────────────────────────────
+    probes_24h = SATHealthProbe.objects.filter(timestamp__gte=hace_24h)
+    total_p = probes_24h.count()
+    if total_p >= 20:  # muestra mínima para que sea significativo
+        ok_p = probes_24h.filter(result="success").count()
+        tasa = 100.0 * ok_p / total_p
+        if tasa < 60 and not _ya_alertado("sat_health", 24):
+            send_telegram(
+                f"🚨 *SAT degradado* — tasa de éxito {tasa:.0f}% en las "
+                f"últimas 24h ({ok_p}/{total_p} probes OK). Posible caída o "
+                f"saturación del portal.",
+                level="critical", category="sat_health",
+            )
+            resultados.append(f"sat_health alert ({tasa:.0f}%)")
+
+    # ── 2. Patrón de descargas fallidas (24h) ─────────────────────────
+    errores_24h = DescargaLog.objects.filter(
+        estado="error", completado_at__gte=hace_24h,
+    ).count()
+    if errores_24h >= 3 and not _ya_alertado("job_failures", 12):
+        send_telegram(
+            f"⚠️ *Patrón de fallas* — {errores_24h} descargas fallidas en "
+            f"las últimas 24h. Revisa /panel/monitor/",
+            level="error", category="job_failures",
+        )
+        resultados.append(f"job_failures alert ({errores_24h})")
+
+    # ── 3. Jobs stuck >48h → crear incidentes ─────────────────────────
+    hace_48h = now - timedelta(hours=48)
+    stuck = DescargaJob.objects.filter(
+        estado__in=["en_cola", "ejecutando"],
+        created_at__lte=hace_48h,
+    ).select_related("empresa")
+    nuevos_incidentes = 0
+    for job in stuck:
+        # dedup: no crear si ya hay incidente abierto para este job
+        ya = DescargaIncidente.objects.filter(job=job, resuelto=False).exists()
+        if ya:
+            continue
+        DescargaIncidente.objects.create(
+            empresa=job.empresa,
+            tipo=_clasificar_incidente(job.ultimo_error),
+            descripcion=(
+                f"Job {job.year}-{job.month:02d} {job.tipo} lleva >48h en "
+                f"'{job.estado}' ({job.intentos} intentos). "
+                f"Último error: {(job.ultimo_error or 'n/a')[:300]}"
+            ),
+            job=job,
+        )
+        nuevos_incidentes += 1
+    if nuevos_incidentes:
+        resultados.append(f"{nuevos_incidentes} incidentes creados")
+
+    # ── 4. 3+ incidentes nuevos en 24h → alerta ───────────────────────
+    incidentes_24h = DescargaIncidente.objects.filter(
+        creado_en__gte=hace_24h,
+    ).count()
+    if incidentes_24h >= 3 and not _ya_alertado("incidentes", 12):
+        send_telegram(
+            f"⚠️ *{incidentes_24h} incidentes de descarga* en las últimas 24h. "
+            f"Revisa /panel/monitor/ → Incidentes",
+            level="error", category="incidentes",
+        )
+        resultados.append(f"incidentes alert ({incidentes_24h})")
+
+    # ── 5. Servicios críticos: worker Celery vivo ─────────────────────
+    try:
+        from cirrus.celery import app as celery_app
+        pong = celery_app.control.ping(timeout=3)
+        if not pong and not _ya_alertado("service_down", 1):
+            send_telegram(
+                "🚨 *Sin workers Celery* — ningún worker respondió al ping. "
+                "Revisa `systemctl status cirrus-worker`.",
+                level="critical", category="service_down",
+            )
+            resultados.append("service_down: workers")
+    except Exception as e:
+        logger.warning("vigilancia_stack: no se pudo hacer ping a workers: %s", e)
+
+    return "; ".join(resultados) if resultados else "stack OK"

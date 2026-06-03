@@ -21,3 +21,25 @@ Thumbs.db
 .idea/
 node_modules/
 backups/
+
+# ── Secretos / credenciales (NUNCA commitear) ─────────────────────────
+# Certificados y llaves privadas de FIEL/CSD/cualquier PKI
+*.cer
+*.key
+*.pem
+*.pfx
+*.p12
+# Paquetes comprimidos (típicamente credenciales o exports)
+*.zip
+# Patrones por nombre — no usar *password*/*secret* porque rompen templates
+*credencial*
+*credentials*
+# Directorios típicos de material FIEL/CSD por si se montan dentro del repo
+fiel/
+csd/
+
+# Directorio hermano de secretos fuera del repo (defensa en profundidad)
+cirrus_secrets/
+
+# ── Outputs y artefactos generados ────────────────────────────────────
+exports/

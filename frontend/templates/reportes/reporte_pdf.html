@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte Ejecutivo {{ empresa.rfc }} — {{ datos.periodo_label }}</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 1.5cm 1.5cm;
+            @bottom-center {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 8px;
+                color: #94a3b8;
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            color: #1e293b;
+            line-height: 1.5;
+            background: #ffffff;
+        }
+
+        /* ── Header ─────────────────────── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #58a6ff;
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+        .header-left h1 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        .header-left .subtitle {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .header-right {
+            text-align: right;
+            font-size: 9px;
+            color: #94a3b8;
+        }
+        .header-right .brand {
+            font-size: 14px;
+            font-weight: 700;
+            color: #58a6ff;
+            letter-spacing: 2px;
+        }
+
+        /* ── Summary & AI ───────────────── */
+        .top-section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 16px;
+        }
+        .top-section .health-score {
+            width: 80px;
+            flex-shrink: 0;
+            text-align: center;
+            border-right: 1px solid #e2e8f0;
+            padding-right: 16px;
+        }
+        .top-section .health-score .circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 4px solid #3fb950;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0 auto 6px;
+            color: #0d1117;
+        }
+        .top-section .health-score .label {
+            font-size: 8px;
+            font-weight: bold;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        .top-section .ai-summary {
+            flex-grow: 1;
+        }
+        .top-section .ai-summary .title {
+            font-size: 10px;
+            font-weight: bold;
+            color: #58a6ff;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .top-section .ai-summary p {
+            font-size: 11px;
+            color: #334155;
+            line-height: 1.6;
+        }
+
+        /* ── KPIs Grid ──────────────────── */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+            border-top: 3px solid #cbd5e1;
+        }
+        .kpi-card.blue { border-top-color: #3b82f6; }
+        .kpi-card.green { border-top-color: #22c55e; }
+        .kpi-card.red { border-top-color: #ef4444; }
+        .kpi-card.yellow { border-top-color: #f59e0b; }
+        .kpi-card .label { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 4px; }
+        .kpi-card .value { font-size: 14px; font-weight: bold; color: #1e293b; font-family: monospace; }
+
+        /* ── Tables & Sections ──────────── */
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .two-col {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .two-col > div { flex: 1; min-width: 0; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+        }
+        th {
+            text-align: left;
+            font-size: 8px;
+            text-transform: uppercase;
+            color: #64748b;
+            padding: 4px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        td {
+            padding: 4px;
+            font-size: 9px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+        }
+        th.right, td.right { text-align: right; }
+        .bold { font-weight: bold; }
+        .mono { font-family: 'Courier New', monospace; font-size: 8.5px; }
+
+        /* ── Actions List ───────────────── */
+        .action-item {
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background: #fff;
+            border-left: 3px solid #cbd5e1;
+            border-radius: 0 4px 4px 0;
+            border-top: 1px solid #f1f5f9;
+            border-right: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .action-item.alta { border-left-color: #ef4444; }
+        .action-item.media { border-left-color: #f59e0b; }
+        .action-item.baja { border-left-color: #22c55e; }
+        .action-item .title { font-weight: bold; font-size: 10px; color: #1e293b; margin-bottom: 2px; }
+        .action-item .subtitle { font-size: 9px; color: #64748b; }
+
+        /* ── Footer ─────────────────────── */
+        .footer {
+            margin-top: 24px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 7px;
+            color: #94a3b8;
+            text-align: center;
+        }
+        .text-red { color: #dc2626 !important; }
+        .text-green { color: #16a34a !important; }
+        .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .max-w-user { max-width: 140px; }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-left">
+            <h1>Reporte Ejecutivo</h1>
+            <div class="subtitle">
+                {{ empresa.rfc }} — {{ empresa.nombre }}
+                {% if empresa.regimen_fiscal %}<br>Régimen: {{ empresa.regimen_fiscal }}{% endif %}
+            </div>
+            <div style="margin-top: 4px; font-weight: bold; font-size: 10px; color: #475569;">
+                Periodo: {{ datos.periodo_label }}
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="brand">☁ CIRRUS</div>
+            <div>Generado: {{ fecha_generacion }}</div>
+        </div>
+    </div>
+
+    <!-- AI & HEALTH SCORE -->
+    <div class="top-section">
+        <div class="health-score">
+            <div class="circle" style="
+                border-color: {% if datos.health_score > 70 %}#3fb950{% elif datos.health_score >= 40 %}#f59e0b{% else %}#ef4444{% endif %};
+            ">
+                {{ datos.health_score }}
+            </div>
+            <div class="label">Health Score</div>
+        </div>
+        <div class="ai-summary">
+            <div class="title">Resumen IA · CIRRUS AI</div>
+            <p>{{ datos.resumen_ia|default:"Análisis IA no generado para este reporte de PDF." }}</p>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card blue">
+            <div class="label">Ingresos Fact.</div>
+            <div class="value">${{ datos.total_ingresos|floatformat:2 }}</div>
+        </div>
+        <div class="kpi-card green">
+            <div class="label">Gastos Deducibles</div>
+            <div class="value">${{ datos.total_gastos_deducibles|floatformat:2 }}</div>
+        </div>
+        <div class="kpi-card {% if datos.total_no_deducible > 0 %}red{% else %}green{% endif %}">
+            <div class="label">No Deducible (Efe.)</div>
+            <div class="value">${{ datos.total_no_deducible|floatformat:2 }}</div>
+        </div>
+        <div class="kpi-card {% if datos.resultado_fiscal < 0 %}red{% else %}green{% endif %}">
+            <div class="label">Resultado Fiscal</div>
+            <div class="value">${{ datos.resultado_fiscal|floatformat:2 }}</div>
+        </div>
+    </div>
+
+    <!-- RESULTADO IVA & ACCIONES -->
+    <div class="two-col">
+        <div>
+            <div class="section-title">Impuestos y Reserva Mínima</div>
+            <table>
+                <tbody>
+                    <tr>
+                        <td>IVA Trasladado (Emitido)</td>
+                        <td class="right mono">${{ datos.iva_trasladado|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>IVA Acreditable (Recibido)</td>
+                        <td class="right mono">${{ datos.iva_acreditable|floatformat:2 }}</td>
+                    </tr>
+                    <tr style="border-top: 1px solid #cbd5e1; background: #f8fafc;">
+                        <td class="bold">IVA Neto (al SAT)</td>
+                        <td class="right mono bold {% if datos.iva_neto > 0 %}text-red{% else %}text-green{% endif %}">
+                            ${{ datos.iva_neto|floatformat:2 }}
+                        </td>
+                    </tr>
+                    <tr><td colspan="2" style="border:none; height:4px;"></td></tr>
+                    <tr>
+                        <td>ISR Provisional (Estimado ~30%)</td>
+                        <td class="right mono">${{ datos.isr_provisional|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>ISR/IVA Retenido</td>
+                        <td class="right mono">${{ datos.isr_retenido|add:datos.iva_retenido|floatformat:2 }}</td>
+                    </tr>
+                    <tr style="border-top: 1px solid #cbd5e1; background: #fffbeb;">
+                        <td class="bold">Reserva Fiscal Mínima Sugerida</td>
+                        <td class="right mono bold text-red">${{ datos.reserva_fiscal_minima|floatformat:2 }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <div class="section-title">Acciones Sugeridas</div>
+            {% if datos.acciones %}
+                {% for act in datos.acciones %}
+                <div class="action-item {{ act.prioridad }}">
+                    <div class="title">{{ act.titulo }}</div>
+                    <div class="subtitle">{{ act.subtitulo }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color:#64748b; font-size:9px; padding-top:8px;">Sin riesgos críticos en este periodo.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- PPD & TOP PROVEEDORES -->
+    <div class="two-col">
+        <div>
+            <div class="section-title">Facturas PPD (Probable falta de REP)</div>
+            {% if datos.ppd_sin_rep %}
+            <table>
+                <thead>
+                    <tr><th style="width: 55px;">Fecha</th><th>Emisor</th><th class="right">Total</th></tr>
+                </thead>
+                <tbody>
+                    {% for c in datos.ppd_sin_rep %}
+                    <tr>
+                        <td class="mono" style="font-size: 7.5px;">{{ c.fecha|date:"d/m/y" }}</td>
+                        <td>
+                            <div class="mono" style="font-size: 7.5px;">{{ c.rfc_emisor }}</div>
+                            <div class="truncate max-w-user" style="font-size: 7px; color: #64748b;">{{ c.nombre_emisor }}</div>
+                        </td>
+                        <td class="right mono">${{ c.total|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color:#64748b; font-size:9px; padding-top:8px;">No se detectaron facturas PPD sin REP asociado.</p>
+            {% endif %}
+        </div>
+        <div>
+            <div class="section-title">Top 5 Proveedores</div>
+            {% if datos.top_proveedores %}
+            <table>
+                <thead>
+                    <tr><th>Proveedor</th><th class="right">% Gasto</th><th class="right">Total</th></tr>
+                </thead>
+                <tbody>
+                    {% for p in datos.top_proveedores %}
+                    <tr>
+                        <td>
+                            <div class="mono bold" style="font-size: 8px; color: #3b82f6;">{{ p.rfc_emisor }}</div>
+                            <div class="truncate max-w-user" style="font-size: 7.5px; color: #64748b;">{{ p.nombre_emisor }}</div>
+                        </td>
+                        <td class="right" style="color: #64748b; font-size: 8px;">{{ p.pct }}%</td>
+                        <td class="right mono bold">${{ p.total_proveedor|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color:#64748b; font-size:9px; padding-top:8px;">Sin proveedores en el periodo.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- FORMAS DE PAGO & EFOS -->
+    <div class="two-col">
+        <div>
+            <div class="section-title">Forma de Pago de Egresos</div>
+            {% if datos.formas_pago %}
+            <table>
+                <thead>
+                    <tr><th>Forma</th><th class="right">%</th><th class="right">Cant.</th><th class="right">Total</th></tr>
+                </thead>
+                <tbody>
+                    {% for f in datos.formas_pago %}
+                    <tr>
+                        <td class="truncate" style="max-width: 100px;">{{ f.label }}</td>
+                        <td class="right" style="color: #64748b; font-size:8px;">{{ f.pct }}%</td>
+                        <td class="right">{{ f.count }}</td>
+                        <td class="right mono">${{ f.total|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        <div>
+            <div class="section-title">Alertas Sistema SAT</div>
+            <table>
+                <tbody>
+                    <tr>
+                        <td>Proveedores reportados en 69-B (EFOS)</td>
+                        <td class="right bold {% if datos.efos_count > 0 %}text-red{% endif %}">{{ datos.efos_count }}</td>
+                    </tr>
+                    <tr>
+                        <td>Gastos con Forma de Pago "Por Definir"</td>
+                        <td class="right bold {% if datos.pct_por_definir > 20 %}text-red{% endif %}">{{ datos.pct_por_definir }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Comprobantes Emitidos</td>
+                        <td class="right bold">{{ datos.ingresos_count }}</td>
+                    </tr>
+                    <tr>
+                        <td>Comprobantes Recibidos</td>
+                        <td class="right bold">{{ datos.gastos_count|add:datos.pagos_count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="footer">
+        Reporte generado algorítmicamente por Cirrus Intelligence a partir de los datos encriptados del contribuyente.<br>
+        Las cifras calculadas son estimaciones y no tienen validez legal como declaración ante el Servicio de Administración Tributaria (SAT).
+    </div>
+
+</body>
+</html>

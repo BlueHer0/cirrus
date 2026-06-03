@@ -1,0 +1,52 @@
+# Cirrus Cerebro — worker dedicado para tareas del Cerebro Fiscal (RAG).
+#
+# Por qué un worker aparte:
+# - Las tareas de cerebro pueden tardar 45s-5min (Qwen + bge-m3 en Spark)
+# - Si compartieran workers con Playwright (SAT scraper), bloquearían slots
+# - concurrency=1 evita sobrecargar Spark con múltiples Qwen72b simultáneos
+#
+# Deploy:
+#   sudo cp /var/www/cirrus/systemd/cirrus-cerebro.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable cirrus-cerebro
+#   sudo systemctl start cirrus-cerebro
+
+[Unit]
+Description=Cirrus Cerebro Fiscal Worker (RAG pipeline)
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=farizpe
+Group=farizpe
+WorkingDirectory=/var/www/cirrus
+Environment="PATH=/var/www/cirrus/venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/var/www/cirrus/.env
+
+# Dedicado a la cola 'cerebro' con concurrency=1.
+# No se mezcla con queues del worker principal (celery,scheduler,descarga,
+# verificacion,sistema) para no bloquear Playwright.
+ExecStart=/var/www/cirrus/venv/bin/celery \
+    -A cirrus worker \
+    -l info \
+    --concurrency=1 \
+    -Q cerebro \
+    --max-tasks-per-child=20 \
+    -n cirrus-cerebro@%%h
+
+Restart=on-failure
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=1800  # 30 min — permitir que un Qwen largo termine
+
+# Cerebro no lanza browsers — memoria más baja. Los LLM corren en Spark remoto.
+PrivateTmp=false
+ProtectSystem=strict
+ReadWritePaths=/var/www/cirrus/logs /tmp
+NoNewPrivileges=true
+
+MemoryMax=2G
+MemoryHigh=1G
+
+[Install]
+WantedBy=multi-user.target

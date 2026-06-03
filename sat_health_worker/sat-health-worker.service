@@ -1,0 +1,19 @@
+[Unit]
+Description=SAT Health Worker
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sat-health-worker
+Environment=SAT_WORKER_NODE_ID=vps2
+Environment=SAT_WORKER_NODE_IP=10.20.0.2
+Environment=SAT_HEALTH_TOKEN=
+ExecStart=/usr/local/bin/uvicorn worker:app --host 0.0.0.0 --port 8300 --workers 1
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

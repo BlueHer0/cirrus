@@ -1,0 +1,111 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Clientes{% endblock %}
+{% block page_title %}Clientes{% endblock %}
+{% block page_subtitle %}Gestión comercial — sin datos fiscales de empresas{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="glass rounded-xl p-4 mb-4">
+    <form method="get" class="flex flex-wrap items-center gap-3">
+        <input type="text" name="q" value="{{ filters.q }}" placeholder="🔍 Buscar email, nombre…"
+               class="px-3 py-2 rounded-lg text-sm text-white placeholder-gray-500 bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent w-64">
+
+        <select name="plan" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Plan: Todos</option>
+            {% for p in planes %}
+            <option value="{{ p.slug }}" {% if filters.plan == p.slug %}selected{% endif %}>{{ p.nombre }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="estado" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Estado: Todos</option>
+            <option value="active" {% if filters.estado == "active" %}selected{% endif %}>Activa</option>
+            <option value="past_due" {% if filters.estado == "past_due" %}selected{% endif %}>Pago pendiente</option>
+            <option value="canceled" {% if filters.estado == "canceled" %}selected{% endif %}>Cancelada (churned)</option>
+            <option value="trialing" {% if filters.estado == "trialing" %}selected{% endif %}>Prueba</option>
+            <option value="none" {% if filters.estado == "none" %}selected{% endif %}>Sin suscripción</option>
+        </select>
+
+        <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition">Filtrar</button>
+
+        {% if filters.q or filters.plan or filters.estado %}
+        <a href="{% url 'panel:clientes' %}" class="text-xs text-gray-500 hover:text-white">Limpiar</a>
+        {% endif %}
+
+        <span class="ml-auto text-xs text-gray-500">{{ total }} cliente(s)</span>
+    </form>
+</div>
+
+<!-- Tabla de clientes -->
+<div class="glass rounded-xl p-5">
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">Email</th>
+                <th class="pb-3 font-semibold">Plan</th>
+                <th class="pb-3 font-semibold text-right">MRR</th>
+                <th class="pb-3 font-semibold text-right">Empresas</th>
+                <th class="pb-3 font-semibold">Alta</th>
+                <th class="pb-3 font-semibold">Última act.</th>
+                <th class="pb-3 font-semibold">Estado</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in clientes %}
+            <tr class="hover:bg-white/5">
+                <td class="py-3 cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">
+                    <div class="text-white font-medium">{{ c.email|truncatechars:40 }}</div>
+                    {% if c.profile.empresa_nombre %}
+                    <div class="text-xs text-gray-500">{{ c.profile.empresa_nombre|truncatechars:40 }}</div>
+                    {% endif %}
+                </td>
+                <td class="py-3 cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold
+                        {% if c.plan_slug == 'owner' %}bg-amber-500/20 text-amber-300
+                        {% elif c.plan_slug == 'enterprise' %}bg-purple-500/20 text-purple-300
+                        {% elif c.plan_slug == 'pro' %}bg-green-500/20 text-green-300
+                        {% elif c.plan_slug == 'basico' %}bg-blue-500/20 text-blue-300
+                        {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                        {{ c.plan_nombre }}
+                    </span>
+                </td>
+                <td class="py-3 text-right font-mono text-green-400 cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">${{ c.mrr|floatformat:0 }}</td>
+                <td class="py-3 text-right text-gray-300 cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">{{ c.empresas_count }}</td>
+                <td class="py-3 text-gray-500 text-xs cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">{{ c.created_at|date:"d/m/Y" }}</td>
+                <td class="py-3 text-gray-500 text-xs cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">
+                    {% if c.last_activity %}{{ c.last_activity|timesince }} atrás{% else %}<span class="text-gray-600">—</span>{% endif %}
+                </td>
+                <td class="py-3 cursor-pointer" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">
+                    {% if c.subscription_status == 'active' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">● Activa</span>
+                    {% elif c.subscription_status == 'past_due' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-warning">● Pago pend.</span>
+                    {% elif c.subscription_status == 'canceled' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">● Churned</span>
+                    {% elif c.subscription_status == 'trialing' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-info">● Prueba</span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs" style="background:rgba(100,116,139,.2);color:#94a3b8;">○ Sin plan</span>
+                    {% endif %}
+                </td>
+                <td class="py-3 text-right">
+                    <a href="mailto:{{ c.user.email }}" onclick="event.stopPropagation();"
+                       class="inline-flex items-center px-2 py-1 rounded text-xs text-indigo-300 hover:bg-indigo-500/20 transition"
+                       title="Contactar por email">
+                        ✉ Contactar
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="py-8 text-center text-gray-600">No se encontraron clientes con estos filtros</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="text-xs text-gray-600 mt-4 text-center">
+    Vista comercial · sin datos fiscales · staff y superusers excluidos automáticamente
+</div>
+{% endblock %}

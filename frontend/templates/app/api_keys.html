@@ -5,14 +5,50 @@
 {% block page_subtitle %}Llaves de acceso para integrar con tus sistemas{% endblock %}
 
 {% block content %}
+
+{% if new_key_reveal %}
+<div class="glass rounded-xl p-5 mb-6 border-l-4 border-amber-500/70" style="background:rgba(239,159,39,0.06);">
+    <div class="flex items-start gap-3">
+        <span class="text-3xl">🔑</span>
+        <div class="flex-1">
+            <h3 class="text-base font-semibold text-amber-300">Tu nueva API Key</h3>
+            <p class="text-xs text-gray-400 mt-1 mb-3">
+                <strong>Cópiala ahora.</strong> No volverás a verla nunca.
+                Si la pierdes tendrás que generar una nueva.
+            </p>
+            <div class="flex items-center gap-2 mb-3">
+                <input type="text" readonly value="{{ new_key_reveal.plain }}"
+                       onclick="this.select()" id="new-key-value"
+                       class="flex-1 px-3 py-2 rounded-lg text-sm font-mono text-amber-200 bg-black/40 border border-amber-500/30">
+                <button onclick="navigator.clipboard.writeText(document.getElementById('new-key-value').value); this.textContent='✓ Copiada';"
+                        class="px-3 py-2 rounded-lg text-xs text-white bg-amber-600 hover:bg-amber-500 font-semibold">
+                    📋 Copiar
+                </button>
+            </div>
+            <p class="text-[11px] text-gray-600">
+                Key para <strong>{{ new_key_reveal.nombre }}</strong> · prefijo visible: <code class="text-amber-300">{{ new_key_reveal.prefix }}</code>
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if api_check.permitido %}
+<div class="glass rounded-xl p-3 mb-4 text-xs flex items-center justify-between">
+    <span class="text-gray-400">Plan: <strong class="text-white">{{ plan_slug|title }}</strong></span>
+    <span class="text-gray-400">Límite API: <strong class="text-indigo-300">{{ limite_plan }}/día</strong></span>
+</div>
+{% endif %}
+
 <div class="glass rounded-xl p-5 mb-6">
     <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Mis Keys</h3>
     <table class="glass-table w-full text-sm">
         <thead>
             <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
                 <th class="pb-3 font-semibold">Nombre</th>
-                <th class="pb-3 font-semibold">Key</th>
+                <th class="pb-3 font-semibold">Prefijo</th>
                 <th class="pb-3 font-semibold">Empresas</th>
+                <th class="pb-3 font-semibold">Uso hoy</th>
                 <th class="pb-3 font-semibold">Permisos</th>
                 <th class="pb-3 font-semibold">Estado</th>
                 <th class="pb-3 font-semibold text-right">Acciones</th>
@@ -22,9 +58,12 @@
             {% for k in api_keys %}
             <tr>
                 <td class="py-3 text-white font-medium">{{ k.nombre }}</td>
-                <td class="py-3 font-mono text-xs text-gray-500">{{ k.key|truncatechars:16 }}…</td>
+                <td class="py-3 font-mono text-xs text-gray-400">{{ k.key_prefix|default:"—" }}</td>
                 <td class="py-3 text-xs">
                     {% for e in k.empresas.all %}<span class="badge-info px-1.5 py-0.5 rounded text-[10px] mr-1">{{ e.rfc }}</span>{% empty %}<span class="text-gray-600">Ninguna</span>{% endfor %}
+                </td>
+                <td class="py-3 text-xs text-gray-400">
+                    <span class="{% if k.requests_hoy >= k.limite_requests_dia %}text-red-400{% elif k.requests_hoy > 0 %}text-amber-300{% endif %}">{{ k.requests_hoy }}</span><span class="text-gray-600">/{{ k.limite_requests_dia }}</span>
                 </td>
                 <td class="py-3 text-xs">
                     {% if k.puede_leer %}<span class="badge-success px-1.5 py-0.5 rounded text-[10px] mr-1">Leer</span>{% endif %}
@@ -39,13 +78,13 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="revoke">
                         <input type="hidden" name="key_id" value="{{ k.id }}">
-                        <button type="submit" class="text-red-400/60 hover:text-red-400 text-xs" onclick="return confirm('¿Revocar esta key?')">Revocar</button>
+                        <button type="submit" class="text-red-400/60 hover:text-red-400 text-xs" onclick="return confirm('¿Revocar esta key? Sistemas que la estén usando van a fallar.')">Revocar</button>
                     </form>
                     {% endif %}
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="6" class="py-8 text-center text-gray-600">No tienes API keys</td></tr>
+            <tr><td colspan="7" class="py-8 text-center text-gray-600">No tienes API keys</td></tr>
             {% endfor %}
         </tbody>
     </table>

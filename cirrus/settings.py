@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     # Local
     "core",
     "accounts",
+    "reportes",
 ]
 
 MIDDLEWARE = [
@@ -117,6 +118,8 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_WORKER_SEND_TASK_EVENTS = True
 CELERY_TASK_SEND_SENT_EVENT = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # ── Telegram Alerts ──────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = config("TELEGRAM_BOT_TOKEN", default="")
@@ -161,6 +164,37 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour="8", minute="0"),
         "options": {"queue": "sistema"},
     },
+    "sat-health-probe": {
+        "task": "core.tasks.sat_health_probe",
+        "schedule": 300,  # every 5 minutes
+        "options": {"queue": "sistema"},
+    },
+    "sat-health-summarize": {
+        "task": "core.tasks.sat_health_summarize",
+        "schedule": 3600,  # every hour
+        "options": {"queue": "sistema"},
+    },
+    "supervisor-pipelines": {
+        "task": "core.tasks.supervisor_pipelines",
+        "schedule": 300,  # every 5 minutes
+        "options": {"queue": "sistema"},
+    },
+    "limpiar-tmp-fiel": {
+        "task": "core.tasks.limpiar_tmp_fiel",
+        "schedule": 1800,  # every 30 minutes
+        "options": {"queue": "sistema"},
+    },
+    # ── API Keys maintenance ────────────────────────────────────────
+    "reset-apikey-requests-diarios": {
+        "task": "core.tasks_api_keys.reset_apikey_requests_diarios",
+        "schedule": crontab(hour="0", minute="5"),  # cada día a las 00:05
+        "options": {"queue": "sistema"},
+    },
+    "desactivar-apikeys-plan-cancelado": {
+        "task": "core.tasks_api_keys.desactivar_apikeys_plan_cancelado",
+        "schedule": 3600,  # cada hora
+        "options": {"queue": "sistema"},
+    },
 }
 
 CELERY_TASK_ROUTES = {
@@ -177,6 +211,12 @@ CELERY_TASK_ROUTES = {
     "core.tasks.descargar_csf_mensual": {"queue": "descarga"},
     "core.tasks.descargar_csf_empresa": {"queue": "descarga"},
     "core.tasks.alertas_vencimiento_fiel": {"queue": "sistema"},
+    "core.tasks.sat_health_probe": {"queue": "sistema"},
+    "core.tasks.sat_health_summarize": {"queue": "sistema"},
+    "core.tasks.supervisor_pipelines": {"queue": "sistema"},
+    "core.tasks.limpiar_tmp_fiel": {"queue": "sistema"},
+    # Cerebro Fiscal — worker dedicado cirrus-cerebro.service
+    "core.cerebro_tasks.procesar_documento_fiscal": {"queue": "cerebro"},
 }
 CELERY_TASK_DEFAULT_QUEUE = "sistema"
 
@@ -189,6 +229,24 @@ SESSION_COOKIE_HTTPONLY = True             # No JS access
 SESSION_COOKIE_SAMESITE = "Lax"           # CSRF protection
 CSRF_COOKIE_SECURE = True                 # CSRF only HTTPS
 
+# ── Docling (CSF Parser) ────────────────────────────────────────────────
+DOCLING_URL = config("DOCLING_URL", default="http://10.20.0.5:8000/extract")
+
+# ── Cerebro Fiscal (RAG sobre legislación fiscal) ──────────────────────
+# Embeddings locales via Ollama en Spark DGX — sin API key, sin costo variable.
+OLLAMA_BASE_URL = config("OLLAMA_BASE_URL", default="http://10.20.0.6:11434")
+OLLAMA_EMBEDDING_MODEL = config("OLLAMA_EMBEDDING_MODEL", default="bge-m3")
+OLLAMA_TIMEOUT = config("OLLAMA_TIMEOUT", default=60, cast=int)
+CEREBRO_EMBEDDING_DIMS = config("CEREBRO_EMBEDDING_DIMS", default=1024, cast=int)
+CEREBRO_CHUNK_TOKENS = config("CEREBRO_CHUNK_TOKENS", default=300, cast=int)
+CEREBRO_CHUNK_OVERLAP = config("CEREBRO_CHUNK_OVERLAP", default=50, cast=int)
+# Qwen 72B para clasificación / extracción de metadata
+OLLAMA_CLASSIFIER_MODEL = config("OLLAMA_CLASSIFIER_MODEL", default="qwen2.5:72b")
+OLLAMA_CLASSIFIER_TIMEOUT = config("OLLAMA_CLASSIFIER_TIMEOUT", default=300, cast=int)
+# Los documentos se almacenan en el bucket `cirrus` con prefix `cerebro-fiscal/`
+# para no requerir permisos de creación de buckets en MinIO.
+CEREBRO_MINIO_PREFIX = config("CEREBRO_MINIO_PREFIX", default="cerebro-fiscal")
+
 # ── MinIO (S3-compatible Object Storage) ─────────────────────────────────
 MINIO_ENDPOINT = config("MINIO_ENDPOINT", default="localhost:9000")
 MINIO_ACCESS_KEY = config("MINIO_ACCESS_KEY", default="minioadmin")
@@ -198,6 +256,9 @@ MINIO_USE_SSL = config("MINIO_USE_SSL", default=False, cast=bool)
 
 # ── FIEL Encryption ─────────────────────────────────────────────────────
 FIEL_ENCRYPTION_KEY = config("FIEL_ENCRYPTION_KEY", default="")
+
+# ── SAT Health Monitor ───────────────────────────────────────────────────
+SAT_HEALTH_TOKEN = config("SAT_HEALTH_TOKEN", default="")
 
 # ── Playwright ───────────────────────────────────────────────────────────
 PLAYWRIGHT_BROWSERS_PATH = config("PLAYWRIGHT_BROWSERS_PATH", default=str(BASE_DIR / ".browsers"))

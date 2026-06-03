@@ -10,8 +10,9 @@ import re
 
 logger = logging.getLogger("core.csf_parser")
 
-# Docling endpoint — to be confirmed
-DOCLING_URL = "http://10.20.0.5:8000/extract"
+# Docling endpoint — configurable via env var, defaults to nodo5
+from django.conf import settings
+DOCLING_URL = getattr(settings, "DOCLING_URL", "http://10.20.0.5:8000/extract")
 
 
 def parsear_csf_con_docling(pdf_bytes):
@@ -28,9 +29,12 @@ def parsear_csf_con_docling(pdf_bytes):
         if response.ok:
             data = response.json()
             result = _extraer_campos_csf(data)
-            if result:
+            # Validate result has actual CSF fields, not just raw Docling JSON
+            if result and any(k in result for k in ("razon_social", "rfc", "codigo_postal", "regimen_fiscal")):
                 logger.info("CSF parsed via Docling: %d fields", len(result))
                 return result
+            else:
+                logger.info("Docling returned data but no CSF fields extracted, falling back to pdfplumber")
     except Exception as e:
         logger.info("Docling unavailable (%s), falling back to pdfplumber", e)
 

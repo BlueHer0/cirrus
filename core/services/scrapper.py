@@ -91,8 +91,10 @@ def ejecutar_descarga(empresa, descarga_log) -> DownloadResult:
             }
 
         # Phase 4: Process downloaded XMLs → MinIO + PostgreSQL
+        from django.db import transaction
         with StepTimer(descarga_log, "xml_process", "cirrus") as step:
-            processed_count = process_downloaded_xmls(download_dir, empresa)
+            with transaction.atomic():
+                processed_count = process_downloaded_xmls(download_dir, empresa)
             step.metadata = {"processed": processed_count}
 
         logger.info(

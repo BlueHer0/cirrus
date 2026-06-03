@@ -1,0 +1,254 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Telegram — Configuración{% endblock %}
+{% block page_title %}Telegram{% endblock %}
+{% block page_subtitle %}Bot de alertas, vinculación de usuarios y log de eventos{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #22c55e;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Estado</div>
+        <div class="text-lg font-bold {% if settings.telegram_enabled %}text-green-400{% else %}text-gray-500{% endif %}">
+            {% if settings.telegram_enabled %}● Habilitado{% else %}○ Deshabilitado{% endif %}
+        </div>
+        <div class="text-[11px] text-gray-500 mt-1">{{ settings.telegram_bot_username|default:"sin bot" }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #22c55e;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Enviados 24h</div>
+        <div class="text-2xl font-bold text-white">{{ stats.sent_24h }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">{{ stats.sent_7d }} en 7d</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #ef4444;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Fallidos 24h</div>
+        <div class="text-2xl font-bold {% if stats.failed_24h > 0 %}text-red-400{% else %}text-white{% endif %}">{{ stats.failed_24h }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">{{ stats.failed_7d }} en 7d</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #64748b;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Omitidos 24h</div>
+        <div class="text-2xl font-bold text-gray-400">{{ stats.skipped_24h }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">por config</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #6366f1;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Vinculados</div>
+        <div class="text-2xl font-bold text-white">{{ linked_users|length }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">usuarios</div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <!-- ═══ Configuración ═══ -->
+    <div class="glass rounded-xl p-5 lg:col-span-2">
+        <h3 class="text-lg font-semibold text-white mb-4">Parámetros del bot</h3>
+
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save">
+
+            <div>
+                <label class="flex items-center gap-2 text-sm text-white">
+                    <input type="checkbox" name="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %}>
+                    <span class="font-medium">Habilitar envío de alertas</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1 ml-6">Si está deshabilitado, no se envía nada (pero se siguen registrando como "omitido")</p>
+            </div>
+
+            <div>
+                <label class="block text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Bot Token</label>
+                <input type="password" name="telegram_bot_token" placeholder="Dejar vacío para no cambiar"
+                       class="w-full px-3 py-2 rounded-lg text-sm text-white bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent font-mono">
+                <p class="text-xs text-gray-500 mt-1">Actual: <span class="font-mono text-gray-400">{{ token_preview|default:"— sin configurar —" }}</span></p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Bot username</label>
+                    <input type="text" name="telegram_bot_username" value="{{ settings.telegram_bot_username }}" placeholder="Cirrusbot_bot"
+                           class="w-full px-3 py-2 rounded-lg text-sm text-white bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Chat ID del admin</label>
+                    <input type="text" name="telegram_admin_chat_id" value="{{ settings.telegram_admin_chat_id }}" placeholder="15821818"
+                           class="w-full px-3 py-2 rounded-lg text-sm text-white bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent font-mono">
+                </div>
+            </div>
+
+            <div>
+                <label class="flex items-center gap-2 text-sm text-white p-3 rounded-lg bg-white/5 border border-white/10">
+                    <input type="checkbox" name="telegram_solo_stack" {% if settings.telegram_solo_stack %}checked{% endif %}>
+                    <span>🛡️ Solo alertas de <strong>stack</strong> (silencia eventos individuales de descarga, FIEL de clientes y probes). Recomendado.</span>
+                </label>
+            </div>
+
+            <div>
+                <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Niveles que se envían al admin</div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" name="telegram_send_info" {% if settings.telegram_send_info %}checked{% endif %}>
+                        <span>ℹ️ Info</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" name="telegram_send_warning" {% if settings.telegram_send_warning %}checked{% endif %}>
+                        <span>⚠️ Warning</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" name="telegram_send_error" {% if settings.telegram_send_error %}checked{% endif %}>
+                        <span>🔴 Error</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-300">
+                        <input type="checkbox" name="telegram_send_critical" {% if settings.telegram_send_critical %}checked{% endif %}>
+                        <span>🚨 Critical</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 pt-2">
+                <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition font-semibold">
+                    Guardar configuración
+                </button>
+                <span class="text-xs text-gray-600">Última actualización: {{ settings.updated_at|date:"d/m/Y H:i" }}{% if settings.updated_by %} por {{ settings.updated_by.email }}{% endif %}</span>
+            </div>
+        </form>
+    </div>
+
+    <!-- ═══ Test manual ═══ -->
+    <div class="glass rounded-xl p-5">
+        <h3 class="text-lg font-semibold text-white mb-4">Probar envío</h3>
+        <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="test">
+            <textarea name="test_message" rows="4" placeholder="Mensaje de prueba..."
+                      class="w-full px-3 py-2 rounded-lg text-sm text-white bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent resize-none">Test manual desde panel admin — {{ settings.updated_at|date:"H:i" }}</textarea>
+            <button type="submit" class="w-full px-4 py-2 rounded-lg text-sm text-white bg-green-600 hover:bg-green-500 transition font-semibold">
+                🚀 Enviar al admin
+            </button>
+        </form>
+        <div class="mt-4 pt-4 border-t border-white/5">
+            <p class="text-xs text-gray-500">
+                Destino: <span class="font-mono text-gray-400">{{ settings.telegram_admin_chat_id|default:"— sin chat_id —" }}</span>
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+                Bot: <a href="https://t.me/{{ settings.telegram_bot_username }}" target="_blank" class="text-indigo-400 hover:text-indigo-300">@{{ settings.telegram_bot_username|default:"—" }}</a>
+            </p>
+            {% if settings.telegram_bot_username %}
+            <p class="text-[11px] text-gray-600 mt-2">
+                Antes de recibir mensajes, el usuario debe abrir el bot en Telegram y enviar <code class="text-indigo-300">/start</code>.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Usuarios vinculados ═══ -->
+<div class="glass rounded-xl p-5 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white">Usuarios vinculados con el bot</h3>
+        <span class="text-xs text-gray-500">{{ linked_users|length }} vinculado(s)</span>
+    </div>
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">Email</th>
+                <th class="pb-3 font-semibold">Plan</th>
+                <th class="pb-3 font-semibold">Chat ID</th>
+                <th class="pb-3 font-semibold">Vinculado</th>
+                <th class="pb-3 font-semibold">Alertas</th>
+                <th class="pb-3 font-semibold">Rol</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in linked_users %}
+            <tr class="cursor-pointer hover:bg-white/5" onclick="location.href='{% url 'panel:cliente_detalle' p.user.id %}'">
+                <td class="py-3 text-white">{{ p.user.email|truncatechars:35 }}</td>
+                <td class="py-3">
+                    <span class="text-xs text-gray-400">{{ p.plan_fk.nombre|default:p.plan_legacy|default:"—" }}</span>
+                </td>
+                <td class="py-3 font-mono text-indigo-300">{{ p.telegram_chat_id }}</td>
+                <td class="py-3 text-gray-500 text-xs">{% if p.telegram_linked_at %}{{ p.telegram_linked_at|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                <td class="py-3">
+                    {% if p.telegram_alerts_enabled %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">● ON</span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs" style="background:rgba(100,116,139,.2);color:#94a3b8;">○ OFF</span>
+                    {% endif %}
+                </td>
+                <td class="py-3">
+                    {% if p.user.is_staff %}
+                    <span class="text-xs text-amber-400 font-semibold">ADMIN</span>
+                    {% else %}
+                    <span class="text-xs text-gray-500">cliente</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="py-6 text-center text-gray-600">Ningún usuario vinculado todavía</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- ═══ Log de alertas ═══ -->
+<div class="glass rounded-xl p-5">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white">Log de eventos (últimos 50)</h3>
+        <span class="text-xs text-gray-500">Historial de intentos de envío</span>
+    </div>
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">Fecha</th>
+                <th class="pb-3 font-semibold">Nivel</th>
+                <th class="pb-3 font-semibold">Categoría</th>
+                <th class="pb-3 font-semibold">Mensaje</th>
+                <th class="pb-3 font-semibold">Chat</th>
+                <th class="pb-3 font-semibold">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in recent_alerts %}
+            <tr>
+                <td class="py-2 text-gray-500 text-xs whitespace-nowrap">{{ a.created_at|date:"d/m H:i:s" }}</td>
+                <td class="py-2">
+                    <span class="text-xs font-semibold
+                        {% if a.level == 'critical' %}text-red-400
+                        {% elif a.level == 'error' %}text-red-300
+                        {% elif a.level == 'warning' %}text-yellow-400
+                        {% elif a.level == 'info' %}text-blue-400
+                        {% else %}text-green-400{% endif %}">
+                        {{ a.level|upper }}
+                    </span>
+                </td>
+                <td class="py-2 text-gray-400 text-xs">{{ a.category|default:"—" }}</td>
+                <td class="py-2 text-gray-300" title="{{ a.message }}">{{ a.message|truncatechars:60 }}</td>
+                <td class="py-2 font-mono text-indigo-300 text-xs">{{ a.chat_id|default:"—" }}</td>
+                <td class="py-2">
+                    {% if a.status == 'sent' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs badge-success">✓ sent</span>
+                    {% elif a.status == 'failed' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs badge-error" title="{{ a.error }}">✗ {{ a.http_status|default:"fail" }}</span>
+                    {% elif a.status == 'skipped' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs" style="background:rgba(100,116,139,.2);color:#94a3b8;" title="{{ a.error }}">⊘ skipped</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="py-6 text-center text-gray-600">Sin eventos registrados todavía</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- ═══ Info: próximos pasos ═══ -->
+<div class="glass rounded-xl p-5 mt-6 border-l-4 border-indigo-500/50">
+    <h3 class="text-sm font-semibold text-white mb-2">Siguiente: onboarding de clientes</h3>
+    <p class="text-xs text-gray-400 leading-relaxed">
+        El campo <code class="text-indigo-300">telegram_chat_id</code> ya existe en el perfil de cada cliente. Para habilitar onboarding automático:
+    </p>
+    <ol class="text-xs text-gray-500 mt-2 space-y-1 list-decimal list-inside">
+        <li>Crear un <strong>deep link</strong>: <code class="text-indigo-300">https://t.me/{{ settings.telegram_bot_username|default:"Cirrusbot_bot" }}?start={user_token}</code></li>
+        <li>Implementar <strong>webhook</strong> del bot para recibir <code>/start &lt;token&gt;</code> y guardar el chat_id del usuario automáticamente</li>
+        <li>Dar al cliente un botón "Vincular Telegram" en su perfil que genere el token y abra el deep link</li>
+        <li>Filtrar alertas por empresa: cuando un cliente tiene FIEL por vencer, notificar SOLO a su chat_id vinculado (además del admin)</li>
+    </ol>
+</div>
+{% endblock %}

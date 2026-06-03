@@ -1,0 +1,274 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Cerebro Fiscal{% endblock %}
+{% block page_title %}🧠 Cerebro Fiscal{% endblock %}
+{% block page_subtitle %}Biblioteca documental con RAG — pipeline automático de 4 fases{% endblock %}
+
+{% block extra_head %}
+<style>
+.dropzone {
+    border: 2px dashed rgba(99,102,241,0.35);
+    border-radius: 14px;
+    padding: 40px 20px;
+    text-align: center;
+    background: rgba(99,102,241,0.04);
+    transition: all 0.15s;
+    cursor: pointer;
+}
+.dropzone.over {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.12);
+}
+.dropzone input[type=file] {
+    display: none;
+}
+.estado-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.03em;
+}
+.e-recibido     { background: rgba(148,163,184,0.2); color: #94a3b8; }
+.e-convirtiendo { background: rgba(59,130,246,0.2); color: #60a5fa; }
+.e-convertido   { background: rgba(59,130,246,0.15); color: #93c5fd; }
+.e-validando    { background: rgba(245,158,11,0.2); color: #fbbf24; animation: pulse 2s infinite; }
+.e-validado     { background: rgba(34,197,94,0.18); color: #86efac; }
+.e-embeddiendo  { background: rgba(245,158,11,0.25); color: #fcd34d; animation: pulse 2s infinite; }
+.e-indexado     { background: rgba(34,197,94,0.25); color: #4ade80; }
+.e-rechazado    { background: rgba(239,68,68,0.22); color: #fca5a5; }
+.e-error        { background: rgba(239,68,68,0.3);  color: #ef4444; }
+.e-requiere_decision { background: rgba(245,158,11,0.3); color: #fde68a; animation: pulse 1s infinite; border: 1px solid rgba(245,158,11,0.6); }
+.e-archivado    { background: rgba(100,116,139,0.2); color: #94a3b8; }
+.row-archivado { opacity: 0.55; }
+.row-archivado td { color: #94a3b8 !important; }
+.row-decision { background: rgba(245,158,11,0.04); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if not spark_disponible %}
+<div class="glass rounded-xl p-4 mb-4 border-l-4 border-amber-500/60" style="background:rgba(239,159,39,0.05);">
+    <div class="flex items-start gap-3">
+        <span class="text-2xl">⚠️</span>
+        <div class="flex-1">
+            <h3 class="text-sm font-semibold text-amber-400">Spark DGX no disponible</h3>
+            <p class="text-xs text-gray-400 mt-1">
+                Ollama (<code class="text-amber-300">10.20.0.6:11434</code>) no responde.
+                Los documentos se recibirán pero quedarán pendientes hasta que el Spark vuelva.
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="glass rounded-xl p-3 mb-4 border-l-4 border-green-500/50" style="background:rgba(34,197,94,0.04);">
+    <div class="flex items-center gap-2 text-xs">
+        <span class="text-green-400">●</span>
+        <span class="text-gray-400">
+            Spark DGX operativo · Pipeline: Docling → <code class="text-amber-300">qwen2.5:72b</code> (clasificador) → <code class="text-green-300">bge-m3</code> (1024 dim)
+        </span>
+    </div>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #6366f1;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Total</div>
+        <div class="text-2xl font-bold text-white">{{ stats.total_docs }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #22c55e;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Indexados</div>
+        <div class="text-2xl font-bold text-green-400">{{ stats.indexados }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #f59e0b;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Procesando</div>
+        <div class="text-2xl font-bold {% if stats.procesando > 0 %}text-amber-400{% else %}text-white{% endif %}">{{ stats.procesando }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #ef4444;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Rechazados</div>
+        <div class="text-2xl font-bold {% if stats.rechazados > 0 %}text-red-300{% else %}text-white{% endif %}">{{ stats.rechazados }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #ef4444;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Con error</div>
+        <div class="text-2xl font-bold {% if stats.con_error > 0 %}text-red-400{% else %}text-white{% endif %}">{{ stats.con_error }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #8b5cf6;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Chunks totales</div>
+        <div class="text-2xl font-bold text-white">{{ stats.total_chunks }}</div>
+    </div>
+</div>
+
+<!-- Drag & Drop -->
+<form method="post" enctype="multipart/form-data" id="upload-form" class="mb-6">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="upload">
+    <label for="file-input" class="dropzone block" id="dropzone">
+        <div class="text-5xl mb-2">📥</div>
+        <div class="text-base text-white font-medium mb-1">Arrastra archivos o haz click para seleccionar</div>
+        <div class="text-xs text-gray-500">PDF, PNG, JPG, DOCX, TXT, MD, HTML · Máx 10 archivos · 50 MB c/u</div>
+        <div class="text-[11px] text-gray-600 mt-3">
+            El título, categoría, año de vigencia y demás metadata se extraen automáticamente con IA.
+            Solo sube el archivo.
+        </div>
+        <input type="file" name="archivos" id="file-input" multiple
+               accept=".pdf,.png,.jpg,.jpeg,.docx,.txt,.md,.markdown,.html,.htm">
+        <div id="file-list" class="mt-4 text-xs text-indigo-300"></div>
+        <button type="submit" id="submit-btn" disabled
+                class="hidden mt-4 px-5 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500 font-semibold">
+            Subir y procesar
+        </button>
+    </label>
+</form>
+
+<script>
+(function() {
+    const dz = document.getElementById('dropzone');
+    const fi = document.getElementById('file-input');
+    const fl = document.getElementById('file-list');
+    const btn = document.getElementById('submit-btn');
+
+    function updateList() {
+        const files = fi.files;
+        if (!files || files.length === 0) {
+            fl.innerHTML = '';
+            btn.classList.add('hidden');
+            btn.disabled = true;
+            return;
+        }
+        const names = [];
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            names.push(`${f.name} (${(f.size/1024/1024).toFixed(1)} MB)`);
+        }
+        fl.innerHTML = names.map(n => `<div>✓ ${n}</div>`).join('');
+        btn.classList.remove('hidden');
+        btn.disabled = false;
+    }
+
+    fi.addEventListener('change', updateList);
+
+    ['dragenter', 'dragover'].forEach(ev => {
+        dz.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation();
+            dz.classList.add('over');
+        });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+        dz.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation();
+            dz.classList.remove('over');
+        });
+    });
+    dz.addEventListener('drop', e => {
+        fi.files = e.dataTransfer.files;
+        updateList();
+    });
+})();
+</script>
+
+<!-- Lista de documentos -->
+<div class="glass rounded-xl p-5">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 class="text-lg font-semibold text-white">Biblioteca</h3>
+        <form method="get" class="flex items-center gap-2">
+            <label class="text-xs text-gray-500">Estado:</label>
+            <select name="estado" onchange="this.form.submit()"
+                    class="text-xs bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-200">
+                <option value="">Todos ({{ stats.total_docs }})</option>
+                {% for slug, label in estado_choices %}
+                <option value="{{ slug }}" {% if estado_filter == slug %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            {% if estado_filter %}
+            <a href="{% url 'panel:cerebro_fiscal' %}" class="text-[11px] text-gray-500 hover:text-white">✕ limpiar</a>
+            {% endif %}
+            <span class="text-xs text-gray-500 ml-2">{{ documentos|length }} mostrado(s)</span>
+        </form>
+    </div>
+
+    {% if stats.requiere_decision %}
+    <div class="mb-3 p-2 rounded-lg text-xs" style="background:rgba(245,158,11,0.08); border-left:3px solid #f59e0b;">
+        ⚠️ <span class="text-amber-300 font-semibold">{{ stats.requiere_decision }}</span>
+        documento(s) requieren acción —
+        <a href="?estado=requiere_decision" class="underline text-amber-200">ver</a>
+    </div>
+    {% endif %}
+    <table class="glass-table w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-3 font-semibold">Archivo original</th>
+                <th class="pb-3 font-semibold">Título (LLM)</th>
+                <th class="pb-3 font-semibold">Categoría</th>
+                <th class="pb-3 font-semibold">Estado</th>
+                <th class="pb-3 font-semibold text-right">Chunks</th>
+                <th class="pb-3 font-semibold">Fecha</th>
+                <th class="pb-3 font-semibold text-right">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documentos %}
+            <tr class="hover:bg-white/5 {% if doc.estado == 'archivado' %}row-archivado{% elif doc.estado == 'requiere_decision' %}row-decision{% endif %}">
+                <td class="py-3">
+                    <a href="{% url 'panel:cerebro_detalle' doc.id %}" class="text-white hover:text-indigo-300">
+                        {{ doc.nombre_archivo_original|truncatechars:45 }}
+                    </a>
+                </td>
+                <td class="py-3 text-gray-300">
+                    {% if doc.titulo %}{{ doc.titulo|truncatechars:50 }}{% else %}<span class="text-gray-600 italic">—</span>{% endif %}
+                </td>
+                <td class="py-3">
+                    {% if doc.categoria %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-300">{{ doc.get_categoria_display }}</span>
+                    {% else %}
+                    <span class="text-gray-600">—</span>
+                    {% endif %}
+                </td>
+                <td class="py-3">
+                    <span class="estado-badge e-{{ doc.estado }}" {% if doc.estado == 'rechazado' and doc.motivo_rechazo %}title="{{ doc.motivo_rechazo }}"{% elif doc.estado == 'error' and doc.error_detalle %}title="{{ doc.error_detalle }}"{% endif %}>
+                        {{ doc.get_estado_display }}
+                    </span>
+                </td>
+                <td class="py-3 text-right text-gray-300">{{ doc.chunks_count }}</td>
+                <td class="py-3 text-xs text-gray-500">
+                    {{ doc.creado_en|date:"d/m/Y H:i" }}
+                    {% if doc.subido_por %}<br><span class="text-[10px]">{{ doc.subido_por.email|default:doc.subido_por.username }}</span>{% endif %}
+                </td>
+                <td class="py-3 text-right whitespace-nowrap">
+                    <a href="{% url 'panel:cerebro_detalle' doc.id %}" class="px-2 py-1 rounded text-xs text-gray-300 hover:bg-white/5" title="Detalle">📄</a>
+                    {% if doc.estado != 'convirtiendo' and doc.estado != 'validando' and doc.estado != 'embeddiendo' %}
+                    <form method="post" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reprocess">
+                        <input type="hidden" name="documento_id" value="{{ doc.id }}">
+                        <button type="submit" class="px-2 py-1 rounded text-xs text-indigo-300 hover:bg-indigo-500/20" title="Re-procesar">🔄</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" class="inline" onsubmit="return confirm('Eliminar {{ doc.nombre_archivo_original|escapejs }} + todos sus chunks?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="documento_id" value="{{ doc.id }}">
+                        <button type="submit" class="px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/20" title="Eliminar">🗑</button>
+                    </form>
+                </td>
+            </tr>
+            {% if doc.estado == 'rechazado' and doc.motivo_rechazo %}
+            <tr class="bg-red-500/[0.03]">
+                <td></td>
+                <td colspan="6" class="py-1 text-[11px] text-red-300 italic">↳ {{ doc.motivo_rechazo|truncatechars:220 }}</td>
+            </tr>
+            {% endif %}
+            {% if doc.estado == 'error' and doc.error_detalle %}
+            <tr class="bg-red-500/[0.02]">
+                <td></td>
+                <td colspan="6" class="py-1 text-[11px] text-red-300 italic">↳ {{ doc.error_detalle|truncatechars:220 }}</td>
+            </tr>
+            {% endif %}
+            {% empty %}
+            <tr><td colspan="7" class="py-8 text-center text-gray-600">Sin documentos todavía. Sube el primero arriba.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

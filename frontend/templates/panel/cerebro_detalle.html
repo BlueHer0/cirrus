@@ -1,0 +1,247 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}{{ doc.titulo|default:doc.nombre_archivo_original }}{% endblock %}
+{% block page_title %}{{ doc.titulo|default:"(sin título aún)" }}{% endblock %}
+{% block page_subtitle %}{{ doc.nombre_archivo_original }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'panel:cerebro_fiscal' %}" class="text-sm text-gray-400 hover:text-white">← Volver a la biblioteca</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.tl-item { display: flex; align-items: flex-start; gap: 14px; padding: 10px 0; }
+.tl-dot {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 12px;
+}
+.tl-dot.done    { background: #22c55e; color: white; }
+.tl-dot.current { background: #f59e0b; color: white; animation: pulse 1.5s infinite; }
+.tl-dot.pending { background: rgba(100,116,139,0.2); color: #64748b; border: 2px solid rgba(100,116,139,0.4); }
+.tl-dot.skipped { background: rgba(100,116,139,0.1); color: #475569; }
+.tl-dot.error   { background: #ef4444; color: white; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
+.tl-line {
+    width: 2px; min-height: 20px; margin-left: 11px;
+    background: linear-gradient(180deg, #22c55e 0%, rgba(100,116,139,0.3) 100%);
+}
+.tl-pending .tl-line { background: rgba(100,116,139,0.2); }
+.meta-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.chunk-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: #cbd5e1;
+    max-height: 200px;
+    overflow-y: auto;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if is_requiere_decision %}
+<div class="glass rounded-xl p-5 mb-5" style="background:rgba(245,158,11,0.08); border:2px solid rgba(245,158,11,0.5); animation: soft-pulse 2s infinite;">
+    <div class="flex items-start gap-4">
+        <div class="text-4xl">⚠️</div>
+        <div class="flex-1">
+            <div class="text-base font-bold text-amber-300 mb-1">Versión anterior detectada — requiere acción</div>
+            <p class="text-sm text-gray-300 mb-3">
+                Este documento parece ser una versión actualizada de:
+                {% if version_anterior %}
+                <a href="{% url 'panel:cerebro_detalle' version_anterior.id %}" class="text-amber-200 underline font-medium">
+                    {{ version_anterior.titulo|default:version_anterior.nombre_archivo_original }}
+                </a>
+                <span class="text-xs text-gray-500">(subido {{ version_anterior.creado_en|date:"d/m/Y" }})</span>
+                {% else %}
+                <span class="text-gray-400 italic">{{ doc.metadata_extra.version_anterior_titulo|default:"(referencia perdida)" }}</span>
+                {% endif %}
+            </p>
+            <p class="text-xs text-gray-400 mb-4">¿Qué deseas hacer?</p>
+            <div class="flex flex-wrap gap-2">
+                <form method="post" action="{% url 'panel:cerebro_resolver' doc.id %}" class="inline"
+                      onsubmit="return confirm('Archivar la versión anterior y indexar ésta? Los chunks previos se borrarán.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="reemplazar">
+                    <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500 font-semibold">
+                        🔁 Reemplazar versión anterior
+                    </button>
+                </form>
+                <form method="post" action="{% url 'panel:cerebro_resolver' doc.id %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="mantener">
+                    <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-slate-700 hover:bg-slate-600 font-semibold">
+                        📚 Mantener ambas versiones
+                    </button>
+                </form>
+                <form method="post" action="{% url 'panel:cerebro_resolver' doc.id %}" class="inline"
+                      onsubmit="return confirm('Eliminar este documento nuevo? Esta acción no se puede deshacer.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="cancelar">
+                    <button type="submit" class="px-4 py-2 rounded-lg text-sm text-red-300 bg-red-500/20 hover:bg-red-500/30 font-semibold">
+                        🗑 Cancelar — eliminar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<style>@keyframes soft-pulse { 0%,100%{border-color:rgba(245,158,11,0.5);} 50%{border-color:rgba(245,158,11,0.85);} }</style>
+{% endif %}
+
+{% if is_archivado %}
+<div class="glass rounded-xl p-4 mb-5" style="background:rgba(100,116,139,0.1); border-left:4px solid #64748b;">
+    <div class="text-sm text-gray-300">
+        📦 <span class="font-semibold">Documento archivado</span> — fue reemplazado por una versión más reciente. No aparece en búsquedas RAG.
+    </div>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <!-- Timeline de fases -->
+    <div class="glass rounded-xl p-5 lg:col-span-1">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Pipeline</h3>
+        {% for step in timeline %}
+        <div class="tl-item">
+            <div class="tl-dot {{ step.status }}">
+                {% if step.status == 'done' %}✓{% elif step.status == 'current' %}●{% elif step.status == 'skipped' %}—{% else %}{{ forloop.counter }}{% endif %}
+            </div>
+            <div class="flex-1">
+                <div class="text-sm {% if step.status == 'done' %}text-white{% elif step.status == 'current' %}text-amber-300 font-semibold{% elif step.status == 'skipped' %}text-gray-600 line-through{% else %}text-gray-400{% endif %}">
+                    {{ step.label }}
+                </div>
+                {% if step.status == 'current' %}
+                <div class="text-[11px] text-gray-500">En progreso…</div>
+                {% endif %}
+            </div>
+        </div>
+        {% if not forloop.last %}
+        <div class="tl-line {% if timeline|slice:forloop.counter|last|default_if_none:'' and forloop.counter >= timeline|length %}tl-pending{% endif %}"></div>
+        {% endif %}
+        {% endfor %}
+
+        {% if is_rechazado %}
+        <div class="mt-4 p-3 rounded-lg" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);">
+            <div class="text-xs font-semibold text-red-300 uppercase mb-1">❌ Rechazado</div>
+            <div class="text-xs text-gray-300">{{ doc.motivo_rechazo|default:"El LLM determinó que no es un documento fiscal." }}</div>
+        </div>
+        {% endif %}
+
+        {% if is_error %}
+        <div class="mt-4 p-3 rounded-lg" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);">
+            <div class="text-xs font-semibold text-red-300 uppercase mb-1">❗ Error</div>
+            <div class="text-xs text-gray-300 font-mono">{{ doc.error_detalle|truncatechars:400 }}</div>
+        </div>
+        {% endif %}
+
+        <div class="mt-5 flex items-center gap-2">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reprocess">
+                <button type="submit" class="px-3 py-1.5 rounded-lg text-xs text-white bg-indigo-600 hover:bg-indigo-500 font-semibold">
+                    🔄 Re-procesar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Metadata extraída -->
+    <div class="glass rounded-xl p-5 lg:col-span-2">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Metadata extraída (Qwen 2.5 72B)</h3>
+        {% if doc.titulo %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Título</span><span class="text-white text-sm font-medium">{{ doc.titulo }}</span></div>
+        {% endif %}
+        {% if doc.categoria %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Categoría</span><span class="text-indigo-300 text-sm">{{ doc.get_categoria_display }}</span></div>
+        {% endif %}
+        {% if doc.organismo_emisor %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Organismo emisor</span><span class="text-white text-sm">{{ doc.organismo_emisor }}</span></div>
+        {% endif %}
+        {% if doc.año_vigencia %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Año vigencia</span><span class="text-white text-sm">{{ doc.año_vigencia }}</span></div>
+        {% endif %}
+        {% if doc.fecha_publicacion %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Fecha publicación</span><span class="text-white text-sm">{{ doc.fecha_publicacion|date:"d/m/Y" }}</span></div>
+        {% endif %}
+        {% if doc.fecha_ultima_revision %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Última revisión</span><span class="text-white text-sm">{{ doc.fecha_ultima_revision|date:"d/m/Y" }}</span></div>
+        {% endif %}
+        {% if doc.aplica_a %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Aplica a</span><span class="text-white text-sm">{% for a in doc.aplica_a %}<span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 mr-1">{{ a }}</span>{% endfor %}</span></div>
+        {% endif %}
+        {% if doc.temas_clave %}
+        <div class="meta-row"><span class="text-gray-500 text-xs">Temas clave</span><span class="text-white text-sm text-right">{% for t in doc.temas_clave %}<span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-300 mr-1 mb-1">{{ t }}</span>{% endfor %}</span></div>
+        {% endif %}
+        {% if doc.descripcion %}
+        <div class="mt-4 pt-3 border-t border-white/5">
+            <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-2">Descripción</div>
+            <div class="text-sm text-gray-300 leading-relaxed">{{ doc.descripcion }}</div>
+        </div>
+        {% endif %}
+
+        {% if not doc.titulo and not doc.categoria %}
+        <div class="text-sm text-gray-600 italic">La metadata aparecerá aquí después de la fase de validación.</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Archivos en MinIO -->
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Archivos en MinIO</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-gray-500 uppercase mb-1">Original</div>
+            <div class="text-xs text-gray-300 font-mono break-all">{{ doc.archivo_original_key|default:"—" }}</div>
+            <div class="text-[11px] text-gray-500 mt-1">{{ doc.archivo_tamano_bytes|filesizeformat }} · {{ doc.archivo_content_type|default:"—" }}</div>
+        </div>
+        <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-gray-500 uppercase mb-1">Markdown</div>
+            <div class="text-xs text-gray-300 font-mono break-all">{{ doc.archivo_md_key|default:"(pendiente)" }}</div>
+        </div>
+        <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-gray-500 uppercase mb-1">Metadata JSON</div>
+            <div class="text-xs text-gray-300 font-mono break-all">{{ doc.archivo_json_key|default:"(pendiente)" }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Datos de sistema -->
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Sistema</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div><span class="text-gray-500">UUID:</span><br><span class="font-mono text-gray-300">{{ doc.uuid_archivo }}</span></div>
+        <div><span class="text-gray-500">SHA-256:</span><br><span class="font-mono text-gray-300">{{ doc.hash_sha256|truncatechars:20 }}</span></div>
+        <div><span class="text-gray-500">Subido:</span><br><span class="text-gray-300">{{ doc.creado_en|date:"d/m/Y H:i" }}</span></div>
+        <div><span class="text-gray-500">Indexado:</span><br><span class="text-gray-300">{% if doc.indexado_en %}{{ doc.indexado_en|date:"d/m/Y H:i" }}{% else %}—{% endif %}</span></div>
+        <div><span class="text-gray-500">Intentos conversión:</span><br><span class="text-gray-300">{{ doc.intentos_conversion }}</span></div>
+        <div><span class="text-gray-500">Intentos validación:</span><br><span class="text-gray-300">{{ doc.intentos_validacion }}</span></div>
+        <div><span class="text-gray-500">Intentos embedding:</span><br><span class="text-gray-300">{{ doc.intentos_embedding }}</span></div>
+        <div><span class="text-gray-500">Chunks:</span><br><span class="text-white font-semibold">{{ doc.chunks_count }}</span></div>
+    </div>
+</div>
+
+<!-- Preview chunks -->
+{% if chunks_preview %}
+<div class="glass rounded-xl p-5">
+    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Primeros 5 chunks (preview)</h3>
+    {% for c in chunks_preview %}
+    <div class="mb-2">
+        <div class="text-[11px] text-gray-500 mb-1">
+            chunk #{{ c.posicion_chunk }} · {{ c.tokens }} tokens
+        </div>
+        <div class="chunk-box">{{ c.contenido|truncatechars:1000 }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% elif doc.estado == 'indexado' %}
+<div class="glass rounded-xl p-5 text-center text-gray-600 text-sm">Sin chunks aún</div>
+{% endif %}
+
+{% endblock %}

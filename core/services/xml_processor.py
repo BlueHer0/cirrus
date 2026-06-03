@@ -125,6 +125,9 @@ def process_single_xml(xml_bytes: bytes, empresa) -> str:
     # 4. Extract tax data directly from XML
     taxes = _extract_taxes(xml_bytes)
 
+    # 4b. Extract nomina data if TipoComprobante == N
+    nomina_data = _extract_nomina(xml_bytes) if tipo_comprobante == "N" else {}
+
     # 5. Upload XML to MinIO
     year = fecha.year if fecha else datetime.now().year
     month = fecha.month if fecha else datetime.now().month
@@ -166,10 +169,65 @@ def process_single_xml(xml_bytes: bytes, empresa) -> str:
         iva_retenido=taxes["iva_retenido"],
         xml_minio_key=minio_key,
         xml_size_bytes=len(xml_bytes),
+        # Nómina (vacíos si no es tipo N)
+        fecha_pago_nomina=nomina_data.get("fecha_pago"),
+        fecha_inicial_pago=nomina_data.get("fecha_inicial_pago"),
+        fecha_final_pago=nomina_data.get("fecha_final_pago"),
+        tipo_nomina=nomina_data.get("tipo_nomina", ""),
     )
 
     logger.info("💾 Stored CFDI %s | %s → %s | $%s", uuid[:8], rfc_emisor, rfc_receptor, total)
     return "created"
+
+
+def _extract_nomina(xml_bytes: bytes) -> dict:
+    """Extract payroll-specific fields from nomina12:Nomina complement.
+
+    Returns dict with: fecha_pago (date|None), fecha_inicial_pago, fecha_final_pago, tipo_nomina ('O'|'E'|'')
+    """
+    from datetime import date
+
+    result = {
+        "fecha_pago": None,
+        "fecha_inicial_pago": None,
+        "fecha_final_pago": None,
+        "tipo_nomina": "",
+    }
+
+    try:
+        root = etree.fromstring(xml_bytes)
+    except etree.XMLSyntaxError:
+        return result
+
+    # nomina12 o nomina13 — namespace variable
+    ns_candidates = [
+        "{http://www.sat.gob.mx/nomina12}Nomina",
+        "{http://www.sat.gob.mx/nomina13}Nomina",
+    ]
+    nom = None
+    for ns in ns_candidates:
+        for elem in root.iter(ns):
+            nom = elem
+            break
+        if nom is not None:
+            break
+
+    if nom is None:
+        return result
+
+    def _parse_date(s):
+        if not s: return None
+        try: return date.fromisoformat(s[:10])
+        except (ValueError, TypeError): return None
+
+    result["fecha_pago"] = _parse_date(nom.get("FechaPago"))
+    result["fecha_inicial_pago"] = _parse_date(nom.get("FechaInicialPago"))
+    result["fecha_final_pago"] = _parse_date(nom.get("FechaFinalPago"))
+    tn = nom.get("TipoNomina", "").strip().upper()
+    if tn in ("O", "E"):
+        result["tipo_nomina"] = tn
+
+    return result
 
 
 def _extract_taxes(xml_bytes: bytes) -> dict:

@@ -1,0 +1,180 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Cliente — {{ cliente.email }}{% endblock %}
+{% block page_title %}{{ cliente.email|default:cliente.username }}{% endblock %}
+{% block page_subtitle %}Vista comercial · {{ profile.empresa_nombre|default:"—" }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'panel:clientes' %}" class="text-sm text-gray-400 hover:text-white">← Volver a clientes</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Header: perfil del cliente -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- Card 1: Info general -->
+    <div class="glass rounded-xl p-5 md:col-span-2">
+        <div class="flex items-center justify-between mb-3">
+            <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Información del cliente</div>
+            <a href="mailto:{{ cliente.email }}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-white bg-indigo-600 hover:bg-indigo-500 transition font-semibold">
+                ✉ Contactar
+            </a>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-gray-500">Email:</span> <span class="text-white">{{ cliente.email }}</span></div>
+            <div><span class="text-gray-500">Usuario:</span> <span class="text-white">{{ cliente.username }}</span></div>
+            <div><span class="text-gray-500">Nombre:</span> <span class="text-white">{{ cliente.get_full_name|default:"—" }}</span></div>
+            <div><span class="text-gray-500">Teléfono:</span> <span class="text-white">{{ profile.telefono|default:"—" }}</span></div>
+            <div><span class="text-gray-500">RFC facturación:</span> <span class="text-white font-mono">{{ profile.rfc_facturacion|default:"—" }}</span></div>
+            <div><span class="text-gray-500">Razón social:</span> <span class="text-white">{{ profile.razon_social|default:"—" }}</span></div>
+            <div><span class="text-gray-500">Alta:</span> <span class="text-white">{{ profile.created_at|date:"d/m/Y" }}</span></div>
+            <div><span class="text-gray-500">Última actividad:</span> <span class="text-white">{% if last_activity %}{{ last_activity|timesince }} atrás{% else %}—{% endif %}</span></div>
+            <div><span class="text-gray-500">Activo:</span> <span class="text-white">{% if cliente.is_active %}Sí{% else %}No{% endif %}</span></div>
+        </div>
+        <p class="text-[11px] text-gray-600 mt-3 italic">
+            Los datos fiscales (RFCs de empresas, CFDIs, montos) no se exponen en el panel admin por política de privacidad.
+        </p>
+    </div>
+
+    <!-- Card 2: Plan & Stripe -->
+    <div class="glass rounded-xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-3">Plan & Suscripción</div>
+        {% with plan=profile.plan_fk %}
+        <div class="text-2xl font-bold text-white mb-1">{{ plan.nombre|default:profile.plan_legacy|default:"Sin plan" }}</div>
+        <div class="text-sm text-green-400 font-mono mb-3">${{ plan.precio_mensual|default:0|floatformat:0 }}/mes</div>
+        {% endwith %}
+        <div class="space-y-1 text-xs">
+            <div><span class="text-gray-500">Estado:</span>
+                {% if profile.subscription_status == 'active' %}
+                <span class="text-green-400 font-semibold">● Activa</span>
+                {% elif profile.subscription_status == 'past_due' %}
+                <span class="text-yellow-400 font-semibold">● Pago pendiente</span>
+                {% elif profile.subscription_status == 'canceled' %}
+                <span class="text-red-400 font-semibold">● Churned</span>
+                {% elif profile.subscription_status == 'trialing' %}
+                <span class="text-blue-400 font-semibold">● Prueba</span>
+                {% else %}
+                <span class="text-gray-500">Sin suscripción</span>
+                {% endif %}
+            </div>
+            {% if profile.stripe_customer_id %}
+            <div><span class="text-gray-500">Stripe customer:</span> <span class="text-gray-300 font-mono">{{ profile.stripe_customer_id|truncatechars:20 }}</span></div>
+            {% endif %}
+            {% if profile.subscription_current_period_end %}
+            <div><span class="text-gray-500">Renovación:</span> <span class="text-gray-300">{{ profile.subscription_current_period_end|date:"d/m/Y" }}</span></div>
+            {% endif %}
+            {% if profile.subscription_cancel_at_period_end %}
+            <div class="text-yellow-400">⚠ Cancelación programada al fin del periodo</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- KPIs comerciales del cliente (sin datos fiscales) -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #6366f1;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Empresas registradas</div>
+        <div class="text-2xl font-bold text-white">{{ empresa_count }}</div>
+        <div class="text-[11px] text-gray-600 mt-1">solo el número</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #22c55e;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Total pagado</div>
+        <div class="text-2xl font-bold text-white">${{ total_pagado|floatformat:0 }}</div>
+        <div class="text-[11px] text-gray-600 mt-1">histórico Stripe</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #8b5cf6;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Pagos registrados</div>
+        <div class="text-2xl font-bold text-white">{{ pagos|length }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #3b82f6;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Días en Cirrus</div>
+        <div class="text-2xl font-bold text-white">{{ profile.created_at|timesince|truncatewords:1 }}</div>
+    </div>
+</div>
+
+<!-- Acciones comerciales -->
+<div class="glass rounded-xl p-5 mb-6">
+    <h3 class="text-lg font-semibold text-white mb-4">Acciones comerciales</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- Cambiar plan -->
+        <div class="bg-white/5 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Cambiar plan manualmente</div>
+            <form method="post" class="flex gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="change_plan">
+                <select name="plan_slug" class="flex-1 px-3 py-2 rounded-lg text-sm text-white bg-glass-100 border border-glass-border focus:outline-none focus:ring-2 focus:ring-accent">
+                    {% for p in planes_disponibles %}
+                    <option value="{{ p.slug }}" {% if profile.plan_fk_id == p.id %}selected{% endif %}>
+                        {{ p.nombre }} — ${{ p.precio_mensual|floatformat:0 }}/mes
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition font-semibold">
+                    Aplicar
+                </button>
+            </form>
+            <p class="text-[11px] text-gray-600 mt-2">Cambio manual — no afecta Stripe. Para cambios con cobro usa el dashboard de Stripe.</p>
+        </div>
+
+        <!-- Churn / Reactivar -->
+        <div class="bg-white/5 rounded-lg p-4">
+            <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">Estado de suscripción</div>
+            {% if profile.subscription_status == 'canceled' %}
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reactivate">
+                <button type="submit" class="w-full px-4 py-2 rounded-lg text-sm text-white bg-green-600 hover:bg-green-500 transition font-semibold">
+                    ↻ Reactivar cliente
+                </button>
+            </form>
+            <p class="text-[11px] text-gray-600 mt-2">Cambia el estado a "active" sin tocar Stripe.</p>
+            {% else %}
+            <form method="post" onsubmit="return confirm('¿Marcar a {{ cliente.email }} como churned?');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="mark_churned">
+                <button type="submit" class="w-full px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-500 transition font-semibold">
+                    ✗ Marcar como churned
+                </button>
+            </form>
+            <p class="text-[11px] text-gray-600 mt-2">Marca la suscripción como cancelada (no toca Stripe).</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Historial de pagos -->
+<div class="glass rounded-xl p-5">
+    <h3 class="text-lg font-semibold text-white mb-4">Historial de pagos</h3>
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="pb-2">Fecha</th>
+                <th class="pb-2">Concepto</th>
+                <th class="pb-2 text-right">Monto</th>
+                <th class="pb-2">Método</th>
+                <th class="pb-2">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pago in pagos %}
+            <tr>
+                <td class="py-2 text-gray-400 text-xs">{{ pago.created_at|date:"d/m/Y H:i" }}</td>
+                <td class="py-2 text-white">{{ pago.concept|truncatechars:40 }}</td>
+                <td class="py-2 text-right font-mono text-green-400">${{ pago.amount|floatformat:0 }} {{ pago.currency|upper }}</td>
+                <td class="py-2 text-gray-500 text-xs">{{ pago.payment_method|default:"—" }}</td>
+                <td class="py-2">
+                    {% if pago.status in "succeeded,paid" %}
+                    <span class="text-xs text-green-400">✓ {{ pago.status }}</span>
+                    {% else %}
+                    <span class="text-xs text-yellow-400">{{ pago.status }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="py-6 text-center text-gray-600">Sin pagos registrados</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

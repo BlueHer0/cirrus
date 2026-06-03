@@ -36,15 +36,15 @@ def _ensure_profile(user):
 
 def _get_empresa_or_404(request, empresa_id):
     """Get empresa scoped to current user."""
-    from core.models import Empresa
-    return get_object_or_404(Empresa, id=empresa_id, owner=request.user)
+    from core.services.colaboradores import get_empresas_visibles
+    return get_object_or_404(get_empresas_visibles(request.user), id=empresa_id)
 
 
 def _get_user_rfcs(user):
     """Get RFCs the user can access (has empresa with verified FIEL)."""
-    from core.models import Empresa
+    from core.services.colaboradores import get_empresas_visibles
     return list(
-        Empresa.objects.filter(owner=user, fiel_verificada=True)
+        get_empresas_visibles(user).filter(fiel_verificada=True)
         .values_list("rfc", flat=True)
     )
 
@@ -55,7 +55,12 @@ def _generate_confirm_token(user):
 
 
 def _send_confirmation_email(user, token):
-    """Send branded HTML email with confirmation link."""
+    """Send branded HTML email with confirmation link.
+
+    fail_silently=False: si SMTP falla, queremos enterarnos en logs y Telegram
+    (via log_error). La excepción se captura para no romper el flujo de
+    registro, pero DEJA rastro claro del fallo.
+    """
     try:
         from django.core.mail import EmailMultiAlternatives
         from django.template.loader import render_to_string
@@ -81,7 +86,7 @@ def _send_confirmation_email(user, token):
             to=[user.email],
         )
         msg.attach_alternative(html_body, "text/html")
-        msg.send(fail_silently=True)
+        msg.send(fail_silently=False)
 
         from core.services.monitor import log_info
         log_info("email", f"Confirmación enviada a {user.email}")
@@ -175,6 +180,20 @@ def confirmar_email(request, token):
 
         user.is_active = True
         user.save(update_fields=["is_active"])
+
+        # Asignar plan "free" al confirmar cuenta — si no existe el plan en BD,
+        # se deja con plan_legacy='free' (fallback silencioso).
+        try:
+            from core.models import Plan
+            profile = user.perfil
+            if profile.plan_fk is None:
+                plan_free = Plan.objects.filter(slug="free", activo=True).first()
+                if plan_free:
+                    profile.plan_fk = plan_free
+                profile.plan_legacy = "free"
+                profile.save(update_fields=["plan_fk", "plan_legacy"])
+        except Exception:
+            pass  # no bloquear confirmación por un issue de plan
 
         from core.services.monitor import log_info
         log_info("auth", f"Email confirmado: {user.email}")
@@ -392,7 +411,8 @@ def app_empresas_list(request):
     enforcer = PlanEnforcer(request.user)
     emp_check = enforcer.puede_crear_empresa()
 
-    empresas = Empresa.objects.filter(owner=request.user).annotate(
+    from core.services.colaboradores import get_empresas_visibles
+    empresas = get_empresas_visibles(request.user).annotate(
         cfdi_count=Count("cfdis"),
     ).order_by("nombre")
 
@@ -738,8 +758,9 @@ def app_descargas(request):
     """Automatic sync dashboard — compact table view."""
     from core.models import Empresa, DescargaJob
     from datetime import datetime
+    from core.services.colaboradores import get_empresas_visibles
 
-    empresas = Empresa.objects.filter(owner=request.user).order_by("rfc")
+    empresas = get_empresas_visibles(request.user).order_by("rfc")
 
     if not empresas.exists():
         return render(request, "app/descargas.html", {
@@ -800,7 +821,7 @@ def app_descargas(request):
         })
 
     has_running = DescargaJob.objects.filter(
-        empresa__owner=request.user, estado="en_cola"
+        empresa__in=empresas, estado="en_cola"
     ).exists()
 
     return render(request, "app/descargas.html", {
@@ -870,8 +891,9 @@ def _calc_anno_comprable(empresa, plan):
 @login_required(login_url=APP_LOGIN_URL)
 def app_cfdis_list(request):
     from core.models import CFDI, Empresa
+    from core.services.colaboradores import get_empresas_visibles
 
-    empresas = Empresa.objects.filter(owner=request.user).order_by("rfc")
+    empresas = get_empresas_visibles(request.user).order_by("rfc")
     user_rfcs = _get_user_rfcs(request.user)
     qs = CFDI.objects.filter(
         Q(rfc_empresa__in=user_rfcs) | Q(uploaded_by=request.user)
@@ -1000,6 +1022,14 @@ def app_cfdis_list(request):
     if filters.get("month"):
         analysis_params += f"&month={filters['month']}"
 
+    # Build reportes url params
+    reportes_url = f"/reportes/ver/?empresa_id={empresa_id}"
+    reportes_url += f"&anio={filters.get('year', now.year)}"
+    if filters.get("month"):
+        reportes_url += f"&tipo=mes&mes={filters['month']}"
+    else:
+        reportes_url += "&tipo=anio"
+
     # Calculate FiscScore when empresa is selected
     fiscscore_ctx = None
     if show_toolbar:
@@ -1059,6 +1089,7 @@ def app_cfdis_list(request):
         "show_toolbar": show_toolbar,
         "periodo_label": periodo_label,
         "analysis_params": analysis_params,
+        "reportes_url": reportes_url,
         "rfcs_efos": rfcs_efos,
     })
 
@@ -1072,8 +1103,10 @@ def app_cfdi_detail(request, uuid):
     from django.shortcuts import get_object_or_404
 
     cfdi = get_object_or_404(CFDI, uuid=uuid)
-    # Access check
-    if cfdi.empresa and cfdi.empresa.owner != request.user and not request.user.is_staff:
+    # Access check — use get_empresas_visibles for collaborator support
+    from core.services.colaboradores import get_empresas_visibles
+    user_empresa_ids = set(get_empresas_visibles(request.user).values_list('id', flat=True))
+    if cfdi.empresa and cfdi.empresa_id not in user_empresa_ids and not request.user.is_staff:
         if cfdi.uploaded_by != request.user:
             return redirect("app:cfdis")
     elif not cfdi.empresa and cfdi.uploaded_by != request.user and not request.user.is_staff:
@@ -1127,7 +1160,9 @@ def app_cfdi_pdf(request, cfdi_uuid):
     from sat_scrapper_core.cfdi_pdf.render import render_cfdi_pdf
 
     cfdi = get_object_or_404(CFDI, uuid=cfdi_uuid)
-    if cfdi.empresa and cfdi.empresa.owner != request.user:
+    from core.services.colaboradores import get_empresas_visibles
+    user_empresa_ids = set(get_empresas_visibles(request.user).values_list('id', flat=True))
+    if cfdi.empresa and cfdi.empresa_id not in user_empresa_ids:
         if cfdi.uploaded_by != request.user:
             return HttpResponse("Forbidden", status=403)
     elif not cfdi.empresa and cfdi.uploaded_by != request.user:
@@ -1146,7 +1181,9 @@ def app_cfdi_xml(request, cfdi_uuid):
     from core.services.storage_minio import download_bytes
 
     cfdi = get_object_or_404(CFDI, uuid=cfdi_uuid)
-    if cfdi.empresa and cfdi.empresa.owner != request.user:
+    from core.services.colaboradores import get_empresas_visibles
+    user_empresa_ids = set(get_empresas_visibles(request.user).values_list('id', flat=True))
+    if cfdi.empresa and cfdi.empresa_id not in user_empresa_ids:
         if cfdi.uploaded_by != request.user:
             return HttpResponse("Forbidden", status=403)
     elif not cfdi.empresa and cfdi.uploaded_by != request.user:
@@ -1199,7 +1236,8 @@ def app_upload_xmls(request):
             else:
                 xml_items.append((f.name, None))  # Unsupported format
 
-        empresas = {e.rfc: e for e in Empresa.objects.filter(owner=request.user)}
+        from core.services.colaboradores import get_empresas_visibles
+        empresas = {e.rfc: e for e in get_empresas_visibles(request.user)}
         results = {"uploaded": 0, "duplicated": 0, "unassigned": 0, "errors": [], "assigned": {}}
 
         for fname, xml_bytes in xml_items:
@@ -1302,10 +1340,19 @@ def app_upload_xmls(request):
 
 @login_required(login_url=APP_LOGIN_URL)
 def app_api_keys(request):
-    import secrets
-    from core.models import APIKey, Empresa
+    """Panel de cliente para gestionar sus API keys.
 
+    Al crear una key se muestra UNA sola vez en la siguiente vista
+    (almacenada en session temporal, no en messages). El cliente debe
+    copiarla en ese momento — nunca más se podrá recuperar.
+    """
+    from core.models import APIKey
+    from core.services.colaboradores import get_empresas_visibles
+    from core.services.api_keys_service import (
+        crear_api_key, revocar_key, RATE_LIMITS_POR_PLAN,
+    )
     from core.services.plan_enforcer import PlanEnforcer
+
     enforcer = PlanEnforcer(request.user)
     api_check = enforcer.puede_usar_api()
 
@@ -1317,37 +1364,63 @@ def app_api_keys(request):
         action = request.POST.get("action", "create")
         if action == "create":
             nombre = request.POST.get("nombre", "").strip()
-            if nombre:
-                key = APIKey.objects.create(
-                    nombre=nombre,
-                    key=secrets.token_hex(32),
-                    owner=request.user,
-                    puede_leer="puede_leer" in request.POST,
-                    puede_trigger_descarga="puede_trigger_descarga" in request.POST,
-                )
-                empresa_ids = request.POST.getlist("empresas")
-                if empresa_ids:
-                    key.empresas.set(
-                        Empresa.objects.filter(id__in=empresa_ids, owner=request.user)
-                    )
-                messages.success(request, f"API Key creada: {key.key}")
+            if not nombre:
+                messages.error(request, "El nombre es obligatorio")
                 return redirect("app:api_keys")
+
+            empresa_ids = request.POST.getlist("empresas")
+            empresas = []
+            if empresa_ids:
+                empresas = list(
+                    get_empresas_visibles(request.user).filter(id__in=empresa_ids)
+                )
+
+            apikey, key_plain = crear_api_key(
+                owner=request.user,
+                nombre=nombre,
+                empresas=empresas,
+                puede_leer="puede_leer" in request.POST,
+                puede_trigger_descarga="puede_trigger_descarga" in request.POST,
+            )
+
+            # Guardar la key plana en session SOLO para la próxima vista.
+            # Se consume (pop) al mostrarla.
+            request.session["new_api_key_once"] = {
+                "id": str(apikey.id),
+                "plain": key_plain,
+                "prefix": apikey.key_prefix,
+                "nombre": apikey.nombre,
+            }
+            return redirect("app:api_keys")
+
         elif action == "revoke":
             key_id = request.POST.get("key_id")
             key = get_object_or_404(APIKey, id=key_id, owner=request.user)
-            key.activa = False
-            key.save(update_fields=["activa"])
+            revocar_key(key, motivo="cliente_revoke")
             messages.warning(request, f"Key '{key.nombre}' revocada")
             return redirect("app:api_keys")
 
-    keys = APIKey.objects.filter(owner=request.user).prefetch_related("empresas").order_by("-created_at")
-    empresas = Empresa.objects.filter(owner=request.user).order_by("rfc")
+    # Pop de la key recién creada (si aplica) — se muestra una sola vez
+    new_key_reveal = request.session.pop("new_api_key_once", None)
+
+    keys = APIKey.objects.filter(
+        owner=request.user,
+    ).prefetch_related("empresas").order_by("-created_at")
+    empresas = get_empresas_visibles(request.user).order_by("rfc")
+
+    # Info de plan para mostrar límite
+    from core.services.api_keys_service import _plan_slug_del_usuario
+    plan_slug = _plan_slug_del_usuario(request.user)
+    limite_plan = RATE_LIMITS_POR_PLAN.get(plan_slug, 0)
 
     return render(request, "app/api_keys.html", {
         "current_page": "api_keys",
         "api_keys": keys,
         "empresas": empresas,
         "api_check": api_check,
+        "new_key_reveal": new_key_reveal,
+        "plan_slug": plan_slug,
+        "limite_plan": limite_plan,
     })
 
 
@@ -1527,7 +1600,8 @@ def _analysis_base_qs(request, empresa_id, year=None, month=None):
         empresa = Empresa.objects.get(id=empresa_id)
     except (Empresa.DoesNotExist, ValueError):
         return None, None
-    if empresa.owner_id != request.user.id and not request.user.is_staff:
+    from core.services.colaboradores import get_empresas_visibles
+    if not get_empresas_visibles(request.user).filter(id=empresa.id).exists() and not request.user.is_staff:
         return None, None
     qs = CFDI.objects.filter(rfc_empresa=empresa.rfc)
     if year:
@@ -2023,12 +2097,13 @@ def analysis_risks_view(request):
 def app_comprar_historico(request):
     """Historic year purchase request."""
     from core.models import Empresa, SolicitudHistorico
+    from core.services.colaboradores import get_empresas_visibles
 
     empresa_id = request.GET.get("empresa", "") or request.POST.get("empresa", "")
     year = int(request.GET.get("year", 0) or request.POST.get("year", 0))
 
     try:
-        empresa = Empresa.objects.get(id=empresa_id, owner=request.user)
+        empresa = get_empresas_visibles(request.user).get(id=empresa_id)
     except (Empresa.DoesNotExist, ValueError):
         return redirect("app:descargas")
 
@@ -2180,3 +2255,132 @@ def cancelar_plan(request):
         except Exception as e:
             messages.error(request, f"Error al cancelar: {e}")
     return redirect("app:perfil")
+
+
+# ── Colaboradores ──────────────────────────────────────────────────────
+
+@login_required(login_url=APP_LOGIN_URL)
+def app_colaboradores_list(request):
+    """View and manage collaborators."""
+    from core.models import Colaborador, Empresa
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    from core.services.plan_enforcer import PlanEnforcer
+    enforcer = PlanEnforcer(request.user)
+    colab_check = enforcer.puede_crear_colaborador()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "invite":
+            if not colab_check["permitido"]:
+                messages.warning(request, colab_check["mensaje"])
+                return redirect("app:colaboradores")
+
+            email = request.POST.get("email", "").strip().lower()
+            if not email:
+                messages.error(request, "Email requerido.")
+                return redirect("app:colaboradores")
+
+            if email == request.user.email:
+                messages.error(request, "No puedes invitarte a ti mismo.")
+                return redirect("app:colaboradores")
+
+            # Check if user exists
+            usuario_invitado = User.objects.filter(email=email).first()
+            if not usuario_invitado:
+                # Create inactive user
+                usuario_invitado = User.objects.create_user(
+                    username=email, email=email, is_active=False
+                )
+                from accounts.models import ClienteProfile
+                ClienteProfile.objects.create(user=usuario_invitado)
+                # Send welcome/registration email with confirmation token
+                try:
+                    from accounts.views import _generate_confirm_token, _send_confirmation_email
+                    token = _generate_confirm_token(usuario_invitado)
+                    _send_confirmation_email(usuario_invitado, token)
+                except Exception as e:
+                    import logging
+                    logging.getLogger("accounts.views").error(f"Error enviando invitacion: {e}")
+
+            # Create colaborador relationship
+            colab, created = Colaborador.objects.get_or_create(
+                cuenta_principal=request.user,
+                usuario=usuario_invitado,
+            )
+            if created:
+                messages.success(request, f"Colaborador {email} invitado exitosamente.")
+            else:
+                messages.info(request, f"El correo {email} ya estaba como colaborador.")
+            return redirect("app:colaboradores")
+            
+        elif action == "revoke":
+            colab_id = request.POST.get("colab_id")
+            from django.shortcuts import get_object_or_404
+            colab = get_object_or_404(Colaborador, id=colab_id, cuenta_principal=request.user)
+            colab.estado = "inactivo"
+            colab.save()
+            messages.warning(request, f"Acceso revocado para {colab.usuario.email}.")
+            return redirect("app:colaboradores")
+            
+        elif action == "reactivate":
+            if not colab_check["permitido"]:
+                messages.warning(request, colab_check["mensaje"])
+                return redirect("app:colaboradores")
+            colab_id = request.POST.get("colab_id")
+            from django.shortcuts import get_object_or_404
+            colab = get_object_or_404(Colaborador, id=colab_id, cuenta_principal=request.user)
+            colab.estado = "activo"
+            colab.save()
+            messages.success(request, f"Acceso reactivado para {colab.usuario.email}.")
+            return redirect("app:colaboradores")
+
+    colaboradores = Colaborador.objects.filter(cuenta_principal=request.user).order_by("-fecha_invitacion")
+
+    return render(request, "app/colaboradores_list.html", {
+        "current_page": "colaboradores",
+        "colaboradores": colaboradores,
+        "colab_check": colab_check,
+    })
+
+@login_required(login_url=APP_LOGIN_URL)
+def app_colaborador_edit(request, colab_id):
+    """Edit permissions for a collaborator."""
+    from core.models import Colaborador, Empresa, ColaboradorEmpresa
+    from django.shortcuts import get_object_or_404
+    colab = get_object_or_404(Colaborador, id=colab_id, cuenta_principal=request.user)
+    from core.services.colaboradores import get_empresas_visibles
+    empresas = get_empresas_visibles(request.user).order_by("nombre")
+
+    if request.method == "POST":
+        # Global perms
+        colab.puede_ver_cfdis = "puede_ver_cfdis" in request.POST
+        colab.puede_ver_analisis = "puede_ver_analisis" in request.POST
+        colab.puede_exportar = "puede_exportar" in request.POST
+        colab.puede_subir_fiel = "puede_subir_fiel" in request.POST
+        colab.puede_subir_xmls = "puede_subir_xmls" in request.POST
+        colab.puede_crear_empresa = "puede_crear_empresa" in request.POST
+        colab.puede_descargar_sat = "puede_descargar_sat" in request.POST
+        colab.puede_ver_csf = "puede_ver_csf" in request.POST
+        colab.save()
+
+        # Update assigned companies
+        assigned_emp_ids = request.POST.getlist("empresas")
+        # Remove unassigned
+        ColaboradorEmpresa.objects.filter(colaborador=colab).exclude(empresa_id__in=assigned_emp_ids).delete()
+        # Ensure assigned exist
+        for emp_id in assigned_emp_ids:
+            ColaboradorEmpresa.objects.get_or_create(colaborador=colab, empresa_id=emp_id)
+
+        messages.success(request, "Permisos actualizados correctamente.")
+        return redirect("app:colaboradores")
+
+    assigned_empresas = ColaboradorEmpresa.objects.filter(colaborador=colab).values_list("empresa_id", flat=True)
+
+    return render(request, "app/colaborador_edit.html", {
+        "current_page": "colaboradores",
+        "colaborador": colab,
+        "empresas": empresas,
+        "assigned_empresas": list(assigned_empresas),
+    })

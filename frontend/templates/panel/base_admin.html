@@ -175,23 +175,26 @@
                 <a href="{% url 'panel:dashboard' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'dashboard' %}active{% endif %}">
                     <span class="text-base">📊</span><span>Dashboard</span>
                 </a>
-                <a href="{% url 'panel:empresas' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'empresas' %}active{% endif %}">
-                    <span class="text-base">🏢</span><span>Empresas</span>
-                </a>
-                <a href="{% url 'panel:cfdis' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'cfdis' %}active{% endif %}">
-                    <span class="text-base">📄</span><span>CFDIs</span>
-                </a>
-                <a href="{% url 'panel:descargas' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'descargas' %}active{% endif %}">
-                    <span class="text-base">📥</span><span>Descargas</span>
-                </a>
-                <a href="{% url 'panel:api_keys' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'api_keys' %}active{% endif %}">
-                    <span class="text-base">🔑</span><span>API Keys</span>
+                <a href="{% url 'panel:clientes' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'clientes' %}active{% endif %}">
+                    <span class="text-base">👤</span><span>Clientes</span>
                 </a>
                 <a href="{% url 'panel:crm' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'crm' %}active{% endif %}">
-                    <span class="text-base">👥</span><span>CRM</span>
+                    <span class="text-base">🎯</span><span>Leads</span>
+                </a>
+                <a href="{% url 'panel:telegram_config' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'telegram' %}active{% endif %}">
+                    <span class="text-base">💬</span><span>Telegram</span>
                 </a>
                 <a href="{% url 'panel:monitor' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'monitor' %}active{% endif %}">
                     <span class="text-base">🔔</span><span>Monitor</span>
+                </a>
+                <a href="{% url 'panel:plan' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'plan' %}active{% endif %}">
+                    <span class="text-base">📋</span><span>Plan</span>
+                </a>
+                <a href="{% url 'panel:cerebro_fiscal' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'cerebro' %}active{% endif %}">
+                    <span class="text-base">🧠</span><span>Cerebro Fiscal</span>
+                </a>
+                <a href="{% url 'panel:stripe_events' %}" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'stripe_events' %}active{% endif %}">
+                    <span class="text-base">💳</span><span>Stripe Events</span>
                 </a>
                 {% endwith %}
             </nav>

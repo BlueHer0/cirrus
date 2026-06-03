@@ -1,0 +1,438 @@
+{% extends "app/base_app.html" %}
+{% load static %}
+{% load reporte_filters %}
+
+{% block title %}Reporte Ejecutivo — {{ empresa.rfc }}{% endblock %}
+
+{% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    .font-plus { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+</style>
+
+<!-- HEADER -->
+<div class="glass rounded-t-2xl p-7 md:px-9 font-plus relative overflow-hidden" style="background: #161b22; border: 1px solid #30363d;">
+    <div class="absolute top-0 left-0 w-full h-1" style="background: linear-gradient(90deg, #58a6ff, #3fb950);"></div>
+    
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3 mb-4 text-[#8b949e] font-semibold text-[11px] tracking-wider uppercase">
+                <span class="text-xl">☁</span> CIRRUS · Inteligencia Fiscal
+            </div>
+            <h1 class="text-[26px] font-extrabold text-[#e6edf3] leading-tight mb-3">
+                {{ empresa.nombre }}
+            </h1>
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+                <span class="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[#e6edf3] font-mono">{{ empresa.rfc }}</span>
+                {% if empresa.regimen_fiscal %}<span class="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[#8b949e]">{{ empresa.regimen_fiscal }}</span>{% endif %}
+                <span class="px-2.5 py-1 rounded border text-[#e6edf3]" style="background: rgba(88,166,255,0.1); border-color: rgba(88,166,255,0.3);">
+                    📅 {{ datos.periodo_label }}
+                </span>
+                
+                <span class="px-2.5 py-1 rounded border text-[#8b949e] bg-[#1c2128]" style="border-color: #30363d;" title="Opinión de Cumplimiento">
+                    🕐 {{ datos.opinion_sat|default:"Sin datos" }}
+                </span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3 shrink-0">
+            <a href="{% url 'reportes:selector' %}" class="px-4 py-2 rounded-lg text-xs font-semibold text-[#8b949e] bg-[#1c2128] border border-[#30363d] hover:text-white transition-colors">
+                ← Volver
+            </a>
+            <a href="{{ pdf_url }}" target="_blank" class="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors flex items-center gap-2"
+               style="background: #1f6feb; border: 1px solid rgba(255,255,255,0.1);" onmouseover="this.style.background='#388bfd'" onmouseout="this.style.background='#1f6feb'">
+               📄 Descargar PDF
+            </a>
+        </div>
+    </div>
+    
+    <div class="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-[#8b949e]">
+        <div class="flex items-center gap-2">
+            <span>🤖</span> Análisis automático basado en CFDIs del SAT. No constituye opinión fiscal contable.
+        </div>
+    </div>
+</div>
+
+<!-- BOTTOM LINE -->
+<div class="rounded-b-2xl p-7 md:px-9 font-plus mb-6 shadow-xl" style="background: #0f172a; border: 1px solid #1e293b; border-top: none;">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Health Score -->
+        <div class="flex items-center gap-5 pr-6 lg:border-r border-white/10">
+            <div class="relative w-[76px] h-[76px] flex items-center justify-center">
+                <!-- SVG Ring bg -->
+                <svg class="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 76 76">
+                    <circle cx="38" cy="38" r="34" fill="none" class="stroke-[#1e293b]" stroke-width="6"></circle>
+                    <!-- SVG Ring fg -->
+                    {% with current_pct=datos.health_score offset_val=213.6 height=76 %}
+                    <circle cx="38" cy="38" r="34" fill="none" stroke="{{ datos.health_score|health_color }}" stroke-width="6"
+                            stroke-dasharray="213.6" stroke-dashoffset="{{ 213.6|add:'-0.0' }}" 
+                            style="stroke-dashoffset: calc(213.6 - (213.6 * {{ datos.health_score }} / 100)); transition: stroke-dashoffset 1s ease-out;"></circle>
+                    {% endwith %}
+                </svg>
+                <span class="font-mono text-xl font-bold text-white relative z-10">{{ datos.health_score }}</span>
+            </div>
+            <div>
+                <div class="text-[11px] font-semibold text-[#8b949e] tracking-wider uppercase mb-1">Health Score</div>
+                <div class="text-sm text-[#e6edf3]">
+                    {% if datos.health_score > 70 %}Salud Fiscal Óptima{% elif datos.health_score >= 40 %}Riesgo Moderado{% else %}Riesgo Alto{% endif %}
+                </div>
+                {% if datos.health_score_delta is not None %}
+                <div class="text-xs mt-1 font-mono font-bold {% if datos.health_score_delta >= 0 %}text-[#3fb950]{% else %}text-[#f85149]{% endif %}">
+                    {% if datos.health_score_delta >= 0 %}▲ +{% else %}▼ {% endif %}{{ datos.health_score_delta }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Resumen IA -->
+        <div class="pr-6 lg:border-r border-white/10">
+            <div class="flex justify-between items-center mb-3">
+                <div class="text-[11px] font-semibold text-[#58a6ff] tracking-wider uppercase">✨ Resumen IA · CIRRUS AI</div>
+                <button id="btn-generar-ia" class="px-3 py-1 bg-[#1e293b] hover:bg-[#334155] border border-[#334155] rounded text-[10px] text-[#e6edf3] font-semibold transition-colors">
+                    Generar análisis IA
+                </button>
+            </div>
+            <div id="resumen-ia-text" class="text-sm text-[#8b949e] leading-relaxed">
+                {{ datos.resumen_ia|default:"Haz clic en «Generar análisis IA» para solicitar un resumen ejecutivo procesado por Cirrus AI." }}
+            </div>
+        </div>
+        
+        <!-- Reserva Fiscal -->
+        <div>
+            <div class="text-[11px] font-semibold text-[#8b949e] tracking-wider uppercase mb-2">Reserva Fiscal Mínima Sugerida</div>
+            <div class="text-[28px] font-mono font-bold text-[#e3b341] leading-none mb-4">
+                {{ datos.reserva_fiscal_minima|pesos }} <span class="text-sm font-semibold text-[#8b949e]">MXN</span>
+            </div>
+            
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider mb-2">Desglose</div>
+            <div class="space-y-1.5 text-xs">
+                {% if datos.resultado_fiscal >= 0 %}
+                <div class="flex justify-between">
+                    <span class="text-[#8b949e]">ISR estimado (30% sobre utilidad):</span>
+                    <span class="font-mono text-[#e6edf3]">{{ datos.isr_provisional|pesos_decimal }}</span>
+                </div>
+                {% else %}
+                <div class="flex justify-between">
+                    <span class="text-[#8b949e]">ISR estimado:</span>
+                    <span class="font-mono text-[#e6edf3]">$0.00 <span class="text-[10px] text-[#f85149]">(pérdida fiscal)</span></span>
+                </div>
+                {% endif %}
+                
+                {% if datos.iva_neto > 0 %}
+                <div class="flex justify-between">
+                    <span class="text-[#8b949e]">IVA neto a enterar:</span>
+                    <span class="font-mono text-[#e6edf3]">{{ datos.iva_neto|pesos_decimal }}</span>
+                </div>
+                {% else %}
+                <div class="flex justify-between">
+                    <span class="text-[#8b949e]">IVA neto a favor:</span>
+                    <span class="font-mono text-[#3fb950]">{{ datos.iva_neto|pesos_decimal }} <span class="text-[10px]">(saldo a tu favor)</span></span>
+                </div>
+                {% endif %}
+                
+                <div class="border-t border-white/10 my-1.5"></div>
+                <div class="flex justify-between font-semibold">
+                    <span class="text-[#e6edf3]">Total a separar antes del día 17:</span>
+                    <span class="font-mono text-[#e3b341]">{{ datos.reserva_fiscal_minima|pesos_decimal }}</span>
+                </div>
+            </div>
+            
+            <p class="text-[10px] text-[#6e7681] mt-3 leading-tight italic">Estimado base en CFDIs del periodo. Confirma con tu contador antes de declarar.</p>
+        </div>
+        
+    </div>
+</div>
+
+<!-- KPIs Grid -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 font-plus">
+    
+    <div class="glass rounded-xl p-4 flex flex-col justify-between" style="background: #161b22; border: 1px solid #30363d;">
+        <span class="text-[11px] text-[#8b949e] font-semibold uppercase tracking-wider">Ingresos Fact.</span>
+        <span class="text-xl font-mono font-bold text-[#e6edf3] mt-2 mb-1">{{ datos.total_ingresos|pesos }}</span>
+        <span class="text-[10px] text-[#6e7681]">{{ datos.ingresos_count }} comprobantes</span>
+    </div>
+    
+    <div class="glass rounded-xl p-4 flex flex-col justify-between" style="background: #161b22; border: 1px solid #30363d;">
+        <span class="text-[11px] text-[#8b949e] font-semibold uppercase tracking-wider">Gastos Deducibles</span>
+        <span class="text-xl font-mono font-bold text-[#e6edf3] mt-2 mb-1">{{ datos.total_gastos_deducibles|pesos }}</span>
+        <span class="text-[10px] text-[#6e7681]">{{ datos.gastos_count }} comprobantes</span>
+    </div>
+    
+    <div class="glass rounded-xl p-4 flex flex-col justify-between" style="background: #161b22; border: 1px solid #30363d;">
+        <span class="text-[11px] text-[#8b949e] font-semibold uppercase tracking-wider">No Deducible</span>
+        <span class="text-xl font-mono font-bold {% if datos.total_no_deducible > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %} mt-2 mb-1">{{ datos.total_no_deducible|pesos }}</span>
+        <span class="text-[10px] text-[#6e7681]">Pagado efectivo > $2k</span>
+    </div>
+    
+    <div class="glass rounded-xl p-4 flex flex-col justify-between" style="background: #161b22; border: 1px solid #30363d;">
+        <span class="text-[11px] text-[#8b949e] font-semibold uppercase tracking-wider">Resultado Fiscal</span>
+        <span class="text-xl font-mono font-bold {% if datos.resultado_fiscal < 0 %}text-[#f85149]{% else %}text-[#3fb950]{% endif %} mt-2 mb-1">{{ datos.resultado_fiscal|pesos }}</span>
+        <span class="text-[10px] text-[#6e7681]">Base para utilidades</span>
+    </div>
+    
+    <div class="glass rounded-xl p-4 flex flex-col justify-between relative overflow-hidden" style="background: #161b22; border: 1px solid #30363d;">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background: {% if datos.iva_neto > 0 %}#f85149{% else %}#3fb950{% endif %};"></div>
+        <span class="text-[11px] text-[#8b949e] font-semibold uppercase tracking-wider pl-2">IVA Neto</span>
+        <span class="text-xl font-mono font-bold text-[#e6edf3] mt-2 mb-1 pl-2">{{ datos.iva_neto|pesos }}</span>
+        <span class="text-[10px] text-[#6e7681] pl-2">{% if datos.iva_neto > 0 %}A pagar al SAT{% else %}Saldo a favor{% endif %}</span>
+    </div>
+    
+</div>
+
+<!-- MAIN GRIDS -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 font-plus">
+    
+    <!-- Left Column: Acciones & Radar -->
+    <div class="space-y-6">
+        
+        <!-- Acciones Dinámicas -->
+        <div class="glass rounded-xl p-5" style="background: #161b22; border: 1px solid #30363d;">
+            <h3 class="text-sm font-semibold text-[#e6edf3] mb-4 flex items-center gap-2">
+                <span class="text-[#f85149]">⚡</span> Acciones Sugeridas
+            </h3>
+            
+            {% if datos.acciones %}
+                <div class="space-y-3">
+                {% for accion in datos.acciones %}
+                    <div class="rounded-lg p-3 pl-4 relative" style="background: #0d1117; border: 1px solid #30363d;">
+                        <div class="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" style="background: {{ accion.prioridad|prioridad_color }};"></div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="text-xs font-bold text-[#e6edf3] mb-1">{{ accion.titulo }}</h4>
+                                <p class="text-[11px] text-[#8b949e]">{{ accion.subtitulo }}</p>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="py-6 text-center text-[#8b949e] text-xs">
+                    <span class="text-2xl mb-2 block opacity-50">👍</span>
+                    No se detectaron riesgos críticos en este periodo.
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Radar Riesgos -->
+        <div class="glass rounded-xl p-5" style="background: #161b22; border: 1px solid #30363d;">
+            <h3 class="text-sm font-semibold text-[#e6edf3] mb-4 flex items-center gap-2">
+                <span class="text-[#e3b341]">🛡️</span> Radar de Riesgos
+            </h3>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.ppd_sin_rep %}#f85149{% else %}#30363d{% endif %};">
+                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Emitidos PPD sin REP</div>
+                    <div class="text-lg font-mono font-bold mt-1 {% if datos.ppd_sin_rep %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.ppd_sin_rep|length }}</div>
+                </div>
+                
+                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.efos_count > 0 %}#f85149{% else %}#30363d{% endif %};">
+                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Proveedores EFOS</div>
+                    <div class="text-lg font-mono font-bold mt-1 {% if datos.efos_count > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.efos_count }}</div>
+                </div>
+                
+                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.pct_por_definir > 20 %}#e3b341{% else %}#30363d{% endif %};">
+                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Pagos "Por Definir"</div>
+                    <div class="text-lg font-mono font-bold mt-1 {% if datos.pct_por_definir > 20 %}text-[#e3b341]{% else %}text-[#e6edf3]{% endif %}">{{ datos.pct_por_definir }}%</div>
+                </div>
+                
+                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.total_no_deducible > 0 %}#f85149{% else %}#30363d{% endif %};">
+                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">No Deducible Efe.</div>
+                    <div class="text-lg font-mono font-bold mt-1 {% if datos.total_no_deducible > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">${{ datos.total_no_deducible|floatformat:0 }}</div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Middle Column: Flujo & Tablas -->
+    <div class="lg:col-span-2 space-y-6">
+        
+        <!-- Flujo Operativo & Deducibilidad -->
+        <div class="glass rounded-xl p-5" style="background: #161b22; border: 1px solid #30363d;">
+            <h3 class="text-sm font-semibold text-[#e6edf3] mb-4">Flujo Operativo y Deducibilidad</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- Flujo -->
+                <div>
+                    {% with max_val=datos.total_ingresos %}
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span class="text-[#8b949e]">Ingresos</span> <span class="text-white font-mono">{{ datos.total_ingresos|pesos }}</span></div>
+                            <div class="h-2 w-full bg-[#0d1117] rounded-full overflow-hidden">
+                                <div class="h-full bg-[#58a6ff] rounded-full" style="width: 100%;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span class="text-[#8b949e]">Gastos Totales</span> <span class="text-white font-mono">{{ datos.total_gastos|pesos }}</span></div>
+                            <div class="h-2 w-full bg-[#0d1117] rounded-full overflow-hidden">
+                                {% if max_val > 0 %}
+                                <div class="h-full bg-[#e3b341] rounded-full" style="width: min(100%, calc({{ datos.total_gastos }} / {{ max_val }} * 100%));"></div>
+                                {% else %}<div class="h-full bg-[#e3b341] rounded-full" style="width: 0%;"></div>{% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1"><span class="text-[#8b949e]">Resultado Fiscal</span> <span class="text-white font-mono">{{ datos.resultado_fiscal|pesos }}</span></div>
+                            <div class="h-2 w-full bg-[#0d1117] rounded-full overflow-hidden">
+                                {% if max_val > 0 %}
+                                <div class="h-full {% if datos.resultado_fiscal >= 0 %}bg-[#3fb950]{% else %}bg-[#f85149]{% endif %} rounded-full" style="width: min(100%, max(0%, calc({{ datos.resultado_fiscal|abs_val }} / {{ max_val }} * 100%)));"></div>
+                                {% else %}<div class="h-full bg-[#3fb950] rounded-full" style="width: 0%;"></div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endwith %}
+                </div>
+                
+                <!-- Deducibilidad -->
+                <div class="border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-8">
+                    <div class="text-xs text-[#8b949e] mb-1">Ratio de Deducibilidad de Egresos</div>
+                    <div class="flex items-end gap-2 mb-2">
+                        <span class="text-3xl font-extrabold font-mono {% if datos.pct_deducible < 95 %}text-[#e3b341]{% else %}text-[#3fb950]{% endif %}">{{ datos.pct_deducible }}%</span>
+                    </div>
+                    
+                    <div class="flex h-3 w-full rounded-full overflow-hidden mb-4">
+                        <div class="bg-[#3fb950] h-full" style="width: {{ datos.pct_deducible }}%"></div>
+                        <div class="bg-[#f85149] h-full" style="width: {{ datos.pct_no_deducible }}%"></div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <div class="text-[10px] text-[#8b949e] font-semibold uppercase tracking-wider mb-2">Composición por Forma de Pago</div>
+                        <div class="space-y-1.5">
+                            {% for fp in datos.formas_pago %}
+                                {% if forloop.counter <= 3 %}
+                                <div class="flex justify-between items-center text-xs">
+                                    <div class="flex items-center gap-1.5 text-[#e6edf3]">
+                                        <div class="w-1.5 h-1.5 rounded-full" style="background: hsl({{ forloop.counter|add:200 }}, 70%, 60%);"></div>
+                                        <span class="truncate max-w-[120px]" title="{{ fp.label }}">{{ fp.label }}</span>
+                                    </div>
+                                    <span class="text-[#8b949e]">{{ fp.pct }}%</span>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- PPD sin REP Table -->
+        {% if datos.ppd_sin_rep %}
+        <div class="glass rounded-xl p-0 overflow-hidden" style="background: #161b22; border: 1px solid #30363d;">
+            <div class="p-4 border-b border-[#30363d]">
+                <h3 class="text-sm font-semibold text-[#e6edf3] flex items-center gap-2">
+                    <span class="text-[#f85149]">!</span> Facturas PPD con probable REP faltante
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-[#0d1117] text-[#8b949e] border-b border-[#30363d]">
+                        <tr>
+                            <th class="px-4 py-2 font-medium">Fecha</th>
+                            <th class="px-4 py-2 font-medium">UUID</th>
+                            <th class="px-4 py-2 font-medium">RFC Emisor</th>
+                            <th class="px-4 py-2 font-medium text-right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#30363d] text-[#e6edf3]">
+                        {% for cfdi in datos.ppd_sin_rep %}
+                        <tr class="hover:bg-[#1c2128]">
+                            <td class="px-4 py-2 text-[#8b949e]">{{ cfdi.fecha|date:"d/m/Y" }}</td>
+                            <td class="px-4 py-2 font-mono text-[10px]">{{ cfdi.uuid|truncate_uuid }}</td>
+                            <td class="px-4 py-2">
+                                <span class="font-mono">{{ cfdi.rfc_emisor }}</span><br>
+                                <span class="text-[10px] text-[#8b949e] truncate max-w-[150px] inline-block">{{ cfdi.nombre_emisor }}</span>
+                            </td>
+                            <td class="px-4 py-2 font-mono text-right">${{ cfdi.total|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Top Proveedores Table -->
+        <div class="glass rounded-xl p-0 overflow-hidden" style="background: #161b22; border: 1px solid #30363d;">
+            <div class="p-4 border-b border-[#30363d]">
+                <h3 class="text-sm font-semibold text-[#e6edf3]">Top 5 Proveedores</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-[#0d1117] text-[#8b949e] border-b border-[#30363d]">
+                        <tr>
+                            <th class="px-4 py-2 font-medium">Proveedor</th>
+                            <th class="px-4 py-2 font-medium text-right">% Gastos</th>
+                            <th class="px-4 py-2 font-medium text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#30363d] text-[#e6edf3]">
+                        {% for p in datos.top_proveedores %}
+                        <tr class="hover:bg-[#1c2128]">
+                            <td class="px-4 py-2">
+                                <span class="font-mono text-[#58a6ff]">{{ p.rfc_emisor }}</span><br>
+                                <span class="text-[10px] text-[#8b949e] truncate max-w-[200px] inline-block">{{ p.nombre_emisor }}</span>
+                            </td>
+                            <td class="px-4 py-2 text-right text-[#8b949e]">{{ p.pct }}%</td>
+                            <td class="px-4 py-2 font-mono text-right text-[#e6edf3]">{{ p.total_proveedor|pesos_decimal }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="px-4 py-6 text-center text-[#8b949e]">Sin gastos registrados en el periodo.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- JavaScript para IA -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const btn = document.getElementById("btn-generar-ia");
+    const container = document.getElementById("resumen-ia-text");
+    
+    if(!btn) return;
+    
+    btn.addEventListener("click", function() {
+        btn.disabled = true;
+        btn.innerText = "Analizando...";
+        container.innerHTML = `<span class="opacity-75">Cirrus AI está analizando tus CFDIs...</span>`;
+        
+        // Fetch AI
+        fetch("{% url 'reportes:generar_ia' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                "empresa_id": "{{ params.empresa_id }}",
+                "fecha_inicio": "{{ params.anio }}-{{ params.mes_inicio|default:params.mes|default:1|stringformat:'02d' }}-01",
+                "fecha_fin": "{{ params.anio }}-{{ params.mes_fin|default:params.mes|default:12|stringformat:'02d' }}-{% if params.mes_fin in '1,3,5,7,8,10,12' or params.mes in '1,3,5,7,8,10,12' or not params.mes %}31{% elif params.mes_fin == 2 or params.mes == 2 %}28{% else %}30{% endif %}"
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.resumen) {
+                container.innerHTML = `<p class="m-0 text-[#e6edf3] leading-relaxed">${data.resumen}</p>`;
+                btn.innerText = "✓ Completo";
+            } else {
+                container.innerHTML = `<p class="m-0 text-[#f85149]">Error: No se pudo generar la respuesta.</p>`;
+                btn.innerText = "Reintentar";
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            container.innerHTML = `<p class="m-0 text-[#f85149]">Hubo un error de red.</p>`;
+            btn.innerText = "Reintentar";
+            btn.disabled = false;
+        });
+    });
+});
+</script>
+
+{% endblock %}

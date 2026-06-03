@@ -65,4 +65,8 @@ urlpatterns = [
     path("cancelar-plan/", views.cancelar_plan, name="cancelar_plan"),
     path("reactivar-plan/", views.reactivar_plan, name="reactivar_plan"),
     path("recibo/<int:pago_id>/", views.descargar_recibo, name="descargar_recibo"),
+
+    # Colaboradores
+    path("colaboradores/", views.app_colaboradores_list, name="colaboradores"),
+    path("colaboradores/<uuid:colab_id>/", views.app_colaborador_edit, name="colaborador_edit"),
 ]

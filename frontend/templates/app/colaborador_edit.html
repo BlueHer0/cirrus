@@ -1,0 +1,79 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Editar Colaborador{% endblock %}
+{% block page_title %}Editar Colaborador: {{ colaborador.usuario.email }}{% endblock %}
+{% block page_subtitle %}Gestiona los permisos y acceso a las empresas para este usuario.{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'app:colaboradores' %}" class="btn-ghost px-4 py-2 rounded-lg text-sm text-gray-400 font-medium">← Volver</a>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    <div class="glass rounded-xl p-6">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/10 pb-2">Permisos Globales</h3>
+        <p class="text-xs text-gray-500 mb-4">Estos permisos aplican a todas las empresas a las que este colaborador tenga acceso.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_ver_cfdis" {% if colaborador.puede_ver_cfdis %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Ver CFDIs</strong><br><span class="text-xs text-gray-500">Puede listar y buscar facturas.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_ver_analisis" {% if colaborador.puede_ver_analisis %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Ver Análisis</strong><br><span class="text-xs text-gray-500">Acceso al dashboard fiscal y gráficas.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_exportar" {% if colaborador.puede_exportar %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Exportar a Excel / PDF</strong><br><span class="text-xs text-gray-500">Generar reportes y conversiones masivas.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_subir_fiel" {% if colaborador.puede_subir_fiel %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Subir FIEL y CSD</strong><br><span class="text-xs text-gray-500">Gestionar certificados de las empresas.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_subir_xmls" {% if colaborador.puede_subir_xmls %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Subir XMLs Manualmente</strong><br><span class="text-xs text-gray-500">Cargar archivos .zip o .xml directamente.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_crear_empresa" {% if colaborador.puede_crear_empresa %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Crear Nuevas Empresas</strong><br><span class="text-xs text-gray-500">Registrar nuevas razones sociales al equipo.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_descargar_sat" {% if colaborador.puede_descargar_sat %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Descargar del SAT</strong><br><span class="text-xs text-gray-500">Disparar trabajos de sincronización manual.</span></span>
+            </label>
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="puede_ver_csf" {% if colaborador.puede_ver_csf %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span><strong>Ver CSF</strong><br><span class="text-xs text-gray-500">Consultar la Constancia de Situación Fiscal.</span></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Empresas Asignadas -->
+    <div class="glass rounded-xl p-6">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/10 pb-2">Empresas Asignadas</h3>
+        <p class="text-xs text-gray-500 mb-4">Selecciona las empresas que este colaborador puede administrar y ver.</p>
+        
+        <div class="space-y-2">
+            {% for e in empresas %}
+            <label class="flex items-center gap-3 text-sm text-gray-300 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+                <input type="checkbox" name="empresas" value="{{ e.id }}" {% if e.id in assigned_empresas %}checked{% endif %} class="rounded border-gray-600 bg-white/5 text-indigo-500">
+                <span class="font-mono text-xs">{{ e.rfc }}</span>
+                <span class="text-white">{{ e.nombre }}</span>
+            </label>
+            {% empty %}
+            <div class="text-sm text-gray-500 italic p-3">No tienes empresas registradas todavía.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="flex justify-end mt-6">
+        <button type="submit" class="btn-primary px-6 py-2.5 rounded-lg text-sm text-white font-medium shadow-lg hover:shadow-xl transition-all">
+            Guardar Permisos
+        </button>
+    </div>
+</form>
+{% endblock %}

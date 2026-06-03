@@ -13,6 +13,21 @@ urlpatterns = [
     # Dashboard
     path("", views.dashboard, name="dashboard"),
 
+    # Plan de producción
+    path("plan/", views.plan_produccion, name="plan"),
+
+    # Cerebro Fiscal
+    path("cerebro/", views.cerebro_fiscal_view, name="cerebro_fiscal"),
+    path("cerebro/<uuid:documento_id>/", views.cerebro_detalle_view, name="cerebro_detalle"),
+    path("cerebro/<uuid:documento_id>/resolver/", views.cerebro_resolver_version, name="cerebro_resolver"),
+
+    # Stripe events (auditoría webhook)
+    path("stripe-events/", views.stripe_events_view, name="stripe_events"),
+
+    # Clientes
+    path("clientes/", views.clientes_list, name="clientes"),
+    path("clientes/<int:user_id>/", views.cliente_detalle, name="cliente_detalle"),
+
     # Empresas
     path("empresas/", views.empresas_list, name="empresas"),
     path("empresas/<uuid:empresa_id>/", views.empresa_detalle, name="empresa_detalle"),
@@ -43,6 +58,10 @@ urlpatterns = [
     # CRM
     path("crm/", views.crm_list, name="crm"),
     path("crm/<int:lead_id>/", views.crm_detail, name="crm_detail"),
+    path("crm/snowie/<uuid:lead_id>/estado/", views.snowie_lead_update_estado, name="snowie_lead_estado"),
+
+    # Telegram
+    path("telegram/", views.telegram_config, name="telegram_config"),
 
     # Monitor
     path("monitor/", views.monitor_view, name="monitor"),

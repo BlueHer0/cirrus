@@ -63,6 +63,17 @@ class ClienteProfile(models.Model):
     subscription_current_period_end = models.DateTimeField(null=True, blank=True)
     subscription_cancel_at_period_end = models.BooleanField(default=False)
 
+    # Telegram — vinculación opcional del usuario con el bot de Cirrus
+    telegram_chat_id = models.CharField(
+        max_length=50, blank=True,
+        help_text="Chat ID del usuario en Telegram (vinculado al bot Cirrus)",
+    )
+    telegram_linked_at = models.DateTimeField(null=True, blank=True)
+    telegram_alerts_enabled = models.BooleanField(
+        default=True,
+        help_text="Recibir alertas del sistema vía Telegram (solo si chat_id está vinculado)",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

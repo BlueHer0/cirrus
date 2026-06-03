@@ -94,4 +94,126 @@
         </tbody>
     </table>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- ═══ LEADS SNOWIE (capturados vía webhook desde Snowie.ai) ═══ -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="mt-8 mb-3 flex items-center gap-3">
+    <h2 class="text-xl font-bold text-white">❄️ Leads Snowie</h2>
+    <span class="text-xs text-gray-500">Capturados vía webhook desde Snowie.ai</span>
+</div>
+
+<!-- Stats Snowie -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #06b6d4;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Snowie</div>
+        <div class="text-2xl font-bold text-white">{{ snowie_stats.total }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #3b82f6;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Nuevos (sin atender)</div>
+        <div class="text-2xl font-bold {% if snowie_stats.nuevos > 0 %}text-blue-400{% else %}text-white{% endif %}">{{ snowie_stats.nuevos }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #22c55e;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Convertidos</div>
+        <div class="text-2xl font-bold text-white">{{ snowie_stats.convertidos }}</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #8b5cf6;">
+        <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Última semana</div>
+        <div class="text-2xl font-bold text-white">{{ snowie_stats.ultima_semana }}</div>
+    </div>
+</div>
+
+<!-- Filtro Snowie -->
+<div class="glass rounded-xl p-4 mb-4">
+    <form method="get" class="flex flex-wrap items-center gap-3">
+        {% if filters.q %}<input type="hidden" name="q" value="{{ filters.q }}">{% endif %}
+        {% if filters.contactado %}<input type="hidden" name="contactado" value="{{ filters.contactado }}">{% endif %}
+        {% if filters.cliente %}<input type="hidden" name="cliente" value="{{ filters.cliente }}">{% endif %}
+
+        <select name="snowie_estado" class="px-3 py-2 rounded-lg text-sm text-gray-300 bg-glass-100 border border-glass-border">
+            <option value="">Estado: Todos</option>
+            <option value="nuevo" {% if filters.snowie_estado == "nuevo" %}selected{% endif %}>Nuevo</option>
+            <option value="contactado" {% if filters.snowie_estado == "contactado" %}selected{% endif %}>Contactado</option>
+            <option value="convertido" {% if filters.snowie_estado == "convertido" %}selected{% endif %}>Convertido</option>
+            <option value="descartado" {% if filters.snowie_estado == "descartado" %}selected{% endif %}>Descartado</option>
+        </select>
+        <button type="submit" class="px-4 py-2 rounded-lg text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition">Filtrar</button>
+        {% if filters.snowie_estado %}
+        <a href="{% url 'panel:crm' %}" class="text-xs text-gray-500 hover:text-white">Limpiar</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Tabla Snowie leads -->
+<div class="glass rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-white/5">
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Fecha</th>
+                <th class="px-4 py-3">Nombre</th>
+                <th class="px-4 py-3">Email</th>
+                <th class="px-4 py-3">Teléfono</th>
+                <th class="px-4 py-3">Plan</th>
+                <th class="px-4 py-3">Estado</th>
+                <th class="px-4 py-3 text-right">Cambiar estado</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5">
+            {% for lead in snowie_leads %}
+            <tr class="hover:bg-white/5 {% if lead.estado == 'nuevo' %}bg-blue-500/5{% endif %}">
+                <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ lead.creado_en|date:"d/m H:i" }}</td>
+                <td class="px-4 py-3 text-white">{{ lead.nombre|default:"—" }}</td>
+                <td class="px-4 py-3">
+                    {% if lead.email %}
+                    <a href="mailto:{{ lead.email }}" class="text-indigo-300 hover:text-indigo-200">{{ lead.email }}</a>
+                    {% else %}
+                    <span class="text-gray-600">—</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-gray-400 text-xs">{{ lead.telefono|default:"—" }}</td>
+                <td class="px-4 py-3">
+                    {% if lead.plan_interesado %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-500/20 text-purple-300">{{ lead.plan_interesado }}</span>
+                    {% else %}
+                    <span class="text-gray-600">—</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    {% if lead.estado == 'nuevo' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-info animate-pulse">● Nuevo</span>
+                    {% elif lead.estado == 'contactado' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-warning">● Contactado</span>
+                    {% elif lead.estado == 'convertido' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">● Convertido</span>
+                    {% elif lead.estado == 'descartado' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">● Descartado</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <form method="post" action="{% url 'panel:snowie_lead_estado' lead.id %}" class="inline">
+                        {% csrf_token %}
+                        <select name="estado" onchange="this.form.submit()" class="px-2 py-1 rounded text-xs text-white bg-glass-100 border border-glass-border focus:outline-none">
+                            <option value="nuevo" {% if lead.estado == 'nuevo' %}selected{% endif %}>Nuevo</option>
+                            <option value="contactado" {% if lead.estado == 'contactado' %}selected{% endif %}>Contactado</option>
+                            <option value="convertido" {% if lead.estado == 'convertido' %}selected{% endif %}>Convertido</option>
+                            <option value="descartado" {% if lead.estado == 'descartado' %}selected{% endif %}>Descartado</option>
+                        </select>
+                    </form>
+                </td>
+            </tr>
+            {% if lead.summary %}
+            <tr class="bg-white/[0.02]">
+                <td colspan="7" class="px-4 py-2 text-xs text-gray-500 italic">↳ {{ lead.summary|truncatechars:200 }}</td>
+            </tr>
+            {% endif %}
+            {% empty %}
+            <tr>
+                <td colspan="7" class="px-4 py-8 text-center text-gray-600 text-sm">
+                    Sin leads de Snowie todavía. Configura el webhook en <code class="text-indigo-300">/admin/core/systemsettings/</code>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endblock %}

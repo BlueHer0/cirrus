@@ -32,16 +32,20 @@ router = Router(tags=["cfdis"])
 # ── Helpers ───────────────────────────────────────────────────────────
 
 def _lookup_cfdi_with_access(request, uuid: str):
-    """Look up CFDI by UUID and verify the requesting API key has access to its empresa."""
+    """Look up CFDI by UUID and verify the requesting API key has access.
+
+    Usa rfc_empresa (canónico en el modelo CFDI) en vez de la FK empresa,
+    para incluir CFDIs subidos manualmente o con FK a instancias migradas.
+    """
     from core.models import CFDI
 
     cfdi = CFDI.objects.select_related("empresa").filter(uuid=uuid).first()
     if not cfdi:
         return None, _error("CFDI not found", 404)
 
-    # Verify API key has access to this empresa
-    allowed_ids = set(request.api_empresas.values_list("id", flat=True))
-    if cfdi.empresa_id not in allowed_ids:
+    # Verify API key has access via rfc_empresa (canonical access control)
+    allowed_rfcs = set(request.api_empresa_rfcs)
+    if not cfdi.rfc_empresa or cfdi.rfc_empresa not in allowed_rfcs:
         return None, _error("CFDI not accessible with this API key", 403)
 
     return cfdi, None
@@ -80,15 +84,39 @@ def _error(msg: str, status: int = 400):
 
 
 def _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante,
-                    fecha_desde=None, fecha_hasta=None):
-    """Apply query filters, always scoped to API key's allowed empresas."""
-    allowed_ids = list(request.api_empresas.values_list("id", flat=True))
-    qs = qs.filter(empresa_id__in=allowed_ids)
+                    fecha_desde=None, fecha_hasta=None,
+                    fecha_pago_desde=None, fecha_pago_hasta=None,
+                    year_pago=None, month_pago=None, tipo_nomina=None):
+    """Apply query filters, always scoped to API key's allowed empresas.
+
+    El scope principal se aplica vía rfc_empresa (canónico en el modelo CFDI).
+    Los parámetros empresa_id/rfc refinan dentro de ese scope, pero también se
+    validan contra las RFCs permitidas para prevenir bypass.
+
+    Filtros de nómina (tipo_comprobante='N'):
+      - fecha_pago_desde / fecha_pago_hasta: rango por FechaPago del complemento
+      - year_pago / month_pago: atajos
+      - tipo_nomina: 'O' (ordinaria) o 'E' (extraordinaria)
+    """
+    allowed_rfcs = request.api_empresa_rfcs
+    qs = qs.filter(rfc_empresa__in=allowed_rfcs)
 
     if empresa_id:
-        qs = qs.filter(empresa_id=empresa_id)
+        # Refinar por FK pero solo si la empresa pertenece al scope de la key
+        from core.models import Empresa
+        emp = Empresa.objects.filter(
+            id=empresa_id, rfc__in=allowed_rfcs,
+        ).first()
+        if emp:
+            qs = qs.filter(rfc_empresa=emp.rfc)
+        else:
+            qs = qs.none()  # empresa_id fuera del scope → no devolver nada
     if rfc:
-        qs = qs.filter(empresa__rfc=rfc.upper())
+        rfc_up = rfc.upper()
+        if rfc_up in allowed_rfcs:
+            qs = qs.filter(rfc_empresa=rfc_up)
+        else:
+            qs = qs.none()  # rfc fuera del scope → no devolver nada
     if year:
         qs = qs.filter(fecha__year=year)
     if month:
@@ -101,6 +129,17 @@ def _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprob
         qs = qs.filter(fecha__gte=fecha_desde)
     if fecha_hasta:
         qs = qs.filter(fecha__lte=fecha_hasta)
+    # ── Filtros de nómina ──
+    if fecha_pago_desde:
+        qs = qs.filter(fecha_pago_nomina__gte=fecha_pago_desde)
+    if fecha_pago_hasta:
+        qs = qs.filter(fecha_pago_nomina__lte=fecha_pago_hasta)
+    if year_pago:
+        qs = qs.filter(fecha_pago_nomina__year=year_pago)
+    if month_pago:
+        qs = qs.filter(fecha_pago_nomina__month=month_pago)
+    if tipo_nomina:
+        qs = qs.filter(tipo_nomina=tipo_nomina.upper())
     return qs
 
 
@@ -118,6 +157,12 @@ def list_cfdis(
     tipo_comprobante: Optional[str] = None,
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
+    # Filtros de nómina (tipo_comprobante='N')
+    fecha_pago_desde: Optional[str] = None,
+    fecha_pago_hasta: Optional[str] = None,
+    year_pago: Optional[int] = None,
+    month_pago: Optional[int] = None,
+    tipo_nomina: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
 ):
@@ -125,18 +170,24 @@ def list_cfdis(
 
     Query params:
     - rfc: filter by empresa RFC
-    - year, month: filter by date
+    - year, month: filter by FECHA DE TIMBRADO
     - tipo: 'emitido' or 'recibido'
     - tipo_comprobante: I, E, T, N, P
-    - fecha_desde, fecha_hasta: YYYY-MM-DD
+    - fecha_desde, fecha_hasta: YYYY-MM-DD (filtra por fecha de timbrado)
+    - fecha_pago_desde, fecha_pago_hasta: filtra por FechaPago del complemento de nómina
+    - year_pago, month_pago: atajos de fecha de pago
+    - tipo_nomina: 'O' (ordinaria) o 'E' (extraordinaria)
     - limit (max 500), offset: pagination
     """
     from core.models import CFDI
 
-    limit = min(limit, 500)  # cap at 500
+    limit = min(limit, 500)
     qs = CFDI.objects.all()
-    qs = _apply_filters(qs, request, empresa_id, rfc, year, month, tipo,
-                        tipo_comprobante, fecha_desde, fecha_hasta)
+    qs = _apply_filters(
+        qs, request, empresa_id, rfc, year, month, tipo,
+        tipo_comprobante, fecha_desde, fecha_hasta,
+        fecha_pago_desde, fecha_pago_hasta, year_pago, month_pago, tipo_nomina,
+    )
 
     total = qs.count()
     results = qs.order_by("-fecha")[offset:offset + limit]
@@ -163,6 +214,11 @@ def list_cfdis(
             "estado_sat": c.estado_sat or "",
             "folio": c.folio or "",
             "serie": c.serie or "",
+            # Nómina (solo relevante si tipo_comprobante == 'N')
+            "fecha_pago_nomina": str(c.fecha_pago_nomina) if c.fecha_pago_nomina else None,
+            "fecha_inicial_pago": str(c.fecha_inicial_pago) if c.fecha_inicial_pago else None,
+            "fecha_final_pago": str(c.fecha_final_pago) if c.fecha_final_pago else None,
+            "tipo_nomina": c.tipo_nomina or "",
         } for c in results],
     })
 
@@ -275,16 +331,27 @@ def export_cfdis_json(
     tipo_comprobante: Optional[str] = None,
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
+    fecha_pago_desde: Optional[str] = None,
+    fecha_pago_hasta: Optional[str] = None,
+    year_pago: Optional[int] = None,
+    month_pago: Optional[int] = None,
+    tipo_nomina: Optional[str] = None,
     limit: int = 1000,
     offset: int = 0,
 ):
-    """Export CFDIs as JSON with all fields. Max 5000 per request."""
+    """Export CFDIs as JSON with all fields. Max 5000 per request.
+
+    Admite filtros de nómina (ver /list/ para detalles).
+    """
     from core.models import CFDI
 
     limit = min(limit, 5000)
     qs = CFDI.objects.all()
-    qs = _apply_filters(qs, request, empresa_id, rfc, year, month, tipo,
-                        tipo_comprobante, fecha_desde, fecha_hasta)
+    qs = _apply_filters(
+        qs, request, empresa_id, rfc, year, month, tipo,
+        tipo_comprobante, fecha_desde, fecha_hasta,
+        fecha_pago_desde, fecha_pago_hasta, year_pago, month_pago, tipo_nomina,
+    )
 
     total = qs.count()
     results = qs.order_by("-fecha")[offset:offset + limit]
@@ -318,6 +385,11 @@ def export_cfdis_json(
             "version": c.version or "",
             "descargado_at": c.descargado_at.isoformat() if c.descargado_at else None,
             "fuente": c.fuente or "",
+            # Nómina
+            "fecha_pago_nomina": str(c.fecha_pago_nomina) if c.fecha_pago_nomina else None,
+            "fecha_inicial_pago": str(c.fecha_inicial_pago) if c.fecha_inicial_pago else None,
+            "fecha_final_pago": str(c.fecha_final_pago) if c.fecha_final_pago else None,
+            "tipo_nomina": c.tipo_nomina or "",
         } for c in results],
     })
 
@@ -609,15 +681,24 @@ def export_cfdis_to_excel(
     month: Optional[int] = None,
     tipo: Optional[str] = None,
     tipo_comprobante: Optional[str] = None,
+    fecha_pago_desde: Optional[str] = None,
+    fecha_pago_hasta: Optional[str] = None,
+    year_pago: Optional[int] = None,
+    month_pago: Optional[int] = None,
+    tipo_nomina: Optional[str] = None,
 ):
     """Export filtered CFDIs to a styled .xlsx file. Scoped to API key's empresas."""
     from core.models import CFDI
     from core.services.excel_export import export_cfdis_excel
 
     qs = CFDI.objects.all()
-    qs = _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante)
+    qs = _apply_filters(
+        qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante,
+        fecha_pago_desde=fecha_pago_desde, fecha_pago_hasta=fecha_pago_hasta,
+        year_pago=year_pago, month_pago=month_pago, tipo_nomina=tipo_nomina,
+    )
 
-    title = f"CFDIs_{year or 'all'}_{month or 'all'}"
+    title = f"CFDIs_{year or year_pago or 'all'}_{month or month_pago or 'all'}"
     xlsx_bytes = export_cfdis_excel(qs, title=title)
 
     return HttpResponse(
@@ -639,16 +720,25 @@ def export_cfdis_to_csv(
     month: Optional[int] = None,
     tipo: Optional[str] = None,
     tipo_comprobante: Optional[str] = None,
+    fecha_pago_desde: Optional[str] = None,
+    fecha_pago_hasta: Optional[str] = None,
+    year_pago: Optional[int] = None,
+    month_pago: Optional[int] = None,
+    tipo_nomina: Optional[str] = None,
 ):
     """Export filtered CFDIs to CSV (UTF-8 BOM). Scoped to API key's empresas."""
     from core.models import CFDI
     from core.services.excel_export import export_cfdis_csv
 
     qs = CFDI.objects.all()
-    qs = _apply_filters(qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante)
+    qs = _apply_filters(
+        qs, request, empresa_id, rfc, year, month, tipo, tipo_comprobante,
+        fecha_pago_desde=fecha_pago_desde, fecha_pago_hasta=fecha_pago_hasta,
+        year_pago=year_pago, month_pago=month_pago, tipo_nomina=tipo_nomina,
+    )
 
     csv_bytes = export_cfdis_csv(qs)
-    filename = f"CFDIs_{year or 'all'}_{month or 'all'}.csv"
+    filename = f"CFDIs_{year or year_pago or 'all'}_{month or month_pago or 'all'}.csv"
 
     return HttpResponse(
         csv_bytes,

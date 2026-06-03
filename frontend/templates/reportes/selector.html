@@ -1,0 +1,190 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Reportes{% endblock %}
+{% block page_title %}Reportes Fiscales{% endblock %}
+{% block page_subtitle %}Genera reportes en pantalla o PDF{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="glass rounded-2xl p-6 md:p-8">
+
+        <!-- Header -->
+        <div class="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2));">
+                <span class="text-xl">📊</span>
+            </div>
+            <div>
+                <h3 class="text-white font-semibold">Configurar Reporte</h3>
+                <p class="text-gray-500 text-xs">Selecciona empresa y periodo para generar tu reporte fiscal</p>
+            </div>
+        </div>
+
+        {% if empresas %}
+        <form id="report-form" method="get" class="space-y-6">
+
+            <!-- Empresa Selector -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">🏢 Empresa</label>
+                <select name="empresa_id" id="sel-empresa" required
+                    class="w-full px-4 py-3 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);">
+                    <option value="">— Selecciona una empresa —</option>
+                    {% for e in empresas %}
+                    <option value="{{ e.id }}">{{ e.rfc }} — {{ e.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Tipo de Periodo -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">📅 Tipo de periodo</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" onclick="setTipoPeriodo('mes')" id="btn-mes"
+                        class="periodo-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-white border"
+                        style="background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.4);">
+                        Mes específico
+                    </button>
+                    <button type="button" onclick="setTipoPeriodo('rango')" id="btn-rango"
+                        class="periodo-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-gray-400 border border-white/8 hover:border-white/20 hover:text-gray-200"
+                        style="background: rgba(255,255,255,0.03);">
+                        Rango de meses
+                    </button>
+                    <button type="button" onclick="setTipoPeriodo('anual')" id="btn-anual"
+                        class="periodo-btn px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-gray-400 border border-white/8 hover:border-white/20 hover:text-gray-200"
+                        style="background: rgba(255,255,255,0.03);">
+                        Año completo
+                    </button>
+                </div>
+                <input type="hidden" name="tipo_periodo" id="inp-tipo" value="mes">
+            </div>
+
+            <!-- Año -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">🗓️ Año</label>
+                <select name="year" id="sel-year"
+                    class="w-full px-4 py-3 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);">
+                    {% for y in years %}
+                    <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Mes Inicio -->
+            <div id="grp-mes-inicio">
+                <label class="block text-sm font-medium text-gray-300 mb-2" id="lbl-mes-inicio">Mes</label>
+                <select name="mes_inicio" id="sel-mes-inicio"
+                    class="w-full px-4 py-3 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);">
+                    {% for val, name in months %}
+                    <option value="{{ val }}" {% if val == current_month %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Mes Fin (only for rango) -->
+            <div id="grp-mes-fin" style="display: none;">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Mes fin</label>
+                <select name="mes_fin" id="sel-mes-fin"
+                    class="w-full px-4 py-3 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);">
+                    {% for val, name in months %}
+                    <option value="{{ val }}" {% if val == current_month %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/5">
+                <button type="submit" id="btn-ver" class="flex-1 px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-0.5"
+                    style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                    📊 Ver reporte en pantalla
+                </button>
+                <button type="button" id="btn-pdf" onclick="downloadPDF()" class="flex-1 px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg hover:shadow-emerald-500/20 hover:-translate-y-0.5"
+                    style="background: linear-gradient(135deg, #059669, #10b981);">
+                    📄 Descargar PDF
+                </button>
+            </div>
+        </form>
+        {% else %}
+        <div class="text-center py-12">
+            <div class="text-4xl mb-4">🏢</div>
+            <h3 class="text-white text-lg font-semibold mb-2">Sin empresas registradas</h3>
+            <p class="text-gray-500 text-sm mb-6">Registra una empresa para generar reportes</p>
+            <a href="{% url 'app:crear_empresa' %}" class="btn-primary px-6 py-3 rounded-xl text-sm text-white inline-block">
+                Registrar empresa →
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+let currentTipo = 'mes';
+
+function setTipoPeriodo(tipo) {
+    currentTipo = tipo;
+    document.getElementById('inp-tipo').value = tipo;
+
+    // Reset all buttons
+    document.querySelectorAll('.periodo-btn').forEach(btn => {
+        btn.style.background = 'rgba(255,255,255,0.03)';
+        btn.style.borderColor = 'rgba(255,255,255,0.08)';
+        btn.className = btn.className.replace('text-white', 'text-gray-400');
+    });
+
+    // Activate selected
+    const active = document.getElementById('btn-' + tipo);
+    active.style.background = 'rgba(99,102,241,0.15)';
+    active.style.borderColor = 'rgba(99,102,241,0.4)';
+    active.className = active.className.replace('text-gray-400', 'text-white');
+
+    // Show/hide month selectors
+    const grpInicio = document.getElementById('grp-mes-inicio');
+    const grpFin = document.getElementById('grp-mes-fin');
+    const lblInicio = document.getElementById('lbl-mes-inicio');
+
+    if (tipo === 'anual') {
+        grpInicio.style.display = 'none';
+        grpFin.style.display = 'none';
+    } else if (tipo === 'rango') {
+        grpInicio.style.display = 'block';
+        grpFin.style.display = 'block';
+        lblInicio.textContent = 'Mes inicio';
+    } else {
+        grpInicio.style.display = 'block';
+        grpFin.style.display = 'none';
+        lblInicio.textContent = 'Mes';
+    }
+}
+
+function buildQueryString() {
+    const empresa = document.getElementById('sel-empresa').value;
+    if (!empresa) {
+        alert('Selecciona una empresa');
+        return null;
+    }
+    const year = document.getElementById('sel-year').value;
+    const mesInicio = document.getElementById('sel-mes-inicio').value;
+    const mesFin = document.getElementById('sel-mes-fin').value;
+
+    let qs = `empresa_id=${empresa}&tipo_periodo=${currentTipo}&year=${year}&mes_inicio=${mesInicio}`;
+    if (currentTipo === 'rango') {
+        qs += `&mes_fin=${mesFin}`;
+    }
+    return qs;
+}
+
+// Override form submit to go to ver
+document.getElementById('report-form')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const qs = buildQueryString();
+    if (qs) window.location.href = '/reportes/ver/?' + qs;
+});
+
+function downloadPDF() {
+    const qs = buildQueryString();
+    if (qs) window.location.href = '/reportes/pdf/?' + qs;
+}
+</script>
+{% endblock %}

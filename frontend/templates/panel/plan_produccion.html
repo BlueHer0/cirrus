@@ -1,0 +1,237 @@
+{% extends "panel/base_admin.html" %}
+
+{% block title %}Plan de Producción{% endblock %}
+{% block page_title %}Plan de Producción{% endblock %}
+{% block page_subtitle %}Roadmap interactivo — progreso persistente en tu navegador{% endblock %}
+
+{% block extra_head %}
+<style>
+    .plan-bar-bg { background: rgba(255,255,255,0.06); }
+    .plan-bar-fill { transition: width 0.5s ease; }
+    .plan-section { margin-bottom: 1.5rem; }
+    .plan-section-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 0.5rem 0;
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .plan-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.25rem;
+        transition: background 0.15s;
+    }
+    .plan-item:hover { background: rgba(255,255,255,0.04); }
+    .plan-item.clickable { cursor: pointer; }
+    .plan-item.is-done .plan-title { text-decoration: line-through; opacity: 0.5; }
+    .plan-item.is-done .plan-desc { opacity: 0.3; }
+    .plan-check {
+        width: 1.25rem;
+        height: 1.25rem;
+        min-width: 1.25rem;
+        border-radius: 0.25rem;
+        border: 2px solid rgba(255,255,255,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        margin-top: 0.1rem;
+        transition: all 0.15s;
+    }
+    .plan-check.checked {
+        background: #1D9E75;
+        border-color: #1D9E75;
+        color: white;
+    }
+    .plan-check.locked {
+        background: #1D9E75;
+        border-color: #1D9E75;
+        color: white;
+        opacity: 0.6;
+    }
+    .plan-title { font-weight: 600; font-size: 0.875rem; }
+    .plan-desc { font-size: 0.75rem; color: #9ca3af; margin-top: 0.15rem; }
+    .plan-dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        min-width: 0.5rem;
+        border-radius: 50%;
+        margin-top: 0.35rem;
+    }
+    .dot-ok { background: #1D9E75; }
+    .dot-danger { background: #E24B4A; }
+    .dot-warn { background: #EF9F27; }
+    .dot-blue { background: #378ADD; }
+    .legend-dot {
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Progress bar -->
+<div class="glass rounded-xl p-4 mb-4">
+    <div class="flex items-center justify-between mb-2">
+        <span class="text-sm text-gray-400">Progreso total</span>
+        <span class="text-sm font-bold text-white" id="progress-text">0%</span>
+    </div>
+    <div class="plan-bar-bg rounded-full h-3 overflow-hidden">
+        <div class="plan-bar-fill h-full rounded-full" id="progress-bar"
+             style="width:0%; background: linear-gradient(90deg, #1D9E75, #378ADD);"></div>
+    </div>
+    <div class="flex items-center gap-4 mt-3 text-xs text-gray-500">
+        <span><span class="legend-dot dot-ok"></span> Completado</span>
+        <span><span class="legend-dot dot-danger"></span> Bloqueante</span>
+        <span><span class="legend-dot dot-warn"></span> Importante</span>
+        <span><span class="legend-dot dot-blue"></span> Post-lanzamiento</span>
+    </div>
+</div>
+
+<!-- Plan sections -->
+<div id="plan-container" class="glass rounded-xl p-5"></div>
+
+<script>
+const STORAGE_KEY = 'cirrus_plan_v3';
+
+const data = [
+  {
+    title: "Seguridad inmediata",
+    items: [
+      { id: "creds", title: "Rotar credenciales expuestas en el chat", desc: "Sudo, token Telegram, passwords SMTP noreply y contacto. Hacerlo HOY.", type: "danger", done: false },
+    ]
+  },
+  {
+    title: "Ya completado",
+    items: [
+      { id: "audit", title: "Auditoría del descargador CFDI", desc: "17 hallazgos clasificados. 4 críticos, 5 altos, 5 medios, 3 bajos.", type: "ok", done: true },
+      { id: "fixes", title: "5 fixes críticos aplicados y verificados", desc: "transaction.atomic(), janitor FIEL, Celery acks_late, meses adyacentes, Docling env var.", type: "ok", done: true },
+      { id: "docs", title: "Documentación generada (1,768 líneas / 8 archivos)", desc: "En /var/www/cirrus/docs/ — NO revisada ni validada aún. Pendiente leerla.", type: "ok", done: true },
+      { id: "smtp", title: "SMTP configurado con credenciales cifradas Fernet", desc: "noreply@ y contacto@ verificados contra chocobo.mxrouting.net:465.", type: "ok", done: true },
+      { id: "telegram", title: "Telegram bot operativo con alertas por nivel", desc: "Panel editable en /panel/telegram/ sin deploy. 1,937 errores 401 resueltos.", type: "ok", done: true },
+      { id: "janitor", title: "Janitor de FIELs huérfanas cada 30 min", desc: "Limpió 21 archivos huérfanos en primer ciclo. Corriendo en producción.", type: "ok", done: true },
+      { id: "dashboard", title: "Panel admin rediseñado como panel de negocio", desc: "Eliminado: Empresas, CFDIs, Descargas, API Keys individuales. KPIs de negocio.", type: "ok", done: true },
+      { id: "users", title: "Usuarios de prueba eliminados", desc: "arizpef@gmail.com y farizpe@nubex.me eliminados. Staff excluido de métricas.", type: "ok", done: true },
+      { id: "snowie", title: "Prompt Snowie corregido — captura proactiva de leads", desc: "Bot pide nombre desde el saludo inicial. Correo después de primera pregunta.", type: "ok", done: true },
+    ]
+  },
+  {
+    title: "Bloqueantes antes de producción",
+    items: [
+      { id: "docs-review", title: "Revisar y validar documentación generada", desc: "Nunca la has visto. Está en /var/www/cirrus/docs/ — leerla y corregir lo que esté mal.", type: "danger", done: false },
+      { id: "onboarding", title: "Auditar pipeline completo de onboarding de cliente", desc: "Registro → email → FIEL → verificación SAT → encolamiento → descarga histórica → CFDIs visibles.", type: "danger", done: false },
+      { id: "planes", title: "Verificar que el sistema respeta límites por plan", desc: "¿Básico descarga el 1 y 15? ¿Profesional semanal? ¿Enterprise cada 2.5 días? ¿O todos descargan igual?", type: "danger", done: false },
+      { id: "gaps", title: "Auditar gap detection para clientes nuevos", desc: "¿Se detectan y rellenan gaps desde el día 1 o solo aplica a históricos ya descargados?", type: "danger", done: false },
+      { id: "stripe", title: "Auditar Stripe — pagos, webhooks, ciclo de vida", desc: "¿Pago exitoso activa plan automáticamente? ¿Cancelación pausa acceso? ¿Reintento en fallos?", type: "danger", done: false },
+      { id: "webui", title: "Revisar webui del cliente — flujo e intuitividad", desc: "Registro → confirmación → empresa → FIEL → espera → CFDIs. ¿Es claro para no técnicos?", type: "danger", done: false },
+      { id: "fiscal", title: "Validar lógica fiscal con contador real", desc: "ISR al 30% genérico es incorrecto por régimen. Sesión de 1h con contador antes de cobrar por reportes.", type: "danger", done: false },
+    ]
+  },
+  {
+    title: "Importantes — no bloqueantes",
+    items: [
+      { id: "cancelados", title: "CFDIs cancelados — detección y alerta oportuna", desc: "¿Cada cuánto revisa cancelaciones en SAT? ¿Avisa al cliente a tiempo?", type: "warn", done: false },
+      { id: "apikeys", title: "API keys de clientes — aislamiento y seguridad", desc: "Revisar que un cliente no pueda acceder a CFDIs de otro. Multi-tenant crítico.", type: "warn", done: false },
+      { id: "snowie-webhook", title: "Webhook Snowie → endpoint en CIRRUS", desc: "Bot configurado. Falta: POST /api/webhooks/snowie/ + tabla SnowieLead + notif Telegram + email promo.", type: "warn", done: false },
+      { id: "admin-panel", title: "Terminar rediseño panel admin", desc: "Sidebar limpio, eliminar vistas de datos de clientes que no corresponden al dueño.", type: "warn", done: false },
+    ]
+  },
+  {
+    title: "Post-lanzamiento — primeros clientes reales",
+    items: [
+      { id: "reportes", title: "Reportes PDF y descarga selectiva de XML", desc: "Features de retención. Construir con datos reales de clientes activos.", type: "blue", done: false },
+      { id: "telegram-cliente", title: "Notificaciones Telegram al cliente", desc: "Onboarding del bot por cliente. La infraestructura ya existe, falta el flujo.", type: "blue", done: false },
+      { id: "colaboradores", title: "Módulo de colaboradores", desc: "$30 MXN/mes por usuario adicional. Permisos granulares por empresa.", type: "blue", done: false },
+      { id: "buzon", title: "Lectura de Buzón Tributario SAT", desc: "Diferenciador fuerte. Requiere scraping adicional con FIEL.", type: "blue", done: false },
+    ]
+  }
+];
+
+// Load saved state
+function loadState() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch { return {}; }
+}
+
+function saveState(state) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function render() {
+    const state = loadState();
+    const container = document.getElementById('plan-container');
+    container.innerHTML = '';
+
+    let totalItems = 0;
+    let doneItems = 0;
+
+    data.forEach(section => {
+        const sec = document.createElement('div');
+        sec.className = 'plan-section';
+
+        const title = document.createElement('div');
+        title.className = 'plan-section-title text-gray-400';
+        title.textContent = section.title;
+        sec.appendChild(title);
+
+        section.items.forEach(item => {
+            totalItems++;
+            // Permanently done items always count as done
+            const isDone = item.done || (state[item.id] === true);
+            if (isDone) doneItems++;
+
+            const row = document.createElement('div');
+            row.className = 'plan-item' + (isDone ? ' is-done' : '') + (!item.done ? ' clickable' : '');
+
+            // Check box
+            const check = document.createElement('div');
+            check.className = 'plan-check' + (isDone ? (item.done ? ' locked' : ' checked') : '');
+            check.textContent = isDone ? '✓' : '';
+            row.appendChild(check);
+
+            // Dot
+            const dot = document.createElement('div');
+            dot.className = 'plan-dot dot-' + item.type;
+            row.appendChild(dot);
+
+            // Text
+            const text = document.createElement('div');
+            text.style.flex = '1';
+            text.innerHTML = '<div class="plan-title text-white">' + item.title + '</div>' +
+                             '<div class="plan-desc">' + item.desc + '</div>';
+            row.appendChild(text);
+
+            // Click handler (only for non-permanently-done items)
+            if (!item.done) {
+                row.addEventListener('click', () => {
+                    const st = loadState();
+                    st[item.id] = !st[item.id];
+                    saveState(st);
+                    render();
+                });
+            }
+
+            sec.appendChild(row);
+        });
+
+        container.appendChild(sec);
+    });
+
+    // Update progress
+    const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = doneItems + '/' + totalItems + ' (' + pct + '%)';
+}
+
+render();
+</script>
+{% endblock %}

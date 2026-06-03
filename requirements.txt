@@ -27,3 +27,16 @@ python-decouple>=3.8
 
 # Server
 gunicorn>=22.0
+
+# PDF Generation
+weasyprint==68.1
+
+# AI
+anthropic>=0.80
+
+# Stripe billing
+stripe>=14.0,<15.0
+
+# Cerebro Fiscal — RAG
+pgvector>=0.4
+tiktoken>=0.10

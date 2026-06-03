@@ -2,84 +2,236 @@
 
 {% block title %}Dashboard{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
-{% block page_subtitle %}Resumen general de todas las empresas{% endblock %}
+{% block page_subtitle %}KPIs de negocio — clientes, ingresos y salud operativa{% endblock %}
 
 {% block content %}
-<!-- Stats Row -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #6366f1;">
-        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Empresas</div>
-        <div class="text-3xl font-bold text-white">{{ stats.total_empresas }}</div>
-        <div class="text-xs text-gray-500 mt-1">{{ stats.empresas_activas }} activas</div>
-    </div>
-    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #22c55e;">
-        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">CFDIs Totales</div>
-        <div class="text-3xl font-bold text-white">{{ stats.total_cfdis|floatformat:0 }}</div>
-        <div class="text-xs text-gray-500 mt-1">{{ stats.cfdis_este_mes }} este mes</div>
-    </div>
-    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #3b82f6;">
-        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Monto Total</div>
-        <div class="text-3xl font-bold text-white">${{ stats.monto_total|floatformat:0|default:"0" }}</div>
-        <div class="text-xs text-gray-500 mt-1">Todas las empresas</div>
-    </div>
-    <div class="glass stat-card rounded-xl p-5" style="--glow-color: #f59e0b;">
-        <div class="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Descargas Hoy</div>
-        <div class="text-3xl font-bold text-white">{{ stats.descargas_hoy }}</div>
-        <div class="text-xs text-gray-500 mt-1">{{ stats.descargas_error }} con error</div>
+<!-- ═══ ZONA 0: AGREGADOS DEL SISTEMA (informativos) ═══ -->
+<div class="glass rounded-xl p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <span class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Agregados del sistema:</span>
+        <span><span class="text-gray-400">API Keys</span> <span class="text-white font-semibold">{{ system_stats.api_keys_activas }}</span><span class="text-gray-600">/{{ system_stats.api_keys_total }}</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">Descargas activas</span> <span class="text-white font-semibold">{{ system_stats.downloads_activos }}</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">CFDIs procesados</span> <span class="text-white font-semibold">{{ system_stats.cfdis_sistema }}</span></span>
     </div>
 </div>
 
-<!-- Empresas Grid -->
+<!-- ═══ ZONA 1: KPIs DE NEGOCIO ═══ -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #22c55e;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">MRR</div>
+        <div class="text-2xl font-bold text-white">${{ kpis.mrr|floatformat:0 }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Recurrente mensual</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #3b82f6;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Clientes activos</div>
+        <div class="text-2xl font-bold text-white">{{ kpis.clientes_activos }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Suscripción activa</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #6366f1;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Nuevos 30d</div>
+        <div class="text-2xl font-bold text-white">{{ kpis.nuevos_30d }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Altas recientes</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #ef4444;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Churn 30d</div>
+        <div class="text-2xl font-bold text-white">{{ kpis.churn_30d }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Cancelaciones</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #8b5cf6;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Ingresos mes</div>
+        <div class="text-2xl font-bold text-white">${{ kpis.revenue_mes|floatformat:0 }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Pagos recibidos</div>
+    </div>
+    <div class="glass stat-card rounded-xl p-4" style="--glow-color: #f59e0b;">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">ARPU</div>
+        <div class="text-2xl font-bold text-white">${{ kpis.arpu|floatformat:0 }}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Promedio por cliente</div>
+    </div>
+</div>
+
+<!-- ═══ ZONA 2 + 3: DISTRIBUCIÓN POR PLAN + CRECIMIENTO ═══ -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <!-- Distribución por plan -->
+    <div class="glass rounded-xl p-5 lg:col-span-2">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">Distribución por plan</h3>
+            <span class="text-xs text-gray-500">Clientes y MRR aportado</span>
+        </div>
+        <div class="space-y-3">
+            {% for p in planes %}
+            <div>
+                <div class="flex items-center justify-between text-sm mb-1">
+                    <span class="text-white font-medium">{{ p.nombre }}</span>
+                    <span class="text-gray-400">
+                        <span class="text-white font-semibold">{{ p.total }}</span>
+                        <span class="text-gray-500">clientes</span>
+                        · <span class="text-green-400 font-mono">${{ p.mrr|floatformat:0 }}</span>
+                        <span class="text-gray-600">/mes</span>
+                    </span>
+                </div>
+                <div class="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all"
+                         style="width: {{ p.pct }}%;
+                                background: linear-gradient(90deg,
+                                {% if p.slug == 'enterprise' %}#8b5cf6, #6366f1
+                                {% elif p.slug == 'pro' %}#22c55e, #10b981
+                                {% elif p.slug == 'basico' %}#3b82f6, #6366f1
+                                {% elif p.slug == 'owner' %}#f59e0b, #ef4444
+                                {% else %}#64748b, #475569{% endif %});">
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-gray-600 text-sm py-4">Sin planes configurados</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Crecimiento -->
+    <div class="glass rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">Nuevos clientes</h3>
+            <span class="text-xs text-gray-500">Últimos 6 meses</span>
+        </div>
+        <div class="flex items-end justify-between gap-2 h-32">
+            {% for label in growth.labels %}
+            <div class="flex flex-col items-center flex-1 group">
+                <div class="text-xs text-gray-500 mb-1">{{ growth.new_clients|slice:forloop.counter0 }}</div>
+                <div class="w-full rounded-t bg-gradient-to-t from-indigo-600 to-purple-500 transition-all hover:from-indigo-500 hover:to-purple-400"
+                     style="height: {% widthratio growth.new_clients|slice:forloop.counter0|add:0 growth.max_new 100 %}%;"></div>
+                <div class="text-[10px] text-gray-600 mt-1">{{ label }}</div>
+            </div>
+            {% empty %}
+            <div class="text-center text-gray-600 text-sm py-4 w-full">Sin datos de crecimiento</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ═══ ZONA 4: FUNNEL DE CONVERSIÓN ═══ -->
+<div class="glass rounded-xl p-5 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white">Funnel de conversión</h3>
+        <span class="text-xs text-gray-500">Lead → Cliente pagado</span>
+    </div>
+    <div class="space-y-2">
+        {% for stage in funnel %}
+        <div class="flex items-center gap-3">
+            <div class="w-48 text-sm text-gray-300 text-right">{{ stage.label }}</div>
+            <div class="flex-1 relative h-7 bg-white/5 rounded">
+                <div class="h-full rounded bg-gradient-to-r from-indigo-600 to-purple-500 flex items-center px-3"
+                     style="width: {{ stage.pct_total }}%;">
+                    <span class="text-xs font-semibold text-white whitespace-nowrap">{{ stage.count }}</span>
+                </div>
+            </div>
+            <div class="w-20 text-xs text-right">
+                {% if stage.pct_step is not None %}
+                <span class="{% if stage.pct_step >= 50 %}text-green-400{% elif stage.pct_step >= 25 %}text-yellow-400{% else %}text-red-400{% endif %}">
+                    {{ stage.pct_step }}%
+                </span>
+                {% else %}
+                <span class="text-gray-600">—</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ═══ ZONA 5: SALUD OPERATIVA (compacta) ═══ -->
+<div class="glass rounded-xl p-4 mb-6">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <span class="text-gray-500 text-xs uppercase tracking-wider font-semibold">Salud operativa:</span>
+        <span>{{ health.sat_status }} <span class="text-gray-400">SAT</span> <span class="text-white font-semibold">{{ health.sat_avg }}%</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">Empresas c/FIEL</span> <span class="text-white font-semibold">{{ health.empresas_con_fiel }}/{{ health.empresas_total }}</span> <span class="text-gray-500">({{ health.fiel_ratio }}%)</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">CFDIs 30d</span> <span class="text-white font-semibold">{{ health.cfdis_30d }}</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">Fallos 24h</span> <span class="{% if health.fallos_24h > 0 %}text-red-400{% else %}text-green-400{% endif %} font-semibold">{{ health.fallos_24h }}</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">Jobs cola</span> <span class="text-white font-semibold">{{ health.jobs_en_cola }}</span></span>
+        <span class="text-gray-600">·</span>
+        <span><span class="text-gray-400">Ejecutando</span> <span class="text-blue-400 font-semibold">{{ health.jobs_ejecutando }}</span></span>
+        <a href="{% url 'panel:monitor' %}" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">Ver monitor completo →</a>
+    </div>
+</div>
+
+<!-- ═══ ZONA 7: ATENCIÓN REQUERIDA ═══ -->
+{% if attention %}
+<div class="glass rounded-xl p-5 mb-6 border-l-4 border-yellow-500/50">
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold text-white">Atención requerida</h3>
+        <span class="text-xs text-gray-500">{{ attention|length }} item(s)</span>
+    </div>
+    <ul class="space-y-2">
+        {% for item in attention %}
+        <li class="flex items-center gap-3 text-sm">
+            <span class="text-lg">{{ item.icon }}</span>
+            <span class="flex-1 {% if item.level == 'critical' %}text-red-300{% else %}text-yellow-300{% endif %}">{{ item.text }}</span>
+            {% if item.link %}
+            <a href="{% url item.link %}" class="text-xs text-indigo-400 hover:text-indigo-300">Ver →</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- ═══ ZONA 6: TOP CLIENTES ═══ -->
 <div class="glass rounded-xl p-5">
     <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-white">Empresas</h3>
-        <span class="text-xs text-gray-500">Última actualización en tiempo real</span>
+        <h3 class="text-lg font-semibold text-white">Top 10 clientes (por MRR)</h3>
+        <a href="{% url 'panel:clientes' %}" class="text-xs text-indigo-400 hover:text-indigo-300">Ver todos →</a>
     </div>
     <table class="glass-table w-full text-sm">
         <thead>
             <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                <th class="pb-3 font-semibold">RFC</th>
-                <th class="pb-3 font-semibold">Nombre</th>
-                <th class="pb-3 font-semibold">FIEL</th>
-                <th class="pb-3 font-semibold">CFDIs</th>
-                <th class="pb-3 font-semibold">Último Scrape</th>
+                <th class="pb-3 font-semibold">Email</th>
+                <th class="pb-3 font-semibold">Plan</th>
+                <th class="pb-3 font-semibold text-right">MRR</th>
+                <th class="pb-3 font-semibold text-right">Empresas</th>
+                <th class="pb-3 font-semibold">Última actividad</th>
                 <th class="pb-3 font-semibold">Estado</th>
             </tr>
         </thead>
         <tbody>
-            {% for e in empresas %}
-            <tr class="cursor-pointer" onclick="location.href='{% url 'panel:empresa_detalle' e.id %}'">
-                <td class="py-3 font-mono text-indigo-300 font-medium">{{ e.rfc }}</td>
-                <td class="py-3 text-white">{{ e.nombre }}</td>
+            {% for c in top_clientes %}
+            <tr class="cursor-pointer hover:bg-white/5" onclick="location.href='{% url 'panel:cliente_detalle' c.user.id %}'">
+                <td class="py-3 text-white font-medium">{{ c.email|truncatechars:35 }}</td>
                 <td class="py-3">
-                    {% if e.fiel_verificada %}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot"></span> Verificada
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold
+                        {% if c.plan_slug == 'owner' %}bg-amber-500/20 text-amber-300
+                        {% elif c.plan_slug == 'enterprise' %}bg-purple-500/20 text-purple-300
+                        {% elif c.plan_slug == 'pro' %}bg-green-500/20 text-green-300
+                        {% elif c.plan_slug == 'basico' %}bg-blue-500/20 text-blue-300
+                        {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                        {{ c.plan_nombre }}
                     </span>
-                    {% elif e.fiel_cer_key %}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-warning">Pendiente</span>
-                    {% else %}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">Sin FIEL</span>
-                    {% endif %}
                 </td>
-                <td class="py-3 text-gray-400">{{ e.cfdi_count }}</td>
-                <td class="py-3 text-gray-400">
-                    {% if e.ultimo_scrape %}
-                    {{ e.ultimo_scrape|timesince }} atrás
-                    {% else %}
-                    <span class="text-gray-600">—</span>
-                    {% endif %}
+                <td class="py-3 text-right font-mono text-green-400">${{ c.mrr|floatformat:0 }}</td>
+                <td class="py-3 text-right text-gray-300">{{ c.empresas_count }}</td>
+                <td class="py-3 text-gray-500">
+                    {% if c.last_activity %}{{ c.last_activity|timesince }} atrás{% else %}<span class="text-gray-600">—</span>{% endif %}
                 </td>
                 <td class="py-3">
-                    {% if e.descarga_activa %}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">Activa</span>
+                    {% if c.subscription_status == 'active' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-success">● Activa</span>
+                    {% elif c.subscription_status == 'past_due' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-warning">● Pago pendiente</span>
+                    {% elif c.subscription_status == 'canceled' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">● Cancelada</span>
+                    {% elif c.subscription_status == 'trialing' %}
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-info">● Prueba</span>
                     {% else %}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs badge-error">Inactiva</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs" style="background:rgba(100,116,139,.2);color:#94a3b8;">○ Sin plan</span>
                     {% endif %}
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="6" class="py-8 text-center text-gray-600">No hay empresas registradas</td></tr>
+            <tr><td colspan="6" class="py-8 text-center text-gray-600">No hay clientes registrados</td></tr>
             {% endfor %}
         </tbody>
     </table>

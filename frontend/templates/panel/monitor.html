@@ -8,269 +8,721 @@
 <button onclick="location.reload()" class="btn-ghost px-3 py-2 rounded-lg text-xs">🔄 Refresh</button>
 {% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+.monitor-section { margin-bottom: 12px; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+.section-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; cursor: pointer; user-select: none; transition: background 0.2s; }
+.section-header:hover { background: rgba(255,255,255,0.05); }
+.section-header-left { display: flex; align-items: center; gap: 10px; }
+.section-chevron { font-size: 12px; transition: transform 0.3s; color: rgba(255,255,255,0.5); display: inline-block; }
+.section-chevron.open { transform: rotate(90deg); }
+.section-title { font-weight: 700; font-size: 13px; letter-spacing: 0.5px; color: rgba(255,255,255,0.9); text-transform: uppercase; }
+.section-summary { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,0.45); }
+.section-body { max-height: 3000px; overflow: hidden; transition: max-height 0.4s ease, padding 0.3s ease; padding: 0 20px 20px 20px; }
+.section-body.collapsed { max-height: 0; padding: 0 20px; }
+.sdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.sdot.green { background: #22c55e; }
+.sdot.red { background: #ef4444; }
+.btn-range { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.6); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
+.btn-range:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.9); }
+.btn-range.active { background: rgba(34,197,94,0.2); border-color: #22c55e; color: #22c55e; }
+</style>
+{% endblock %}
+
 {% block content %}
-<!-- Services Status -->
-<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-    {% for svc, active in workers.items %}
-    <div class="glass rounded-xl p-4 text-center">
-        <div class="text-lg mb-1">{% if active %}🟢{% else %}🔴{% endif %}</div>
-        <div class="text-xs text-gray-400 font-mono">{{ svc }}</div>
-        <div class="text-[10px] {% if active %}text-green-400{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">
-            {% if active %}active{% else %}down{% endif %}
-        </div>
-    </div>
-    {% endfor %}
-    <!-- Playwright -->
-    <div class="glass rounded-xl p-4 text-center">
-        <div class="text-lg mb-1">{% if playwright_health.ok %}🟢{% elif playwright_health.ok == None %}⚪{% else %}🔴{% endif %}</div>
-        <div class="text-xs text-gray-400 font-mono">Playwright</div>
-        <div class="text-[10px] {% if playwright_health.ok %}text-green-400{% elif playwright_health.ok == None %}text-gray-500{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">
-            {% if playwright_health.ok %}ok{% elif playwright_health.ok == None %}pending{% else %}fail{% endif %}
-        </div>
-    </div>
-    <!-- Telegram -->
-    <div class="glass rounded-xl p-4 text-center">
-        <div class="text-lg mb-1">📱</div>
-        <div class="text-xs text-gray-400 font-mono">Telegram</div>
-        <div class="text-[10px] text-indigo-400 font-semibold uppercase mt-1">active</div>
-    </div>
-</div>
 
-<!-- Stats Cards -->
-<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-    <div class="glass rounded-xl p-4">
-        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Errores 1h</div>
-        <div class="text-2xl font-bold {% if stats.errors_1h > 0 %}text-red-400{% else %}text-green-400{% endif %} mt-1">{{ stats.errors_1h }}</div>
-    </div>
-    <div class="glass rounded-xl p-4">
-        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Warnings 1h</div>
-        <div class="text-2xl font-bold {% if stats.warnings_1h > 0 %}text-amber-400{% else %}text-gray-400{% endif %} mt-1">{{ stats.warnings_1h }}</div>
-    </div>
-    <div class="glass rounded-xl p-4">
-        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Emails Hoy</div>
-        <div class="text-2xl font-bold text-blue-400 mt-1">{{ stats.emails_today }}</div>
-    </div>
-    <div class="glass rounded-xl p-4">
-        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Conversiones Hoy</div>
-        <div class="text-2xl font-bold text-purple-400 mt-1">{{ stats.conversions_today }}</div>
-    </div>
-    <div class="glass rounded-xl p-4">
-        <div class="text-[11px] text-gray-500 uppercase tracking-wider">Total Logs</div>
-        <div class="text-2xl font-bold text-white mt-1">{{ stats.total }}</div>
-    </div>
-</div>
-
-<!-- Jobs 24h -->
-<div class="glass rounded-xl p-5 mb-5">
-    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Jobs Últimas 24h</h3>
-    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Total</div>
-            <div class="text-xl font-bold text-white">{{ jobs_stats.total }}</div>
+<!-- ═══ 1. SERVICIOS ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('servicios')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-servicios">▶</span>
+            <span class="section-title">Servicios</span>
         </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Exitosos</div>
-            <div class="text-xl font-bold text-green-400">{{ jobs_stats.ok }}</div>
+        <div class="section-summary">
+            {% for ok in svc_dots %}<span class="sdot {% if ok %}green{% else %}red{% endif %}"></span>{% endfor %}
+            <span style="margin-left:4px">{{ svc_summary }}</span>
         </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Fallidos</div>
-            <div class="text-xl font-bold {% if jobs_stats.fail > 0 %}text-red-400{% else %}text-gray-500{% endif %}">{{ jobs_stats.fail }}</div>
-        </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">% Éxito</div>
-            <div class="text-xl font-bold {% if jobs_stats.pct_ok >= 90 %}text-green-400{% elif jobs_stats.pct_ok >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ jobs_stats.pct_ok }}%</div>
-        </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Duración Prom</div>
-            <div class="text-xl font-bold text-gray-300">{{ jobs_stats.avg_duration }}s</div>
-        </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Más Largo</div>
-            <div class="text-xl font-bold text-gray-300">{{ jobs_stats.max_duration }}s</div>
+    </div>
+    <div class="section-body collapsed" id="body-servicios">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-2">
+            {% for svc, active in workers.items %}
+            <div class="glass rounded-xl p-4 text-center">
+                <div class="text-lg mb-1">{% if active %}🟢{% else %}🔴{% endif %}</div>
+                <div class="text-xs text-gray-400 font-mono">{{ svc }}</div>
+                <div class="text-[10px] {% if active %}text-green-400{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">{% if active %}active{% else %}down{% endif %}</div>
+            </div>
+            {% endfor %}
+            <div class="glass rounded-xl p-4 text-center">
+                <div class="text-lg mb-1">{% if playwright_health.ok %}🟢{% elif playwright_health.ok == None %}⚪{% else %}🔴{% endif %}</div>
+                <div class="text-xs text-gray-400 font-mono">Playwright</div>
+                <div class="text-[10px] {% if playwright_health.ok %}text-green-400{% elif playwright_health.ok == None %}text-gray-500{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">{% if playwright_health.ok %}ok{% elif playwright_health.ok == None %}pending{% else %}fail{% endif %}</div>
+            </div>
+            <div class="glass rounded-xl p-4 text-center">
+                <div class="text-lg mb-1">📱</div>
+                <div class="text-xs text-gray-400 font-mono">Telegram</div>
+                <div class="text-[10px] text-indigo-400 font-semibold uppercase mt-1">active</div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Download History -->
-
-<!-- Workers -->
-<div class="glass rounded-xl p-5 mb-5">
-    <div class="flex items-center justify-between mb-3">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Workers (Celery)</h3>
-        <div class="flex items-center gap-4 text-xs">
-            {% if reserved_count > 0 %}
-            <span class="text-amber-400">📋 {{ reserved_count }} en cola</span>
-            {% else %}
-            <span class="text-gray-600">📋 0 en cola</span>
-            {% endif %}
-            {% if worker_memory %}
-            <span class="text-gray-500 font-mono">{{ worker_memory }}</span>
-            {% endif %}
+<!-- ═══ 2. CONTADORES ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('contadores')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-contadores">▶</span>
+            <span class="section-title">Contadores</span>
+        </div>
+        <div class="section-summary">{{ stats_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-contadores">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-2">
+            <div class="glass rounded-xl p-4">
+                <div class="text-[11px] text-gray-500 uppercase tracking-wider">Errores 1h</div>
+                <div class="text-2xl font-bold {% if stats.errors_1h > 0 %}text-red-400{% else %}text-green-400{% endif %} mt-1">{{ stats.errors_1h }}</div>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <div class="text-[11px] text-gray-500 uppercase tracking-wider">Warnings 1h</div>
+                <div class="text-2xl font-bold {% if stats.warnings_1h > 0 %}text-amber-400{% else %}text-gray-400{% endif %} mt-1">{{ stats.warnings_1h }}</div>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <div class="text-[11px] text-gray-500 uppercase tracking-wider">Emails Hoy</div>
+                <div class="text-2xl font-bold text-blue-400 mt-1">{{ stats.emails_today }}</div>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <div class="text-[11px] text-gray-500 uppercase tracking-wider">Conversiones Hoy</div>
+                <div class="text-2xl font-bold text-purple-400 mt-1">{{ stats.conversions_today }}</div>
+            </div>
+            <div class="glass rounded-xl p-4">
+                <div class="text-[11px] text-gray-500 uppercase tracking-wider">Total Logs</div>
+                <div class="text-2xl font-bold text-white mt-1">{{ stats.total }}</div>
+            </div>
         </div>
     </div>
-    {% if celery_workers %}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {% for w in celery_workers %}
-        <div class="rounded-xl p-4 {% if w.active %}bg-green-500/5 border border-green-500/20{% else %}bg-white/5 border border-white/10{% endif %}">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-500 font-mono">Worker (pid {{ w.pid }})</span>
-                {% if w.active %}
-                <span class="text-[10px] text-green-400 font-semibold uppercase">🟢 Activo</span>
-                {% else %}
-                <span class="text-[10px] text-gray-600 font-semibold uppercase">💤 Esperando</span>
+</div>
+
+<!-- ═══ 2.5. PIPELINES ACTIVOS ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('pipelines')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-pipelines">▶</span>
+            <span class="section-title">🔄 Pipelines</span>
+        </div>
+        <div class="section-summary">{{ pipelines_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-pipelines">
+        {% if pipelines_activos %}
+        <div class="overflow-x-auto mt-2">
+            <table class="glass-table w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="pb-2 font-semibold">Cliente</th>
+                        <th class="pb-2 font-semibold">Tipo</th>
+                        <th class="pb-2 font-semibold">Paso</th>
+                        <th class="pb-2 font-semibold">Estado</th>
+                        <th class="pb-2 font-semibold">Intento</th>
+                        <th class="pb-2 font-semibold">Actualizado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in pipelines_activos %}
+                    <tr>
+                        <td class="py-2 text-xs text-gray-500 font-mono">cliente-{{ p.empresa.id|stringformat:"s"|slice:":8" }}</td>
+                        <td class="py-2 text-xs text-gray-400">{{ p.get_pipeline_type_display }}</td>
+                        <td class="py-2 text-xs text-white">{{ p.paso_actual }}/{{ p.total_pasos }} {{ p.paso_nombre }}</td>
+                        <td class="py-2">
+                            {% if p.estado == 'en_proceso' %}<span class="badge-success px-2 py-0.5 rounded-full text-[10px]">⏳ en proceso</span>
+                            {% elif p.estado == 'reintentando' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">🔄 reintento #{{ p.intento_actual }}</span>
+                            {% elif p.estado == 'esperando_sat' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">🛰️ SAT</span>
+                            {% elif p.estado == 'completado' %}<span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ OK</span>
+                            {% elif p.estado == 'error' %}<span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌ error</span>
+                            {% else %}<span class="text-gray-500 text-[10px]">{{ p.estado }}</span>{% endif %}
+                        </td>
+                        <td class="py-2 text-xs text-gray-500">{{ p.intento_actual }}/{{ p.max_intentos }}</td>
+                        <td class="py-2 text-xs text-gray-500 whitespace-nowrap">{{ p.actualizado|date:"d/m H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-gray-600 text-xs py-4 mt-2">Sin pipelines activos</div>
+        {% endif %}
+        {% if pipelines_bloqueados_sat > 0 %}
+        <div class="mt-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-400">
+            🛰️ {{ pipelines_bloqueados_sat }} pipeline(s) bloqueado(s) por SAT Health
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ═══ 2.6. INCIDENTES DE DESCARGA ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('incidentes')">
+        <div class="section-header-left">
+            <span class="section-chevron{% if incidentes_stats.abiertos %} open{% endif %}" id="chevron-incidentes">▶</span>
+            <span class="section-title">🚧 Incidentes</span>
+        </div>
+        <div class="section-summary">
+            {{ incidentes_stats.abiertos }} abiertos · {{ incidentes_stats.nuevos_24h }} nuevos (24h)
+        </div>
+    </div>
+    <div class="section-body{% if not incidentes_stats.abiertos %} collapsed{% endif %}" id="body-incidentes">
+        {% if incidentes_abiertos %}
+        <div class="overflow-x-auto mt-2">
+            <table class="glass-table w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="pb-2 font-semibold">Cliente</th>
+                        <th class="pb-2 font-semibold">Tipo</th>
+                        <th class="pb-2 font-semibold">Descripción</th>
+                        <th class="pb-2 font-semibold">Creado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inc in incidentes_abiertos %}
+                    <tr>
+                        <td class="py-2 text-xs text-gray-500 font-mono">cliente-{{ inc.empresa.id|stringformat:"s"|slice:":8" }}</td>
+                        <td class="py-2">
+                            {% if inc.tipo == 'timeout' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">⏱️ timeout</span>
+                            {% elif inc.tipo == 'sat_error' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/10 text-red-400">🛰️ SAT</span>
+                            {% elif inc.tipo == 'fiel_error' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/10 text-red-400">🔑 FIEL</span>
+                            {% elif inc.tipo == 'gap_detectado' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">📉 gap</span>
+                            {% else %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-gray-500/10 text-gray-400">{{ inc.tipo }}</span>{% endif %}
+                        </td>
+                        <td class="py-2 text-xs text-gray-400">{{ inc.descripcion|truncatechars:90 }}</td>
+                        <td class="py-2 text-xs text-gray-500 whitespace-nowrap">{{ inc.creado_en|date:"d/m H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-gray-600 text-xs py-4 mt-2">Sin incidentes abiertos ✅</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ═══ 3. SAT HEALTH MONITOR (expanded by default) ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('sat-health')">
+        <div class="section-header-left">
+            <span class="section-chevron open" id="chevron-sat-health">▶</span>
+            <span class="section-title">🛰️ SAT Health Monitor</span>
+        </div>
+        <div class="section-summary">{{ sat_summary }}</div>
+    </div>
+    <div class="section-body" id="body-sat-health">
+        <!-- A: Current Status -->
+        <div class="rounded-xl p-5 mb-4 mt-2 {% if sat_health.status == 'up' %}bg-green-500/5 border border-green-500/20{% elif sat_health.status == 'degraded' %}bg-amber-500/5 border border-amber-500/20{% elif sat_health.status == 'down' %}bg-red-500/5 border border-red-500/20{% else %}bg-white/5 border border-white/10{% endif %}">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">{{ sat_health.status_emoji }}</span>
+                    <div>
+                        <span class="text-lg font-bold {% if sat_health.status == 'up' %}text-green-400{% elif sat_health.status == 'degraded' %}text-amber-400{% elif sat_health.status == 'down' %}text-red-400{% else %}text-gray-500{% endif %}">{{ sat_health.status_label }}</span>
+                        <div class="text-[10px] text-gray-500 uppercase">Estado del Portal SAT</div>
+                    </div>
+                </div>
+                {% if sat_health.last_probe %}
+                <div class="text-right">
+                    <div class="text-xs text-gray-500">Último probe: {{ sat_health.last_probe_ago }}</div>
+                    <div class="text-[10px] text-gray-600 font-mono">{{ sat_health.last_probe.node_id }} → {{ sat_health.last_probe.rfc_used }} {% if sat_health.last_probe.result == 'success' %}✅{% else %}❌{% endif %}</div>
+                </div>
                 {% endif %}
             </div>
-            {% if w.active %}
-            <div class="text-sm text-white font-medium">{{ w.task_name }}</div>
-            {% if w.rfc %}<div class="text-xs text-indigo-300 font-mono mt-1">{{ w.rfc }}{% if w.period %} · {{ w.period }}{% endif %}</div>{% endif %}
-            {% if w.elapsed %}<div class="text-[10px] text-gray-500 mt-1">{{ w.elapsed }}</div>{% endif %}
-            {% else %}
-            <div class="text-sm text-gray-600">Sin task asignado</div>
-            {% endif %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Disponibilidad 30m</div>
+                    <div class="text-xl font-bold {% if sat_health.availability >= 70 %}text-green-400{% elif sat_health.availability >= 30 %}text-amber-400{% elif sat_health.total > 0 %}text-red-400{% else %}text-gray-600{% endif %} mt-1">{{ sat_health.availability }}%</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Probes Exitosos</div>
+                    <div class="text-xl font-bold text-white mt-1">{{ sat_health.success }}/{{ sat_health.total }}</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Tiempo Prom. Login</div>
+                    <div class="text-xl font-bold text-blue-400 mt-1">{% if sat_health.avg_time_ms %}{{ sat_health.avg_time_ms|floatformat:"0" }}ms{% else %}—{% endif %}</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Última Hora</div>
+                    <div class="text-xl font-bold text-gray-300 mt-1">{{ sat_health.success }} ✓ {{ sat_health.failed }} ✗</div>
+                </div>
+            </div>
         </div>
-        {% endfor %}
+
+        <!-- B: Nodes -->
+        <div class="grid grid-cols-3 gap-3 mb-4">
+            {% for node in sat_nodes %}
+            <div class="rounded-xl p-4 text-center {% if node.status == 'online' %}bg-green-500/5 border border-green-500/20{% elif node.status == 'error' %}bg-amber-500/5 border border-amber-500/20{% else %}bg-red-500/5 border border-red-500/20{% endif %}">
+                <div class="text-lg mb-1">{% if node.status == 'online' %}🟢{% elif node.status == 'error' %}🟡{% else %}🔴{% endif %}</div>
+                <div class="text-xs text-white font-semibold">{{ node.id|upper }}</div>
+                <div class="text-[10px] {% if node.status == 'online' %}text-green-400{% elif node.status == 'error' %}text-amber-400{% else %}text-red-400{% endif %} font-semibold uppercase mt-1">{{ node.status }}</div>
+                <div class="text-[10px] text-gray-600 font-mono mt-0.5">{{ node.ip }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Heartbeat Chart -->
+        <div class="mb-4">
+            <div class="flex justify-between items-center mb-3">
+                <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">📈 Pulso SAT</h4>
+                <div class="flex gap-1">
+                    <button class="btn-range active" onclick="loadHeartbeat('2h')" id="btn-2h">2H</button>
+                    <button class="btn-range" onclick="loadHeartbeat('24h')" id="btn-24h">24H</button>
+                    <button class="btn-range" onclick="loadHeartbeat('7d')" id="btn-7d">7D</button>
+                </div>
+            </div>
+            <div style="position:relative;height:220px;">
+                <canvas id="satHeartbeat"></canvas>
+            </div>
+        </div>
+
+        <!-- C: Recent Probes -->
+        <div class="mb-4">
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Últimos Probes</h4>
+            <div class="overflow-x-auto">
+                <table class="glass-table w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                            <th class="pb-2 font-semibold">Timestamp</th>
+                            <th class="pb-2 font-semibold">Nodo</th>
+                            <th class="pb-2 font-semibold">RFC</th>
+                            <th class="pb-2 font-semibold">Resultado</th>
+                            <th class="pb-2 font-semibold">Fase</th>
+                            <th class="pb-2 font-semibold text-right">Tiempo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in sat_probes %}
+                        <tr>
+                            <td class="py-1.5 text-xs text-gray-500 whitespace-nowrap">{{ p.timestamp|date:"d/m H:i" }}</td>
+                            <td class="py-1.5 text-xs text-gray-400 font-mono">{{ p.node_id }}</td>
+                            <td class="py-1.5 text-xs text-indigo-300 font-mono">{{ p.rfc_used }}</td>
+                            <td class="py-1.5">
+                                {% if p.result == 'success' %}<span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✅ success</span>
+                                {% elif p.result == 'timeout' %}<span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌ timeout</span>
+                                {% elif p.result == 'login_failed' %}<span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌ login_failed</span>
+                                {% elif p.result == 'page_error' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">⚠️ page_error</span>
+                                {% elif p.result == 'network_error' %}<span class="badge-error px-2 py-0.5 rounded-full text-[10px]">❌ network_error</span>
+                                {% elif p.result == 'maintenance' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">🔧 maintenance</span>
+                                {% elif p.result == 'captcha' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-purple-500/10 text-purple-400">🤖 captcha</span>
+                                {% else %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-white/5 text-gray-400">{{ p.result }}</span>{% endif %}
+                            </td>
+                            <td class="py-1.5 text-xs text-gray-500">{{ p.last_phase_reached }}</td>
+                            <td class="py-1.5 text-xs text-gray-400 text-right font-mono">{{ p.time_total_ms|floatformat:"0" }}ms</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="py-4 text-center text-gray-600 text-xs">Sin probes aún — esperando primera ejecución</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- D: Hourly Summary -->
+        <div>
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Disponibilidad por Hora (24h)</h4>
+            <div class="overflow-x-auto">
+                <table class="glass-table w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                            <th class="pb-2 font-semibold">Hora</th>
+                            <th class="pb-2 font-semibold">Disponibilidad</th>
+                            <th class="pb-2 font-semibold">Probes</th>
+                            <th class="pb-2 font-semibold text-right">Tiempo Prom.</th>
+                            <th class="pb-2 font-semibold">Error Común</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sat_summaries %}
+                        <tr>
+                            <td class="py-1.5 text-xs text-gray-400 whitespace-nowrap font-mono">{{ s.hour|date:"d/m H:00" }}</td>
+                            <td class="py-1.5">
+                                {% if s.availability_pct >= 80 %}<span class="text-green-400 font-semibold text-xs">🟢 {{ s.availability_pct|floatformat:"0" }}%</span>
+                                {% elif s.availability_pct >= 50 %}<span class="text-amber-400 font-semibold text-xs">🟡 {{ s.availability_pct|floatformat:"0" }}%</span>
+                                {% else %}<span class="text-red-400 font-semibold text-xs">🔴 {{ s.availability_pct|floatformat:"0" }}%</span>{% endif %}
+                            </td>
+                            <td class="py-1.5 text-xs text-gray-400">{{ s.successful_probes }}/{{ s.total_probes }}</td>
+                            <td class="py-1.5 text-xs text-gray-400 text-right font-mono">{% if s.avg_total_time_ms %}{{ s.avg_total_time_ms }}ms{% else %}—{% endif %}</td>
+                            <td class="py-1.5 text-xs text-gray-500">{{ s.most_common_error|default:"—" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="py-4 text-center text-gray-600 text-xs">Sin resúmenes aún — se generan cada hora</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-    {% else %}
-    <div class="text-center text-gray-600 text-sm py-4">No se pudo conectar con el worker</div>
-    {% endif %}
 </div>
 
-<!-- Download History -->
-{% if recent_downloads %}
-<div class="glass rounded-xl p-5 mb-5">
-    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Historial de Descargas</h3>
-    <div class="overflow-x-auto">
-        <table class="glass-table w-full text-sm">
-            <thead>
-                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                    <th class="pb-3 font-semibold">Empresa</th>
-                    <th class="pb-3 font-semibold">Periodo</th>
-                    <th class="pb-3 font-semibold">Estado</th>
-                    <th class="pb-3 font-semibold text-right">CFDIs</th>
-                    <th class="pb-3 font-semibold text-right">Duración</th>
-                    <th class="pb-3 font-semibold">Trigger</th>
-                    <th class="pb-3 font-semibold">Iniciado</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in recent_downloads %}
-                <tr>
-                    <td class="py-2 font-mono text-xs text-indigo-300">{{ d.empresa.rfc }}</td>
-                    <td class="py-2 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
-                    <td class="py-2">
-                        {% if d.estado == 'completado' %}
-                        <span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✓ OK</span>
-                        {% elif d.estado == 'ejecutando' %}
-                        <span class="badge-warning px-2 py-0.5 rounded-full text-[10px]">⏳ running</span>
-                        {% else %}
-                        <span class="badge-error px-2 py-0.5 rounded-full text-[10px]">✗ error</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2 text-right text-white font-medium">{{ d.cfdis_nuevos|default:"—" }}</td>
-                    <td class="py-2 text-right text-gray-400 text-xs">{{ d.duracion_segundos|default:"—" }}s</td>
-                    <td class="py-2 text-xs text-gray-500">{{ d.triggered_by }}</td>
-                    <td class="py-2 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
-                </tr>
+<!-- ═══ 4. JOBS 24H ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('jobs')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-jobs">▶</span>
+            <span class="section-title">Jobs Últimas 24h</span>
+        </div>
+        <div class="section-summary">{{ jobs_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-jobs">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mt-2">
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Total</div>
+                <div class="text-xl font-bold text-white">{{ jobs_stats.total }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Exitosos</div>
+                <div class="text-xl font-bold text-green-400">{{ jobs_stats.ok }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Fallidos</div>
+                <div class="text-xl font-bold {% if jobs_stats.fail > 0 %}text-red-400{% else %}text-gray-500{% endif %}">{{ jobs_stats.fail }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">% Éxito</div>
+                <div class="text-xl font-bold {% if jobs_stats.pct_ok >= 90 %}text-green-400{% elif jobs_stats.pct_ok >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ jobs_stats.pct_ok }}%</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Duración Prom</div>
+                <div class="text-xl font-bold text-gray-300">{{ jobs_stats.avg_duration }}s</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Más Largo</div>
+                <div class="text-xl font-bold text-gray-300">{{ jobs_stats.max_duration }}s</div>
+            </div>
+        </div>
+
+        <!-- Estado de la cola (DescargaJob) -->
+        <div class="mt-4 pt-4 border-t border-white/5">
+            <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-2">Estado de la cola (DescargaJob)</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">En cola</div>
+                    <div class="text-xl font-bold text-blue-400">{{ jobs_stats.queue_en_cola }}</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Ejecutando</div>
+                    <div class="text-xl font-bold text-amber-400">{{ jobs_stats.queue_ejecutando }}</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Con error</div>
+                    <div class="text-xl font-bold {% if jobs_stats.queue_error > 0 %}text-red-400{% else %}text-gray-500{% endif %}">{{ jobs_stats.queue_error }}</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-gray-500 uppercase">Completado vacío</div>
+                    <div class="text-xl font-bold text-gray-500">{{ jobs_stats.queue_completado_vacio }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ 5. WORKERS (CELERY) ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('workers')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-workers">▶</span>
+            <span class="section-title">Workers (Celery)</span>
+        </div>
+        <div class="section-summary">{{ workers_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-workers">
+        <div class="mt-2">
+            {% if celery_workers %}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {% for w in celery_workers %}
+                <div class="rounded-xl p-4 {% if w.active %}bg-green-500/5 border border-green-500/20{% else %}bg-white/5 border border-white/10{% endif %}">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-gray-500 font-mono">Worker (pid {{ w.pid }})</span>
+                        {% if w.active %}<span class="text-[10px] text-green-400 font-semibold uppercase">🟢 Activo</span>
+                        {% else %}<span class="text-[10px] text-gray-600 font-semibold uppercase">💤 Esperando</span>{% endif %}
+                    </div>
+                    {% if w.active %}
+                    <div class="text-sm text-white font-medium">{{ w.task_name }}</div>
+                    {% if w.rfc %}<div class="text-xs text-indigo-300 font-mono mt-1">{{ w.rfc }}{% if w.period %} · {{ w.period }}{% endif %}</div>{% endif %}
+                    {% if w.elapsed %}<div class="text-[10px] text-gray-500 mt-1">{{ w.elapsed }}</div>{% endif %}
+                    {% else %}
+                    <div class="text-sm text-gray-600">Sin task asignado</div>
+                    {% endif %}
+                </div>
                 {% endfor %}
-            </tbody>
-        </table>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-600 text-sm py-4">No se pudo conectar con el worker</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ═══ 6. HISTORIAL DE DESCARGAS ═══ -->
+{% if recent_downloads %}
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('descargas')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-descargas">▶</span>
+            <span class="section-title">Historial de Descargas</span>
+        </div>
+        <div class="section-summary">{{ descargas_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-descargas">
+        <div class="overflow-x-auto mt-2">
+            <table class="glass-table w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="pb-3 font-semibold">Cliente</th>
+                        <th class="pb-3 font-semibold">Periodo</th>
+                        <th class="pb-3 font-semibold">Estado</th>
+                        <th class="pb-3 font-semibold text-right">CFDIs</th>
+                        <th class="pb-3 font-semibold text-right">Duración</th>
+                        <th class="pb-3 font-semibold">Trigger</th>
+                        <th class="pb-3 font-semibold">Iniciado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in recent_downloads %}
+                    <tr>
+                        <td class="py-2 text-xs text-gray-500 font-mono">cliente-{{ d.empresa.id|stringformat:"s"|slice:":8" }}</td>
+                        <td class="py-2 text-xs text-gray-400">{{ d.year }}/{{ d.month_start }}-{{ d.month_end }}</td>
+                        <td class="py-2">
+                            {% if d.estado == 'completado' %}<span class="badge-success px-2 py-0.5 rounded-full text-[10px]">✓ OK</span>
+                            {% elif d.estado == 'ejecutando' %}<span class="badge-warning px-2 py-0.5 rounded-full text-[10px]">⏳ running</span>
+                            {% else %}<span class="badge-error px-2 py-0.5 rounded-full text-[10px]">✗ error</span>{% endif %}
+                        </td>
+                        <td class="py-2 text-right text-white font-medium">{{ d.cfdis_nuevos|default:"—" }}</td>
+                        <td class="py-2 text-right text-gray-400 text-xs">{{ d.duracion_segundos|default:"—" }}s</td>
+                        <td class="py-2 text-xs text-gray-500">{{ d.triggered_by }}</td>
+                        <td class="py-2 text-xs text-gray-500">{{ d.iniciado_at|date:"d/m H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endif %}
 
-<!-- Playwright Health -->
-<div class="glass rounded-xl p-5 mb-5">
-    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Playwright Health Check</h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Estado</div>
-            <div class="mt-1">
-                {% if playwright_health.ok %}
-                <span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ OK</span>
-                {% elif playwright_health.ok == None %}
-                <span class="px-2.5 py-1 rounded-full text-xs text-gray-500 bg-white/5">⏳ Pendiente</span>
-                {% else %}
-                <span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ FAIL</span>
-                {% endif %}
+<!-- ═══ 7. PLAYWRIGHT HEALTH ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('playwright')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-playwright">▶</span>
+            <span class="section-title">Playwright Health</span>
+        </div>
+        <div class="section-summary">{{ playwright_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-playwright">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Estado</div>
+                <div class="mt-1">
+                    {% if playwright_health.ok %}<span class="badge-success px-2.5 py-1 rounded-full text-xs">✅ OK</span>
+                    {% elif playwright_health.ok == None %}<span class="px-2.5 py-1 rounded-full text-xs text-gray-500 bg-white/5">⏳ Pendiente</span>
+                    {% else %}<span class="badge-error px-2.5 py-1 rounded-full text-xs">❌ FAIL</span>{% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Último Check</div>
+                <div class="text-gray-300 text-sm mt-1">{{ playwright_health.last_check|date:"d/m/Y H:i"|default:"—" }}</div>
+            </div>
+            <div>
+                <div class="text-[11px] text-gray-500 uppercase">Mensaje</div>
+                <div class="text-gray-400 text-xs mt-1 font-mono">{{ playwright_health.message|truncatechars:80 }}</div>
             </div>
         </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Último Check</div>
-            <div class="text-gray-300 text-sm mt-1">{{ playwright_health.last_check|date:"d/m/Y H:i"|default:"—" }}</div>
+    </div>
+</div>
+
+<!-- ═══ 8. SYSTEM LOGS ═══ -->
+<div class="monitor-section">
+    <div class="section-header" onclick="toggleSection('logs')">
+        <div class="section-header-left">
+            <span class="section-chevron" id="chevron-logs">▶</span>
+            <span class="section-title">System Logs</span>
         </div>
-        <div>
-            <div class="text-[11px] text-gray-500 uppercase">Mensaje</div>
-            <div class="text-gray-400 text-xs mt-1 font-mono">{{ playwright_health.message|truncatechars:80 }}</div>
+        <div class="section-summary">{{ logs_summary }}</div>
+    </div>
+    <div class="section-body collapsed" id="body-logs">
+        <!-- Filters -->
+        <div class="rounded-xl p-4 bg-white/3 border border-white/5 mb-3 mt-2">
+            <form method="get" class="flex flex-wrap gap-3 items-end">
+                <div>
+                    <label class="block text-[11px] text-gray-500 uppercase mb-1">Nivel</label>
+                    <select name="level" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                        <option value="">Todos</option>
+                        {% for code, label in levels %}
+                        <option value="{{ code }}" {% if filters.level == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] text-gray-500 uppercase mb-1">Categoría</label>
+                    <select name="category" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+                        <option value="">Todas</option>
+                        {% for code, label in categories %}
+                        <option value="{{ code }}" {% if filters.category == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm text-white">Filtrar</button>
+                {% if filters.level or filters.category %}
+                <a href="{% url 'panel:monitor' %}" class="text-xs text-gray-500 hover:text-gray-400">Limpiar</a>
+                {% endif %}
+            </form>
+        </div>
+        <!-- Table -->
+        <div class="overflow-x-auto">
+            <table class="glass-table w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                        <th class="pb-3 font-semibold">Nivel</th>
+                        <th class="pb-3 font-semibold">Cat.</th>
+                        <th class="pb-3 font-semibold">Mensaje</th>
+                        <th class="pb-3 font-semibold">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="py-2">
+                            {% if log.level == 'critical' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/20 text-red-400 font-bold">🚨 CRIT</span>
+                            {% elif log.level == 'error' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/10 text-red-400">ERROR</span>
+                            {% elif log.level == 'warning' %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">WARN</span>
+                            {% else %}<span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400">INFO</span>{% endif %}
+                        </td>
+                        <td class="py-2 text-xs text-gray-500 font-mono">{{ log.category }}</td>
+                        <td class="py-2 text-gray-300 text-xs">{{ log.message|truncatechars:120 }}</td>
+                        <td class="py-2 text-xs text-gray-500 whitespace-nowrap">{{ log.created_at|date:"d/m H:i:s" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="py-6 text-center text-gray-600">Sin logs</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<!-- Log Filters -->
-<div class="glass rounded-xl p-5 mb-5">
-    <form method="get" class="flex flex-wrap gap-3 items-end">
-        <div>
-            <label class="block text-[11px] text-gray-500 uppercase mb-1">Nivel</label>
-            <select name="level" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
-                <option value="">Todos</option>
-                {% for code, label in levels %}
-                <option value="{{ code }}" {% if filters.level == code %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label class="block text-[11px] text-gray-500 uppercase mb-1">Categoría</label>
-            <select name="category" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
-                <option value="">Todas</option>
-                {% for code, label in categories %}
-                <option value="{{ code }}" {% if filters.category == code %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm text-white">Filtrar</button>
-        {% if filters.level or filters.category %}
-        <a href="{% url 'panel:monitor' %}" class="text-xs text-gray-500 hover:text-gray-400">Limpiar</a>
-        {% endif %}
-    </form>
-</div>
+<!-- ═══ SCRIPTS ═══ -->
+<script>
+function toggleSection(id) {
+    const body = document.getElementById('body-' + id);
+    const chevron = document.getElementById('chevron-' + id);
+    if (!body || !chevron) return;
+    body.classList.toggle('collapsed');
+    chevron.classList.toggle('open');
+    localStorage.setItem('monitor_section_' + id, body.classList.contains('collapsed') ? 'closed' : 'open');
+}
 
-<!-- Log Table -->
-<div class="glass rounded-xl p-5">
-    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">System Logs (últimos 100)</h3>
-    <div class="overflow-x-auto">
-        <table class="glass-table w-full text-sm">
-            <thead>
-                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
-                    <th class="pb-3 font-semibold">Nivel</th>
-                    <th class="pb-3 font-semibold">Cat.</th>
-                    <th class="pb-3 font-semibold">Mensaje</th>
-                    <th class="pb-3 font-semibold">Fecha</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in logs %}
-                <tr>
-                    <td class="py-2">
-                        {% if log.level == 'critical' %}
-                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/20 text-red-400 font-bold">🚨 CRIT</span>
-                        {% elif log.level == 'error' %}
-                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-red-500/10 text-red-400">ERROR</span>
-                        {% elif log.level == 'warning' %}
-                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-400">WARN</span>
-                        {% else %}
-                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400">INFO</span>
-                        {% endif %}
-                    </td>
-                    <td class="py-2 text-xs text-gray-500 font-mono">{{ log.category }}</td>
-                    <td class="py-2 text-gray-300 text-xs">{{ log.message|truncatechars:120 }}</td>
-                    <td class="py-2 text-xs text-gray-500 whitespace-nowrap">{{ log.created_at|date:"d/m H:i:s" }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="4" class="py-6 text-center text-gray-600">Sin logs</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+document.addEventListener('DOMContentLoaded', function() {
+    const defaults = {
+        'servicios':'closed','contadores':'closed','pipelines':'closed','sat-health':'open',
+        'jobs':'closed','workers':'closed','descargas':'closed',
+        'playwright':'closed','logs':'closed'
+    };
+    Object.keys(defaults).forEach(id => {
+        const saved = localStorage.getItem('monitor_section_' + id);
+        const state = saved || defaults[id];
+        const body = document.getElementById('body-' + id);
+        const chevron = document.getElementById('chevron-' + id);
+        if (body && chevron) {
+            if (state === 'closed') { body.classList.add('collapsed'); chevron.classList.remove('open'); }
+            else { body.classList.remove('collapsed'); chevron.classList.add('open'); }
+        }
+    });
+    loadHeartbeat('2h');
+});
+
+// ── Heartbeat Chart ──
+const probesData = {{ sat_probes_json|safe }};
+const summariesData = {{ sat_summaries_json|safe }};
+let heartbeatChart = null;
+
+function loadHeartbeat(range) {
+    document.querySelectorAll('.btn-range').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-' + range).classList.add('active');
+    if (range === '7d') { renderWeeklyChart(); return; }
+    const now = Date.now();
+    const ms = range === '2h' ? 2*3600000 : 24*3600000;
+    const filtered = probesData.filter(p => new Date(p.timestamp).getTime() >= now - ms);
+    renderHeartbeat(filtered);
+}
+
+function renderHeartbeat(probes) {
+    const ctx = document.getElementById('satHeartbeat').getContext('2d');
+    const ok = probes.filter(p => p.result === 'success').map(p => ({x: new Date(p.timestamp), y: p.time_total_ms}));
+    const fail = probes.filter(p => p.result !== 'success').map(p => ({x: new Date(p.timestamp), y: 0}));
+    if (heartbeatChart) heartbeatChart.destroy();
+    heartbeatChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                { label: 'Tiempo respuesta', data: ok, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#22c55e', tension: 0.35, fill: true },
+                { label: 'Fallos', data: fail, borderColor: 'transparent', backgroundColor: '#ef4444', pointRadius: 8, pointHoverRadius: 10, pointStyle: 'crossRot', pointBorderWidth: 3, showLine: false }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 600, easing: 'easeOutQuart' },
+            interaction: { mode: 'nearest', intersect: false },
+            scales: {
+                x: { type: 'time', time: { displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } }, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 11 } } },
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'s' : v+'ms' }, title: { display: true, text: 'Tiempo de respuesta', color: 'rgba(255,255,255,0.35)', font: { size: 11 } } }
+            },
+            plugins: {
+                legend: { labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, usePointStyle: true } },
+                tooltip: {
+                    backgroundColor: 'rgba(0,0,0,0.85)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, cornerRadius: 8, padding: 10,
+                    callbacks: {
+                        title: items => { const d = new Date(items[0].parsed.x); return d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}); },
+                        label: ctx => {
+                            if (ctx.dataset.label === 'Fallos') {
+                                const p = probesData.find(p => Math.abs(new Date(p.timestamp).getTime() - ctx.parsed.x) < 60000 && p.result !== 'success');
+                                return p ? `❌ ${p.result} — ${p.node_id} → ${p.rfc_used}` : '❌ Fallo';
+                            }
+                            const ms = ctx.parsed.y; const t = ms >= 1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms';
+                            const p = probesData.find(p => Math.abs(new Date(p.timestamp).getTime() - ctx.parsed.x) < 60000 && p.result === 'success');
+                            return p ? `✅ ${t} — ${p.node_id} → ${p.rfc_used}` : `✅ ${t}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderWeeklyChart() {
+    const ctx = document.getElementById('satHeartbeat').getContext('2d');
+    const data = summariesData.map(s => ({x: new Date(s.hour), y: s.availability_pct}));
+    if (heartbeatChart) heartbeatChart.destroy();
+    heartbeatChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Disponibilidad (%)', data: data,
+                segment: { borderColor: ctx2 => { const y = ctx2.p1.parsed.y; return y >= 70 ? '#22c55e' : y >= 30 ? '#eab308' : '#ef4444'; } },
+                borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.06)', borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: true
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { type: 'time', time: { displayFormats: { hour: 'dd/MM HH:mm', day: 'dd/MM' } }, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 11 } } },
+                y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 11 }, callback: v => v+'%' }, title: { display: true, text: 'Disponibilidad', color: 'rgba(255,255,255,0.35)', font: { size: 11 } } }
+            },
+            plugins: {
+                legend: { labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } } },
+                tooltip: {
+                    backgroundColor: 'rgba(0,0,0,0.85)',
+                    callbacks: { label: ctx2 => { const s = summariesData.find(s => Math.abs(new Date(s.hour).getTime() - ctx2.parsed.x) < 3600000); const avg = s && s.avg_time_ms ? (s.avg_time_ms/1000).toFixed(1)+'s' : 'N/A'; return `${ctx2.parsed.y.toFixed(0)}% — ${s ? s.successful_probes+'/'+s.total_probes : '?'} probes — ${avg} prom`; } }
+                }
+            }
+        }
+    });
+}
+</script>
 
 <!-- Auto-refresh every 30s -->
 <script>setTimeout(() => location.reload(), 30000);</script>

@@ -185,6 +185,12 @@
                 <a href="{% url 'app:api_keys' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'api_keys' %}active{% endif %}">
                     <span class="text-base">🔑</span><span>API Keys</span>
                 </a>
+                <a href="{% url 'app:colaboradores' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'colaboradores' %}active{% endif %}">
+                    <span class="text-base">👥</span><span>Colaboradores</span>
+                </a>
+                <a href="{% url 'reportes:selector' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'reportes' %}active{% endif %}">
+                    <span class="text-base">📊</span><span>Reportes</span>
+                </a>
 
                 <div class="pt-4 mt-4 border-t border-white/5">
                     <a href="{% url 'app:perfil' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'perfil' %}active{% endif %}">
@@ -285,11 +291,13 @@ window.addEventListener('resize', function() {
 });
 </script>
 
+<!-- Chat widget disabled for now 
 <link rel="stylesheet" href="https://sidewidget.vercel.app/react-widget-uv.css">
 <script>
   window.process = { env: {} };
 </script>
 <script src="https://sidewidget.vercel.app/react-widget-uv.iife.js"></script>
 <react-widget-uv agent_id="7cf5db19-b63d-497b-b3c7-d2c5f00bb0dc" schema="1a55f63b-d552-4050-8162-291ea11e62b1" type="thunderemotionlite"></react-widget-uv>
+-->
 </body>
 </html>

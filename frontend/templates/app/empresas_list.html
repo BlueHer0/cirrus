@@ -40,7 +40,12 @@
                 <td class="py-3">
                     <a href="{% url 'app:empresa_detail' e.id %}" class="font-mono text-indigo-300 hover:text-indigo-200 font-medium">{{ e.rfc }}</a>
                 </td>
-                <td class="py-3 text-white">{{ e.nombre }}</td>
+                <td class="py-3 text-white">
+                    {{ e.nombre }}
+                    {% if e.owner != request.user %}
+                    <span class="badge-info px-1.5 py-0.5 rounded text-[10px] ml-2 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Compartida</span>
+                    {% endif %}
+                </td>
                 <td class="py-3">
                     {% if e.fiel_verificada %}
                     <span class="badge-success px-2 py-0.5 rounded-full text-xs">✓ Verificada</span>

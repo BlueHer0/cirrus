@@ -36,6 +36,24 @@ class PlanEnforcer:
             ),
         }
 
+    def puede_crear_colaborador(self):
+        from core.models import Colaborador
+        actuales = Colaborador.objects.filter(cuenta_principal=self.user, estado__in=['activo', 'inactivo']).count()
+        if self._is_owner:
+            return {**self._unlimited(), "actuales": actuales, "mensaje": ""}
+        limite = self.plan.max_colaboradores if self.plan else 0
+        ok = actuales < limite
+        return {
+            "permitido": ok,
+            "actuales": actuales,
+            "limite": limite,
+            "pct": min(100, int(actuales / max(limite, 1) * 100)),
+            "mensaje": "" if ok else (
+                f"Has alcanzado el límite de {limite} colaborador(es) "
+                f"en tu plan {self.plan.nombre if self.plan else 'Gratis'}."
+            ),
+        }
+
     def puede_ver_cfdi(self):
         from django.db.models import Q
 
@@ -145,6 +163,7 @@ class PlanEnforcer:
         return {
             "plan": self.plan,
             "empresas": self.puede_crear_empresa(),
+            "colaboradores": self.puede_crear_colaborador(),
             "cfdis": self.puede_ver_cfdi(),
             "descargas": self.puede_descargar(),
             "pdf": self.puede_convertir_pdf(),
