@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
+from django.utils import timezone as dj_timezone
 
 logger = logging.getLogger("core.tasks")
 
@@ -738,7 +739,6 @@ def procesar_cola_descargas():
             # o fallo silencioso del SAT. Reintentar hasta 3 veces.
             job.estado = 'en_cola'
             job.intentos += 1
-            from django.utils import timezone as dj_timezone
             job.programado_para = dj_timezone.now() + timedelta(hours=6)
             job.save()
             logger.warning(f"Job {job.empresa.rfc} {job.year}-{job.month:02d} completó con 0 CFDIs, reintentando ({job.intentos}/3)")
