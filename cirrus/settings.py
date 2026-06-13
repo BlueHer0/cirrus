@@ -166,7 +166,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     "sat-health-probe": {
         "task": "core.tasks.sat_health_probe",
-        "schedule": 300,  # every 5 minutes
+        # 04:00 UTC (22:00 CST, ventana SAT 90% disponibilidad) y
+        # 16:00 UTC (10:00 CST, fuera de la zona de degradación 09-13 UTC).
+        # Antes: every 300s (288 logins/día). Ahora: 2/día.
+        # Reduce el soft-throttling SAT que disparaba login_failed creciente.
+        "schedule": crontab(hour="4,16", minute="0"),
         "options": {"queue": "sistema"},
     },
     "sat-health-summarize": {
@@ -176,7 +180,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "supervisor-pipelines": {
         "task": "core.tasks.supervisor_pipelines",
-        "schedule": 300,  # every 5 minutes
+        "schedule": 900,  # every 15 minutes (era 300)
         "options": {"queue": "sistema"},
     },
     "limpiar-tmp-fiel": {
