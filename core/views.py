@@ -1286,6 +1286,12 @@ def _get_logo_b64():
 
 def landing_view(request):
     """Public landing page with stats, converter, and pricing."""
+    # Guard: si la landing pública está deshabilitada, redirigir a login del app.
+    # Reversible: settings.LANDING_PUBLICA_HABILITADA = True + restart cirrus-web.
+    from django.conf import settings as dj_settings
+    if not getattr(dj_settings, "LANDING_PUBLICA_HABILITADA", False):
+        return redirect("app:login")
+
     from core.models import Empresa, CFDI, Plan
 
     stats = {

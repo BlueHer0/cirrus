@@ -99,6 +99,16 @@ def _send_confirmation_email(user, token):
 
 def app_register(request):
     """Client registration with email confirmation via Django signing."""
+    # Guard: si el registro público está cerrado, redirigir a login.
+    # Reversible: settings.REGISTRO_PUBLICO_ABIERTO = True + restart cirrus-web.
+    if not getattr(settings, "REGISTRO_PUBLICO_ABIERTO", False):
+        messages.info(
+            request,
+            "El registro está cerrado temporalmente. "
+            "Contacta a contactocirrus@nubex.me si necesitas una cuenta.",
+        )
+        return redirect("app:login")
+
     if request.user.is_authenticated:
         if request.user.is_staff:
             auth_logout(request)
