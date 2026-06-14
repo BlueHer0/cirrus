@@ -221,6 +221,131 @@ class SATNavigator:
 
         await self._screenshot(f"07_filters_{year}_{month:02d}")
 
+    async def _set_filters_range(self, date_from, date_to):
+        """Configura filtro de RANGO en la bandeja EMISOR (UI nueva).
+
+        El portal /ConsultaEmisor.aspx migró (~mayo 2026) de dropdowns Año/Mes/Día
+        a un filtro de rango con calendario Tigra Datepicker. Los inputs
+        Calendario_text llegan ``disabled="disabled"`` desde el server — hay que
+        quitarles disabled antes de setear el value, si no el ``name`` no viaja
+        en el POST y el server filtra con rango vacío.
+
+        Secuencia validada contra SAT (VEN enero 2026 → 29 emitidos reales,
+        evidencia en /tmp/diag_emisor_validacion/).
+
+        ``SetDDL`` (función JS de SAT) se llama por cortesía: limpia validadores
+        de ``ddlComplementos`` poblando ``hfInicialBool``. NO es la fuente de
+        verdad del filtro (sobreescribe ``hfInicial``/``hfFinal`` con sólo el
+        año, comportamiento intencional del portal — no nos toca).
+        """
+        date_str_ini = date_from.strftime("%d/%m/%Y")
+        date_str_fin = date_to.strftime("%d/%m/%Y")
+        logger.info("📅 Filtro de rango Emisor: %s → %s", date_str_ini, date_str_fin)
+
+        # 1) Click radio "Fecha de Emisión" — dispara postback que revela el filtro
+        clicked = await safe_click(self.page, SEL_RADIO_FECHA, timeout=10_000)
+        if not clicked:
+            raise SATNavigatorError(
+                "No se pudo activar radio 'Fecha de Emisión' en bandeja Emisor"
+            )
+        logger.info("✅ Radio 'Fecha de Emisión' seleccionado")
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=15_000)
+        except Exception:
+            pass  # networkidle es best-effort; ASP.NET no siempre lo señala
+        await asyncio.sleep(2)
+
+        # 2) Llenar los dos Calendario_text: disabled=false + setter nativo + eventos
+        js_fill = r"""(args) => {
+            const setField = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el) return {ok:false, err:'no encontrado:'+id};
+                el.disabled = false;  // crítico: sin esto el name no viaja en POST
+                const ns = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype, 'value').set;
+                ns.call(el, val);     // setter nativo evita interceptors de frameworks
+                el.dispatchEvent(new Event('input',  {bubbles: true}));
+                el.dispatchEvent(new Event('change', {bubbles: true}));
+                el.dispatchEvent(new Event('blur',   {bubbles: true}));
+                if (typeof SetDDL === 'function') {
+                    try { SetDDL(el, el.id, val); } catch (e) {}
+                }
+                return {ok:true, value:el.value, disabled:el.disabled};
+            };
+            return {
+                ini: setField('ctl00_MainContent_CldFechaInicial2_Calendario_text', args.ini),
+                fin: setField('ctl00_MainContent_CldFechaFinal2_Calendario_text',   args.fin),
+            };
+        }"""
+        result = await self.page.evaluate(
+            js_fill, {"ini": date_str_ini, "fin": date_str_fin}
+        )
+        if not result["ini"].get("ok") or not result["fin"].get("ok"):
+            raise SATNavigatorError(
+                f"No se pudieron poblar Calendario_text en Emisor: {result}"
+            )
+        logger.info(
+            "✅ Calendarios poblados: %s → %s",
+            result["ini"]["value"], result["fin"]["value"],
+        )
+
+        # 3) Horas: 00:00:00 inicial, 23:59:59 final (cubrir el rango completo del día)
+        try:
+            await self.page.locator(
+                "#ctl00_MainContent_CldFechaInicial2_DdlHora").select_option("0")
+            await self.page.locator(
+                "#ctl00_MainContent_CldFechaInicial2_DdlMinuto").select_option("0")
+            await self.page.locator(
+                "#ctl00_MainContent_CldFechaInicial2_DdlSegundo").select_option("0")
+            await self.page.locator(
+                "#ctl00_MainContent_CldFechaFinal2_DdlHora").select_option("23")
+            await self.page.locator(
+                "#ctl00_MainContent_CldFechaFinal2_DdlMinuto").select_option("59")
+            await self.page.locator(
+                "#ctl00_MainContent_CldFechaFinal2_DdlSegundo").select_option("59")
+            logger.info("✅ Horas: 00:00:00 → 23:59:59")
+        except Exception as e:
+            raise SATNavigatorError(f"No se pudieron setear horas del rango: {e}")
+
+        label = "07_range_%s_%s" % (
+            date_str_ini.replace("/", "-"), date_str_fin.replace("/", "-"))
+        await self._screenshot(label)
+
+    async def _wait_for_results_or_empty(self, timeout_ms: int = 30_000) -> str:
+        """Regla 'fallo ≠ vacío'.
+
+        Tras pulsar Buscar, espera hasta que aparezca uno de:
+          - ``has_results``: tabla ``ctl00_MainContent_tblResult`` con filas de datos
+          - ``no_results``:  mensaje explícito 'No se encontraron' / '0 Registros'
+
+        Si en ``timeout_ms`` no aparece ninguno → ``SATNavigatorError``.
+        Esto evita el bug histórico donde un fallo de filtros silencioso (UI del
+        SAT cambió, selectores muertos) producía búsquedas con filtros vacíos
+        que retornaban [] y se marcaban como ``completado_vacio`` falso.
+        """
+        poll_every_s = 0.5
+        elapsed_ms = 0
+        while elapsed_ms < timeout_ms:
+            state = await self.page.evaluate(r"""() => {
+                const tbl = document.getElementById('ctl00_MainContent_tblResult');
+                const tbl_rows = tbl ? tbl.rows.length : 0;
+                const body = document.body.innerText || '';
+                const empty = /no se encontraron|0\s*registros|sin resultado/i.test(body);
+                return {tbl_rows, empty};
+            }""")
+            if state.get("tbl_rows", 0) > 1:
+                logger.info("✅ Tabla de resultados con %d filas", state["tbl_rows"])
+                return "has_results"
+            if state.get("empty"):
+                return "no_results"
+            await asyncio.sleep(poll_every_s)
+            elapsed_ms += int(poll_every_s * 1000)
+        raise SATNavigatorError(
+            f"Tras Buscar, ni la tabla de resultados ni el mensaje 'sin resultados' "
+            f"aparecieron en {timeout_ms // 1000}s. Probable fallo del filtro o "
+            f"cambio de UI del portal SAT. NO marcar como vacío — investigar."
+        )
+
     # ──────────────────────────────────────────────────────────────────
     #  BÚSQUEDA
     # ──────────────────────────────────────────────────────────────────
@@ -406,20 +531,35 @@ class SATNavigator:
             await self.login()
 
         await self._navigate_to_query(tipo)
-        await self._set_filters(year, month)
+
+        if tipo == "emitidos":
+            # Bandeja Emisor migró a filtro de rango (UI con calendario Tigra).
+            # Rango = mes calendario completo, inclusivo.
+            import calendar
+            from datetime import datetime as _dt
+            last_day = calendar.monthrange(year, month)[1]
+            date_from = _dt(year, month, 1, 0, 0, 0)
+            date_to = _dt(year, month, last_day, 23, 59, 59)
+            await self._set_filters_range(date_from, date_to)
+        else:
+            await self._set_filters(year, month)
 
         searched = await self._click_search()
         if not searched:
-            logger.error("Búsqueda falló")
-            return []
+            # Regla 'fallo ≠ vacío': el botón Buscar no clickeable es FALLO real,
+            # no vacío. Antes esto se enmascaraba con return [].
+            raise SATNavigatorError(
+                f"Botón Buscar no clickeable en {tipo} {year}-{month:02d}"
+            )
 
-        # Verificar si hay resultados
-        content = await self.page.content()
-        if "No se encontraron" in content or "0 Registros" in content:
+        # Regla 'fallo ≠ vacío': esperar tabla O mensaje explícito.
+        # Si ninguno aparece, levanta SATNavigatorError (no devuelve []).
+        result_state = await self._wait_for_results_or_empty(timeout_ms=30_000)
+        if result_state == "no_results":
             logger.info("ℹ️ Sin resultados para %d-%02d (%s)", year, month, tipo)
             return []
 
-        # Intentar descarga por paquete
+        # has_results: continuar con descarga por paquete
         folio = await self._select_all_and_request_download()
 
         if folio:
