@@ -422,18 +422,29 @@ class SATNavigator:
     async def _recover_downloads(
         self,
         bot,
+        folio: str | None = None,
         max_retries: int = 18,
         poll_interval_s: int = 50,
     ) -> list[Path]:
         """Recupera el paquete ZIP solicitado vía polling de ConsultaDescargaMasiva.aspx.
 
-        UI nueva (post-may 2026): la página ya NO tiene <table>/<tr> por paquete.
-        Tiene dos paneles ASP.NET que alternan visibilidad vía style ``display:none``:
-          - ``ctl00_MainContent_PnlResultados``    → paquete listo (botón
-            ``#setLinkButtonDescarga`` + hidden ``#hfFolioDescargaActual`` /
-            ``#hfUrlDescargaActual``).
+        UI nueva (post-may 2026): la página tiene dos paneles ASP.NET que alternan
+        visibilidad vía style ``display:none``:
+          - ``ctl00_MainContent_PnlResultados``    → paquete(s) listo(s); dentro
+            vive la tabla ``ctl00_MainContent_GridViewReporte`` con una fila por
+            paquete. Cada fila tiene su propio ``<span id="BtnDescarga">`` en la
+            primera celda (todos comparten id; Playwright los distingue por orden
+            con ``nth()``).
           - ``ctl00_MainContent_PnlNoResultados`` → "No existen registros…" —
             estado **normal mientras SAT procesa la solicitud**, NO vacío real.
+
+        Mecánica de descarga: localizar la fila cuyo cells[1] == folio solicitado
+        y clickear su BtnDescarga (envuelto en wait_for_download). El SAT lista
+        residuales de hasta 3 días, por eso es crítico filtrar por folio.
+
+        El botón global ``#setLinkButtonDescarga`` que aparece en el DOM NO es
+        el entry point — clickearlo no dispara la descarga (validado en
+        /tmp/diag_click/). La mecánica correcta es BtnDescarga por fila.
 
         Polling generoso (~15 min, 18 × 50s) — antes eran 6 min y resultaba
         insuficiente para SAT bajo carga. Diagnóstico en /tmp/diag_recover/.
@@ -508,28 +519,71 @@ class SATNavigator:
             last_state = state
 
             if state.get("resultados"):
-                # Paquete listo: bajar ZIP vía botón #setLinkButtonDescarga
-                folio = state.get("folio") or "(sin folio)"
-                logger.info(
-                    "✅ Paquete listo (ciclo %d/%d): folio=%s",
-                    attempt, max_retries, folio[:36],
-                )
+                # Paquete listo: el ZIP se baja clickeando el <span id="BtnDescarga">
+                # DE LA FILA del folio solicitado dentro de #GridViewReporte. El
+                # botón global #setLinkButtonDescarga NO funciona como entry point.
+                #
+                # SAT lista hasta varios paquetes residuales en GridViewReporte
+                # (~3 días de retención). Hay que ubicar la fila por folio para
+                # no descargar uno equivocado. Si el folio no aparece (raro,
+                # pero defensa), fallback al más reciente (idx 0) con warning.
+                target_folio_up = (folio or "").upper()
+                row_info = await self.page.evaluate(r"""(target) => {
+                    const tbl = document.getElementById('ctl00_MainContent_GridViewReporte');
+                    if (!tbl) return {error: 'GridViewReporte no existe'};
+                    const data_rows = Array.from(tbl.rows).slice(1);
+                    if (data_rows.length === 0) return {error: 'GridViewReporte sin filas de datos'};
+                    let idx = -1;
+                    if (target) {
+                        idx = data_rows.findIndex(r =>
+                            (r.cells[1]?.innerText || '').trim().toUpperCase() === target
+                        );
+                    }
+                    const fallback = idx < 0;
+                    if (fallback) idx = 0;
+                    return {
+                        idx, fallback,
+                        n_data_rows: data_rows.length,
+                        row_folio: (data_rows[idx]?.cells[1]?.innerText || '').trim(),
+                    };
+                }""", target_folio_up)
+
+                if row_info.get("error"):
+                    raise SATNavigatorError(
+                        f"PnlResultados visible pero {row_info['error']}"
+                    )
+
+                if row_info.get("fallback"):
+                    logger.warning(
+                        "⚠️ Folio solicitado %r no aparece en GridViewReporte (%d filas); "
+                        "fallback a fila 0 (más reciente: %s)",
+                        folio, row_info["n_data_rows"], row_info["row_folio"][:36],
+                    )
+                else:
+                    logger.info(
+                        "✅ Paquete listo (ciclo %d/%d): fila %d/%d, folio=%s",
+                        attempt, max_retries, row_info["idx"] + 1,
+                        row_info["n_data_rows"], row_info["row_folio"][:36],
+                    )
                 await self._screenshot(f"11_pkg_ready_attempt_{attempt}")
 
-                btn = self.page.locator("#setLinkButtonDescarga")
+                # Click directo sobre el <span id="BtnDescarga"> de ESA fila.
+                # Todos los spans comparten id="BtnDescarga" (HTML inválido pero
+                # ASP.NET lo permite); Playwright los distingue por orden con nth().
+                btn = self.page.locator("[id='BtnDescarga']").nth(row_info["idx"])
                 try:
-                    path = await bot.wait_for_download(lambda: btn.click())
+                    path = await bot.wait_for_download(
+                        lambda: btn.click(), timeout=120_000,
+                    )
                 except Exception as e:
-                    # PnlResultados visible pero el click no produjo descarga →
-                    # falla del último paso. NO marcar como vacío.
                     raise SATNavigatorError(
-                        f"Click #setLinkButtonDescarga falló "
-                        f"(folio={folio[:36]}): {e}"
+                        f"Click BtnDescarga[{row_info['idx']}] falló "
+                        f"(folio={row_info['row_folio'][:36]}): {e}"
                     )
                 if not path:
                     raise SATNavigatorError(
-                        f"PnlResultados visible (folio={folio[:36]}) pero la "
-                        f"descarga del ZIP no produjo archivo"
+                        f"Click BtnDescarga[{row_info['idx']}] ejecutado pero "
+                        f"no produjo descarga (folio={row_info['row_folio'][:36]})"
                     )
                 logger.info("✅ ZIP descargado: %s", path.name)
                 return [path]
@@ -644,7 +698,9 @@ class SATNavigator:
         if folio:
             logger.info("⏳ Esperando %ds para que el SAT genere el ZIP...", 35)
             await asyncio.sleep(35)
-            files = await self._recover_downloads(bot)
+            # Pasar el folio para que _recover_downloads ubique la fila correcta
+            # en GridViewReporte (hay paquetes residuales de hasta 3 días).
+            files = await self._recover_downloads(bot, folio=folio)
             if files:
                 return files
 
