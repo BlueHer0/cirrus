@@ -648,8 +648,25 @@ class SATNavigator:
             if files:
                 return files
 
-        # Fallback: descargas individuales
-        return await self._try_individual_downloads(bot)
+        # Fallback: descargas individuales.
+        # Llegamos aquí solo si NO se obtuvo folio del paquete (_recover_downloads
+        # ahora levanta excepción cuando hay folio sin ZIP, así que no cae aquí).
+        # Como _wait_for_results_or_empty ya confirmó que la tabla tenía filas,
+        # llegar aquí con [] es FALLO real: tabla con datos pero no se pudo
+        # descargar ni vía paquete ni vía links individuales → cae al retry de
+        # tasks.py, no a completado_vacio.
+        individual_files = await self._try_individual_downloads(bot)
+        if individual_files:
+            return individual_files
+
+        # Tercer y último punto de la cadena 'fallo ≠ vacío'.
+        # El único return [] legítimo en este flujo es el de result_state=='no_results'
+        # arriba. Aquí los datos existen en SAT pero no logramos cosecharlos.
+        raise SATNavigatorError(
+            f"Tabla con resultados visible pero no se obtuvo folio del paquete "
+            f"NI links de descarga individual ({tipo} {year}-{month:02d}). "
+            f"NO marcar como vacío — caso para retry en tasks.py."
+        )
 
     # ──────────────────────────────────────────────────────────────────
     #  LOGOUT
