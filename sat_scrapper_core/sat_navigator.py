@@ -419,68 +419,147 @@ class SATNavigator:
     #  RECUPERAR DESCARGAS (POLLING)
     # ──────────────────────────────────────────────────────────────────
 
-    async def _recover_downloads(self, bot, max_retries: int = 12) -> list[Path]:
+    async def _recover_downloads(
+        self,
+        bot,
+        max_retries: int = 18,
+        poll_interval_s: int = 50,
+    ) -> list[Path]:
+        """Recupera el paquete ZIP solicitado vía polling de ConsultaDescargaMasiva.aspx.
+
+        UI nueva (post-may 2026): la página ya NO tiene <table>/<tr> por paquete.
+        Tiene dos paneles ASP.NET que alternan visibilidad vía style ``display:none``:
+          - ``ctl00_MainContent_PnlResultados``    → paquete listo (botón
+            ``#setLinkButtonDescarga`` + hidden ``#hfFolioDescargaActual`` /
+            ``#hfUrlDescargaActual``).
+          - ``ctl00_MainContent_PnlNoResultados`` → "No existen registros…" —
+            estado **normal mientras SAT procesa la solicitud**, NO vacío real.
+
+        Polling generoso (~15 min, 18 × 50s) — antes eran 6 min y resultaba
+        insuficiente para SAT bajo carga. Diagnóstico en /tmp/diag_recover/.
+
+        Principio 'fallo ≠ vacío':
+          - Si en algún ciclo aparece PnlResultados → bajar ZIP. Éxito.
+          - Si agota timeout SIN PnlResultados → SATNavigatorError. NO retorna []
+            silencioso. Esto deja el caso como "pendiente de reintentar" en el
+            flujo de retry de tasks.py, no como completado_vacio.
+          - PnlNoResultados visible durante el polling **NO se considera vacío
+            real** porque hubo solicitud de folio en esta sesión — solo es estado
+            de "SAT aún no terminó". Solo el timeout terminal decide.
         """
-        Navega a 'Recuperar Descargas', hace polling hasta que el ZIP esté listo.
+        total_min = (max_retries * poll_interval_s) / 60.0
+        logger.info(
+            "📦 Recuperando descargas (polling hasta ~%.0f min: %d × %ds)...",
+            total_min, max_retries, poll_interval_s,
+        )
 
-        Polling: hasta max_retries intentos con 30s entre cada uno (~6 min total).
-        """
-        logger.info("📦 Recuperando descargas (polling hasta %d min)...", max_retries // 2)
-        downloaded_files: list[Path] = []
-
-        for attempt in range(max_retries):
-            # Cargar página de recuperación
-            await self.page.goto(
-                SAT_PORTAL_URL,
-                wait_until="domcontentloaded",
-                timeout=self.config.browser_timeout,
-            )
-            await asyncio.sleep(2)
-            clicked = await safe_click(self.page, [SEL_RECUPERAR_DESCARGAS], timeout=10_000)
-            if not clicked:
-                logger.warning("No se encontró link 'Recuperar Descargas'")
-                return []
-
-            await asyncio.sleep(3)
-            if attempt == 0 or attempt == max_retries - 1:
-                await self._screenshot(f"11_recover_attempt_{attempt}")
-
-            # Buscar botones de descarga en la tabla de recuperación
-            rows = self.page.locator("table tr")
-            row_count = await rows.count()
-            logger.info(
-                "Polling %d/%d: %d filas en tabla de recuperación",
-                attempt + 1, max_retries, row_count,
-            )
-
-            for i in range(row_count):
-                row = rows.nth(i)
-                btn = row.locator(
-                    'a[title*="descarga" i], button[title*="descarga" i], '
-                    'img[title*="descarga" i], input[title*="descarga" i], '
-                    'span[id*="descarga" i], span[title*="descarga" i], '
-                    'a:has-text("Descargar"), input[id*="descarga" i]'
+        last_state = None
+        for attempt in range(1, max_retries + 1):
+            # Cargar página de descarga masiva (mismo flujo que el código antiguo)
+            try:
+                await self.page.goto(
+                    SAT_PORTAL_URL,
+                    wait_until="domcontentloaded",
+                    timeout=self.config.browser_timeout,
                 )
-                if await btn.count() > 0:
-                    try:
-                        path = await bot.wait_for_download(
-                            lambda b=btn: b.first.click()
-                        )
-                        if path:
-                            logger.info("✅ ZIP descargado: %s", path.name)
-                            downloaded_files.append(path)
-                    except Exception as e:
-                        logger.warning("Descarga de fila %d falló: %s", i, e)
+                await asyncio.sleep(2)
+                clicked = await safe_click(
+                    self.page, [SEL_RECUPERAR_DESCARGAS], timeout=10_000,
+                )
+                if not clicked:
+                    # Si la página principal NO tiene el link de Recuperar Descargas,
+                    # es fallo de UI/sesión — no es vacío.
+                    raise SATNavigatorError(
+                        "No se encontró link 'Recuperar Descargas' en la página principal"
+                    )
+                await asyncio.sleep(3)
+            except SATNavigatorError:
+                raise
+            except Exception as e:
+                # Fallo transitorio de navegación (network, timeout) → reintentar el ciclo.
+                logger.warning(
+                    "Navegación a Recuperar Descargas falló (ciclo %d): %s",
+                    attempt, e,
+                )
+                if attempt < max_retries:
+                    await asyncio.sleep(poll_interval_s)
+                    continue
+                raise SATNavigatorError(
+                    f"No se pudo navegar a Recuperar Descargas tras {attempt} intentos: {e}"
+                )
 
-            if downloaded_files:
-                break
+            # Evaluar visibilidad de los paneles (UI nueva ASP.NET)
+            state = await self.page.evaluate(r"""() => {
+                const visible = (id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return false;
+                    const style = el.getAttribute('style') || '';
+                    if (/display\s*:\s*none/i.test(style)) return false;
+                    const cs = window.getComputedStyle(el);
+                    return cs.display !== 'none' && cs.visibility !== 'hidden';
+                };
+                return {
+                    resultados:    visible('ctl00_MainContent_PnlResultados'),
+                    no_resultados: visible('ctl00_MainContent_PnlNoResultados'),
+                    folio: document.getElementById('hfFolioDescargaActual')?.value || '',
+                    url:   document.getElementById('hfUrlDescargaActual')?.value || '',
+                };
+            }""")
+            last_state = state
 
-            if attempt < max_retries - 1:
-                logger.info("⏳ ZIP no listo. Esperando 30s antes de reintentar...")
-                await asyncio.sleep(30)
+            if state.get("resultados"):
+                # Paquete listo: bajar ZIP vía botón #setLinkButtonDescarga
+                folio = state.get("folio") or "(sin folio)"
+                logger.info(
+                    "✅ Paquete listo (ciclo %d/%d): folio=%s",
+                    attempt, max_retries, folio[:36],
+                )
+                await self._screenshot(f"11_pkg_ready_attempt_{attempt}")
 
-        logger.info("📥 %d archivos descargados", len(downloaded_files))
-        return downloaded_files
+                btn = self.page.locator("#setLinkButtonDescarga")
+                try:
+                    path = await bot.wait_for_download(lambda: btn.click())
+                except Exception as e:
+                    # PnlResultados visible pero el click no produjo descarga →
+                    # falla del último paso. NO marcar como vacío.
+                    raise SATNavigatorError(
+                        f"Click #setLinkButtonDescarga falló "
+                        f"(folio={folio[:36]}): {e}"
+                    )
+                if not path:
+                    raise SATNavigatorError(
+                        f"PnlResultados visible (folio={folio[:36]}) pero la "
+                        f"descarga del ZIP no produjo archivo"
+                    )
+                logger.info("✅ ZIP descargado: %s", path.name)
+                return [path]
+
+            # PnlResultados NO visible → seguir esperando.
+            # PnlNoResultados visible mientras esperamos = SAT aún no terminó.
+            # NO es vacío real porque pedimos un folio en esta sesión.
+            estado_label = (
+                "no_resultados (esperando SAT)" if state.get("no_resultados")
+                else "loading (paneles no resueltos)"
+            )
+            logger.info(
+                "⏳ Polling %d/%d: %s",
+                attempt, max_retries, estado_label,
+            )
+
+            if attempt < max_retries:
+                await asyncio.sleep(poll_interval_s)
+
+        # Timeout terminal: folio fue solicitado pero PnlResultados nunca apareció.
+        # Caso 'fallo ≠ vacío': levantar excepción para que la cadena la propague:
+        #   nav → engine.download_all (registra en result.errors)
+        #   → ejecutar_descarga guard (0 archivos + errors → raise)
+        #   → tasks.descargar_cfdis / procesar_cola_descargas (estado='error', retry)
+        await self._screenshot("11_recover_timeout")
+        raise SATNavigatorError(
+            f"Folio asignado pero ZIP no recuperado tras {total_min:.0f} min de "
+            f"polling ({max_retries} ciclos). Último estado: {last_state}. "
+            f"NO marcar como vacío — caso para retry en tasks.py."
+        )
 
     # ──────────────────────────────────────────────────────────────────
     #  DESCARGA INDIVIDUAL (FALLBACK)
