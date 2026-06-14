@@ -90,6 +90,21 @@ def ejecutar_descarga(empresa, descarga_log) -> DownloadResult:
                 "errors_count": len(result.errors),
             }
 
+        # Regla 'fallo ≠ vacío' a nivel de resultado del engine.
+        # El try/except de engine.download_all (por diseño multi-mes) traga las
+        # excepciones del navigator y las registra en result.errors. Si el
+        # navigator falló (ej. UI del SAT cambió, filtros muertos, timeout sin
+        # tabla ni mensaje "sin resultados") y el engine no descargó nada, ese
+        # caso debe propagarse como excepción real — no como "completado_vacio".
+        # Vacío legítimo (SAT dijo explícitamente "sin resultados") deja
+        # result.errors=[] y total_files=0, así que NO dispara este guard.
+        if result.total_files == 0 and result.errors:
+            preview = "; ".join(str(e)[:200] for e in result.errors[:3])
+            raise Exception(
+                f"Scraper falló sin descargar archivos "
+                f"({len(result.errors)} errores). Primeros: {preview}"
+            )
+
         # Phase 4: Process downloaded XMLs → MinIO + PostgreSQL
         from django.db import transaction
         with StepTimer(descarga_log, "xml_process", "cirrus") as step:
