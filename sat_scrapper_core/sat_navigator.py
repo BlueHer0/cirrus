@@ -315,28 +315,51 @@ class SATNavigator:
         """Regla 'fallo ≠ vacío'.
 
         Tras pulsar Buscar, espera hasta que aparezca uno de:
-          - ``has_results``: tabla ``ctl00_MainContent_tblResult`` con filas de datos
-          - ``no_results``:  mensaje explícito 'No se encontraron' / '0 Registros'
+          - ``has_results``: tabla ``ctl00_MainContent_tblResult`` VISIBLE con filas
+          - ``no_results``:  señal explícita de vacío:
+              * Bandeja EMISOR: panel ``ctl00_MainContent_PnlNoResultados`` visible
+                con "No existen registros que cumplan con los criterios…"
+                (validado /tmp/diag_emisor_vacio/). La tabla tblResult queda
+                presente pero oculta (display:none) en este caso.
+              * Texto genérico: 'no existen registros' / 'no se encontraron' /
+                '0 registros' / 'sin resultado' (cubre Recibidos y variantes).
 
         Si en ``timeout_ms`` no aparece ninguno → ``SATNavigatorError``.
         Esto evita el bug histórico donde un fallo de filtros silencioso (UI del
         SAT cambió, selectores muertos) producía búsquedas con filtros vacíos
         que retornaban [] y se marcaban como ``completado_vacio`` falso.
+
+        OJO: la tabla solo cuenta como ``has_results`` si está VISIBLE. En Emisor
+        vacío, tblResult existe con su header (rows>1 a veces) pero display:none —
+        antes eso podía leerse como falso has_results.
         """
         poll_every_s = 0.5
         elapsed_ms = 0
         while elapsed_ms < timeout_ms:
             state = await self.page.evaluate(r"""() => {
+                const isVisible = (el) => {
+                    if (!el) return false;
+                    const cs = window.getComputedStyle(el);
+                    const r = el.getBoundingClientRect();
+                    return cs.display !== 'none' && cs.visibility !== 'hidden' && r.height > 0;
+                };
                 const tbl = document.getElementById('ctl00_MainContent_tblResult');
                 const tbl_rows = tbl ? tbl.rows.length : 0;
+                const tbl_visible = isVisible(tbl);
+                // Panel explícito de "sin resultados" (Emisor lo usa)
+                const pnl_no = document.getElementById('ctl00_MainContent_PnlNoResultados');
+                const pnl_no_visible = isVisible(pnl_no);
                 const body = document.body.innerText || '';
-                const empty = /no se encontraron|0\s*registros|sin resultado/i.test(body);
-                return {tbl_rows, empty};
+                const empty_text = /no existen registros|no se encontraron|0\s*registros|sin resultado/i.test(body);
+                return {tbl_rows, tbl_visible, pnl_no_visible, empty_text};
             }""")
-            if state.get("tbl_rows", 0) > 1:
+            # has_results SOLO si la tabla está visible con filas de datos.
+            if state.get("tbl_visible") and state.get("tbl_rows", 0) > 1:
                 logger.info("✅ Tabla de resultados con %d filas", state["tbl_rows"])
                 return "has_results"
-            if state.get("empty"):
+            # no_results: panel explícito de vacío (Emisor) o texto explícito.
+            if state.get("pnl_no_visible") or state.get("empty_text"):
+                logger.info("ℹ️ Señal explícita de 'sin resultados' detectada")
                 return "no_results"
             await asyncio.sleep(poll_every_s)
             elapsed_ms += int(poll_every_s * 1000)
