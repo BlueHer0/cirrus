@@ -319,13 +319,18 @@ LOGGING = {
 
 # ── Email (SMTP) ─────────────────────────────────────────────────────
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = config("EMAIL_HOST", default="mail.nubex.me")
+EMAIL_HOST = config("EMAIL_HOST", default="chocobo.mxrouting.net")
 EMAIL_PORT = config("EMAIL_PORT", default=465, cast=int)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_TIMEOUT = 15  # seconds — prevents hanging on slow SMTP
-DEFAULT_FROM_EMAIL = f'Cirrus <{config("EMAIL_HOST_USER", default="cirrus@nubex.me")}>'
+DEFAULT_FROM_EMAIL = f'Cirrus <{config("EMAIL_HOST_USER", default="noreply@nubex.me")}>'
+
+# Cuenta dedicada para reportes fiscales (separada de la cuenta de sistema)
+EMAIL_REPORTES_USER = config("EMAIL_REPORTES_USER", default="")
+EMAIL_REPORTES_PASSWORD = config("EMAIL_REPORTES_PASSWORD", default="")
+EMAIL_REPORTES_FROM = f'Cirrus Reportes <{EMAIL_REPORTES_USER}>' if EMAIL_REPORTES_USER else DEFAULT_FROM_EMAIL
 
 # ── Stripe Payments ──────────────────────────────────────────────────
 STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY", default="")

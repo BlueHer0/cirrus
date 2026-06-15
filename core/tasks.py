@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone as dj_timezone
 
 logger = logging.getLogger("core.tasks")
@@ -1273,7 +1274,7 @@ def alertas_vencimiento_fiel():
                 f'Constancia de Situación Fiscal.\n\n'
                 f'Renueva tu FIEL en: https://www.sat.gob.mx\n\n'
                 f'— Equipo Cirrus',
-                'Cirrus <cirrus@nubex.me>',
+                settings.DEFAULT_FROM_EMAIL,
                 [empresa.owner.email],
                 fail_silently=True,
             )
@@ -1301,7 +1302,7 @@ def alertas_vencimiento_fiel():
                     f'El CSD de {empresa.nombre} vence el {empresa.csd_expira.strftime("%d/%m/%Y")}.\n'
                     f'Renuévalo en el portal del SAT para poder seguir facturando.\n\n'
                     f'— Equipo Cirrus',
-                    'Cirrus <cirrus@nubex.me>',
+                    settings.DEFAULT_FROM_EMAIL,
                     [empresa.owner.email],
                     fail_silently=True,
                 )
@@ -1769,7 +1770,7 @@ def verificar_fiel_por_vencer():
                 f"Constancia de Situación Fiscal de forma automática.\n\n"
                 f"— Equipo Cirrus"
             ),
-            "Cirrus <cirrus@nubex.me>",
+            settings.DEFAULT_FROM_EMAIL,
             [owner_email],
             fail_silently=True,
         )
@@ -1816,7 +1817,7 @@ def verificar_fiel_por_vencer():
                 f"Renuévalo en el portal del SAT para poder seguir facturando.\n\n"
                 f"— Equipo Cirrus"
             ),
-            "Cirrus <cirrus@nubex.me>",
+            settings.DEFAULT_FROM_EMAIL,
             [owner_email],
             fail_silently=True,
         )

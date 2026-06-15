@@ -345,7 +345,7 @@ def _handle_invoice_payment_failed(data):
             "Por favor actualiza tu método de pago en tu panel.\n"
             "Si no se regulariza en 7 días, tu cuenta será degradada al plan gratuito.\n\n"
             "— Equipo Cirrus\ncirrus.nubex.me",
-            "Cirrus <cirrus@nubex.me>",
+            settings.DEFAULT_FROM_EMAIL,
             [profile.user.email],
             fail_silently=False,
         )
@@ -447,7 +447,7 @@ def _enviar_email_recibo(user, plan, safe: bool = True):
                 f"Adjuntamos tu recibo de pago.\n\n"
                 f"— Equipo Cirrus\ncirrus.nubex.me"
             ),
-            from_email="Cirrus <cirrus@nubex.me>",
+            from_email=settings.DEFAULT_FROM_EMAIL,
             to=[user.email],
         )
         email.attach(f"Recibo_Cirrus_{payment.id:06d}.pdf", pdf, "application/pdf")

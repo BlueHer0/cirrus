@@ -12,6 +12,27 @@ from django.conf import settings
 logger = logging.getLogger("reportes.tasks")
 
 
+def _get_reportes_connection():
+    """Return SMTP connection using the dedicated reports account.
+
+    Uses EMAIL_REPORTES_USER/EMAIL_REPORTES_PASSWORD on the same host/port/SSL
+    as the system account. Falls back to the default Django connection if
+    the dedicated credentials are not configured.
+    """
+    from django.core.mail import get_connection
+    if not settings.EMAIL_REPORTES_USER or not settings.EMAIL_REPORTES_PASSWORD:
+        return None  # let Django use the default connection
+    return get_connection(
+        backend="django.core.mail.backends.smtp.EmailBackend",
+        host=settings.EMAIL_HOST,
+        port=settings.EMAIL_PORT,
+        username=settings.EMAIL_REPORTES_USER,
+        password=settings.EMAIL_REPORTES_PASSWORD,
+        use_ssl=settings.EMAIL_USE_SSL,
+        timeout=settings.EMAIL_TIMEOUT,
+    )
+
+
 @shared_task(bind=True, max_retries=2, soft_time_limit=120, time_limit=150)
 def enviar_reporte_mensual_email(self, empresa_id, anio, mes):
     """
@@ -115,8 +136,9 @@ def enviar_reporte_mensual_email(self, empresa_id, anio, mes):
     email = EmailMultiAlternatives(
         subject=asunto,
         body=resumen_text,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=settings.EMAIL_REPORTES_FROM,
         to=[usuario.email],
+        connection=_get_reportes_connection(),
     )
     email.attach_alternative(cuerpo_html, "text/html")
 
@@ -237,8 +259,9 @@ def generar_y_enviar_reporte_anual(self, empresa_id, anio, emails_extra=None, ov
     email = EmailMultiAlternatives(
         subject=asunto,
         body=resumen_text,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=settings.EMAIL_REPORTES_FROM,
         to=to_emails,
+        connection=_get_reportes_connection(),
     )
     email.attach_alternative(cuerpo_html, "text/html")
 
