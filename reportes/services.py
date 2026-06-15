@@ -95,19 +95,25 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
     cfdi_count = cfdis.count()
 
     # ── CFDI sets ───────────────────────────────────────────────────
-    # INGRESOS: CFDIs tipo I donde la empresa es el EMISOR
+    # INGRESOS: CFDIs tipo I donde la empresa es el EMISOR (ventas facturadas).
+    # Nota: tipo 'E' (notas de credito/debito) y tipo 'N' (nomina) no entran
+    # en este conjunto; el criterio de ajustes lo evaluara la contadora.
     ingresos_qs = CFDI.objects.filter(
         rfc_empresa=rfc,
         tipo_comprobante='I',
+        rfc_emisor=rfc,
         fecha__date__gte=fecha_inicio,
         fecha__date__lte=fecha_fin,
         estado_sat='vigente'
     )
 
-    # GASTOS: CFDIs tipo E donde la empresa es el RECEPTOR  
+    # GASTOS: CFDIs tipo I donde la empresa es el RECEPTOR (compras recibidas).
+    # Antes filtraba tipo 'E' lo cual solo capturaba notas de credito; las
+    # compras reales son tipo 'I' con la empresa como receptor.
     gastos_qs = CFDI.objects.filter(
         rfc_empresa=rfc,
-        tipo_comprobante='E',
+        tipo_comprobante='I',
+        rfc_receptor=rfc,
         fecha__date__gte=fecha_inicio,
         fecha__date__lte=fecha_fin,
         estado_sat='vigente'
