@@ -325,6 +325,86 @@
 </div>
 {% endif %}
 
+<!-- Panel de Nómina — T6 (informativo, no entra al resultado fiscal) -->
+{% if datos.nomina_panel.nominas_count > 0 %}
+<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+    <h3 class="text-sm font-semibold text-[#e6edf3] mb-3 flex items-center gap-2">
+        <span>👥</span> Nómina del Periodo
+        <span class="text-[11px] font-normal text-[#8b949e]">— panel informativo, no entra al resultado fiscal</span>
+    </h3>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Nóminas emitidas</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">{{ datos.nomina_panel.nominas_count }}</div>
+            <div class="text-[10px] text-[#6e7681]">{{ datos.nomina_panel.ordinarias_count }} ordinarias{% if datos.nomina_panel.extraordinarias_count %} · {{ datos.nomina_panel.extraordinarias_count }} extra{% endif %}</div>
+        </div>
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Trabajadores</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">{{ datos.nomina_panel.trabajadores_count }}</div>
+            <div class="text-[10px] text-[#6e7681]">RFCs distintos</div>
+        </div>
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Total pagado (neto)</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">${{ datos.nomina_panel.total_pagado|floatformat:2 }}</div>
+            <div class="text-[10px] text-[#6e7681]">Suma de campo total</div>
+        </div>
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Periodicidad</div>
+            <div class="text-base font-semibold mt-1 text-[#e6edf3]">{{ datos.nomina_panel.periodicidad }}</div>
+            <div class="text-[10px] text-[#6e7681]">Detectada por fechas</div>
+        </div>
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">ISR retenido</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#6e7681]">n/d</div>
+            <div class="text-[10px] text-[#6e7681]">No extraído</div>
+        </div>
+    </div>
+
+    {% if datos.nomina_panel.top_trabajadores %}
+    <div class="overflow-x-auto rounded-lg border border-[#30363d]">
+        <table class="w-full text-xs">
+            <thead style="background: #0d1117;">
+                <tr class="text-[10px] text-[#8b949e] uppercase tracking-wider">
+                    <th class="px-3 py-2 text-left font-semibold">Trabajador</th>
+                    <th class="px-3 py-2 text-center font-semibold"># nóminas</th>
+                    <th class="px-3 py-2 text-right font-semibold">Total pagado (neto)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in datos.nomina_panel.top_trabajadores %}
+                <tr class="border-t border-[#30363d]">
+                    <td class="px-3 py-2 text-[#e6edf3]">
+                        <div>{{ t.nombre_receptor|default:t.rfc_receptor }}</div>
+                        <div class="font-mono text-[10px] text-[#6e7681]">{{ t.rfc_receptor }}</div>
+                    </td>
+                    <td class="px-3 py-2 text-center font-mono text-[#8b949e]">{{ t.n }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">${{ t.monto|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if not datos.nomina_panel.complemento_parseado %}
+    <div class="mt-4 rounded-lg p-3 border" style="background: rgba(227,179,65,0.08); border-color: #e3b341;">
+        <div class="flex items-start gap-2">
+            <span class="text-[#e3b341]">⚠️</span>
+            <div class="text-xs text-[#e6edf3] leading-relaxed">
+                <strong>El complemento de nómina aún no se extrae por completo del XML.</strong>
+                El <em>"total pagado"</em> mostrado corresponde al campo <code class="font-mono text-[10px] px-1 rounded bg-[#0d1117]">total</code> del CFDI (neto liquidado al empleado).
+                Las percepciones brutas, deducciones detalladas, ISR retenido en nómina y subsidio al empleo
+                están dentro del bloque <code class="font-mono text-[10px] px-1 rounded bg-[#0d1117]">nomina12:Nomina</code>
+                del XML, que aún no se procesa.
+                Para detalle fiscal completo de nómina se requiere ampliar el parser (pendiente).
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- KPIs Grid -->
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 font-plus">
     

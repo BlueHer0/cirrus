@@ -502,6 +502,62 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         .annotate(n=Count("uuid"), monto=Sum("total")).order_by("dia")
     )
 
+    # ── Panel de nomina (T6 — informativo, NO entra al resultado fiscal) ─
+    # Solo lee los campos que YA estan poblados en BD (header del complemento).
+    # El bloque Percepciones/Deducciones del complemento nomina12 NO esta parseado
+    # — se marca con bandera para que la web lo declare explicitamente.
+    nominas_qs = CFDI.objects.filter(
+        rfc_empresa=rfc, tipo_comprobante='N', rfc_emisor=rfc,
+        fecha__date__gte=fecha_inicio, fecha__date__lte=fecha_fin,
+        estado_sat='vigente',
+    )
+    nominas_count = nominas_qs.count()
+    nomina_total_pagado = _safe(nominas_qs.aggregate(s=Sum("total"))["s"])
+    # Set elimina duplicados del Meta.ordering implicito que desactiva DISTINCT en Django.
+    nomina_trabajadores = list({r for r in nominas_qs.values_list("rfc_receptor", flat=True)})
+    nomina_ordinarias = nominas_qs.filter(tipo_nomina='O').count()
+    nomina_extraordinarias = nominas_qs.filter(tipo_nomina='E').count()
+    # Periodicidad: inferir a partir de la duracion de los periodos cubiertos.
+    nomina_periodicidad = "n/d"
+    if nominas_count > 0:
+        # Mediana del span fecha_final - fecha_inicial (en dias) si ambos existen.
+        spans = []
+        for n in nominas_qs.exclude(fecha_inicial_pago__isnull=True).exclude(fecha_final_pago__isnull=True):
+            spans.append((n.fecha_final_pago - n.fecha_inicial_pago).days + 1)
+        if spans:
+            spans.sort()
+            mediana = spans[len(spans) // 2]
+            if 13 <= mediana <= 17:
+                nomina_periodicidad = "Quincenal"
+            elif 6 <= mediana <= 8:
+                nomina_periodicidad = "Semanal"
+            elif 28 <= mediana <= 31:
+                nomina_periodicidad = "Mensual"
+            elif 9 <= mediana <= 12:
+                nomina_periodicidad = "Decenal"
+            else:
+                nomina_periodicidad = f"{mediana} días (irregular)"
+    # Top trabajadores por neto pagado (informativo)
+    nomina_top_trabajadores = list(
+        nominas_qs.values("rfc_receptor", "nombre_receptor")
+        .annotate(n=Count("uuid"), monto=Sum("total"))
+        .order_by("-monto")[:10]
+    )
+    nomina_panel = {
+        "nominas_count": nominas_count,
+        "total_pagado": nomina_total_pagado,
+        "trabajadores_count": len(nomina_trabajadores),
+        "ordinarias_count": nomina_ordinarias,
+        "extraordinarias_count": nomina_extraordinarias,
+        "periodicidad": nomina_periodicidad,
+        "top_trabajadores": nomina_top_trabajadores,
+        # Bandera: el complemento de nomina12 NO esta parseado en xml_processor.
+        # total_pagado refleja el NETO (después de deducciones), no las percepciones
+        # brutas. ISR retenido en nómina = $0 en BD para TODOS los CFDIs tipo N,
+        # lo cual no representa el dato fiscal real.
+        "complemento_parseado": False,
+    }
+
     return {
         # Empresa
         "empresa_nombre": empresa.nombre,
@@ -591,6 +647,9 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         "gastos_sin_fp_iva_riesgo": sin_fp_iva_riesgo,
         "gastos_sin_fp_count": sin_fp_count,
         "gastos_sin_fp_por_proveedor": sin_fp_por_proveedor,
+
+        # Panel de nomina — T6 (informativo, NO entra a resultado fiscal)
+        "nomina_panel": nomina_panel,
 
         # Top proveedores / clientes
         "top_proveedores": top_proveedores,
