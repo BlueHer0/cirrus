@@ -8,9 +8,14 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F, Max
 
 from core.models import Empresa, CFDI, EFOS
+
+# EFOS segmentado por situacion (campo del SAT 69-B).
+# Solo Definitivo y Presunto cuentan como riesgo fiscal real.
+EFOS_SITUACIONES_RIESGO = {"Definitivo", "Presunto"}
+EFOS_SITUACIONES_LIMPIAS = {"Desvirtuado", "Sentencia Favorable"}
 
 logger = logging.getLogger("reportes.services")
 
@@ -128,23 +133,56 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         estado_sat='vigente'
     )
 
-    # ── KPIs ────────────────────────────────────────────────────────
-    total_ingresos = _safe(ingresos_qs.aggregate(s=Sum("total"))["s"])
-    total_gastos = _safe(gastos_qs.aggregate(s=Sum("total"))["s"])
+    # NOTAS DE CREDITO/DEBITO tipo 'E' — ajuste a ingresos/gastos (criterio 1).
+    # Notas E recibidas (rfc_receptor=empresa) restan de gastos y de IVA acreditable.
+    # Notas E emitidas (rfc_emisor=empresa)  restan de ingresos y de IVA trasladado.
+    notas_e_recibidas_qs = CFDI.objects.filter(
+        rfc_empresa=rfc, tipo_comprobante='E', rfc_receptor=rfc,
+        fecha__date__gte=fecha_inicio, fecha__date__lte=fecha_fin,
+        estado_sat='vigente',
+    )
+    notas_e_emitidas_qs = CFDI.objects.filter(
+        rfc_empresa=rfc, tipo_comprobante='E', rfc_emisor=rfc,
+        fecha__date__gte=fecha_inicio, fecha__date__lte=fecha_fin,
+        estado_sat='vigente',
+    )
+    notas_e_recibidas_total = _safe(notas_e_recibidas_qs.aggregate(s=Sum("total"))["s"])
+    notas_e_recibidas_iva = _safe(notas_e_recibidas_qs.aggregate(s=Sum("iva"))["s"])
+    notas_e_emitidas_total = _safe(notas_e_emitidas_qs.aggregate(s=Sum("total"))["s"])
+    notas_e_emitidas_iva = _safe(notas_e_emitidas_qs.aggregate(s=Sum("iva"))["s"])
 
-    # Deducibilidad: efectivo > $2,000 = no deducible
-    gastos_no_deducibles_qs = gastos_qs.filter(forma_pago="01", total__gt=2000)
-    total_no_deducible = _safe(gastos_no_deducibles_qs.aggregate(s=Sum("total"))["s"])
-    total_gastos_deducibles = total_gastos - total_no_deducible
+    # ── KPIs ────────────────────────────────────────────────────────
+    # Ingresos y gastos NETOS (despues de notas E como ajuste, criterio 1).
+    total_ingresos_bruto = _safe(ingresos_qs.aggregate(s=Sum("total"))["s"])
+    total_gastos_bruto = _safe(gastos_qs.aggregate(s=Sum("total"))["s"])
+    total_ingresos = total_ingresos_bruto - notas_e_emitidas_total
+    total_gastos = total_gastos_bruto - notas_e_recibidas_total
+
+    # Riesgo de no deducibilidad: efectivo > $2,000 — INFORMATIVO, no resta auto
+    # (criterio 2). Se expone como lista para revision manual; el resultado fiscal
+    # ya NO descuenta este monto automaticamente.
+    gastos_riesgo_efectivo_qs = gastos_qs.filter(forma_pago="01", total__gt=2000)
+    total_riesgo_no_deducible = _safe(gastos_riesgo_efectivo_qs.aggregate(s=Sum("total"))["s"])
+    iva_riesgo_no_deducible = _safe(gastos_riesgo_efectivo_qs.aggregate(s=Sum("iva"))["s"])
+    # Aliases retrocompatibles (mismos valores, ahora INFORMATIVOS).
+    total_no_deducible = total_riesgo_no_deducible
+    iva_no_acreditable = iva_riesgo_no_deducible
+
+    # Resultado fiscal: ingresos netos - gastos netos (sin restar el riesgo
+    # de efectivo>$2K, que ahora es informativo).
+    total_gastos_deducibles = total_gastos
     resultado_fiscal = total_ingresos - total_gastos_deducibles
 
     # ── IVA ─────────────────────────────────────────────────────────
-    iva_trasladado = _safe(ingresos_qs.aggregate(s=Sum("iva"))["s"])
-    iva_acreditable = _safe(
-        gastos_qs.exclude(forma_pago="01", total__gt=2000).aggregate(s=Sum("iva"))["s"]
-    )
+    # IVA trasladado = IVA cobrado en ventas - IVA de notas E emitidas (devoluciones).
+    iva_trasladado_bruto = _safe(ingresos_qs.aggregate(s=Sum("iva"))["s"])
+    iva_trasladado = iva_trasladado_bruto - notas_e_emitidas_iva
+    # IVA acreditable = IVA pagado en compras - IVA de notas E recibidas.
+    # Criterio 2: NO se excluye el IVA de gastos efectivo>$2K — todo IVA legitimo
+    # entra al acreditable; el riesgo de efectivo se reporta aparte como aviso.
+    iva_acreditable_bruto = _safe(gastos_qs.aggregate(s=Sum("iva"))["s"])
+    iva_acreditable = iva_acreditable_bruto - notas_e_recibidas_iva
     iva_retenido_total = _safe(gastos_qs.aggregate(s=Sum("iva_retenido"))["s"])
-    iva_no_acreditable = _safe(gastos_no_deducibles_qs.aggregate(s=Sum("iva"))["s"])
     iva_neto = iva_trasladado - iva_acreditable  # positivo=a pagar, negativo=a favor
     isr_retenido = _safe(gastos_qs.aggregate(s=Sum("isr_retenido"))["s"])
     isr_provisional = max(resultado_fiscal * Decimal("0.30"), Decimal("0"))
@@ -154,10 +192,11 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
     if iva_neto > 0:
         reserva_fiscal_minima += iva_neto
 
-    # ── Deducibilidad % ─────────────────────────────────────────────
+    # ── % de gastos en riesgo de no deducibilidad (efectivo > $2K) ─
+    # Informativo. No descuenta automatico del resultado fiscal.
     if total_gastos > 0:
-        pct_deducible = float(total_gastos_deducibles / total_gastos * 100)
-        pct_no_deducible = 100 - pct_deducible
+        pct_no_deducible = float(total_riesgo_no_deducible / total_gastos * 100)
+        pct_deducible = 100 - pct_no_deducible
     else:
         pct_deducible = 100.0
         pct_no_deducible = 0.0
@@ -184,15 +223,27 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             })
     ppd_sin_rep_monto = sum(x["total"] for x in ppd_sin_rep)
 
-    # ── EFOS ────────────────────────────────────────────────────────
+    # ── EFOS segmentado por situacion (criterio 3) ──────────────────
+    # Definitivo / Presunto = riesgo real. Desvirtuado / Sentencia Favorable = limpio.
     rfcs_proveedores = list(
         gastos_qs.values_list("rfc_emisor", flat=True).distinct()
     )
     efos_encontrados = EFOS.objects.filter(rfc__in=rfcs_proveedores)
-    efos_count = efos_encontrados.count()
-    efos_lista = list(
+    efos_lista_full = list(
         efos_encontrados.values("rfc", "nombre", "situacion")
     )
+    efos_definitivo_lista = [e for e in efos_lista_full if e["situacion"] == "Definitivo"]
+    efos_presunto_lista = [e for e in efos_lista_full if e["situacion"] == "Presunto"]
+    efos_desvirtuado_lista = [e for e in efos_lista_full if e["situacion"] == "Desvirtuado"]
+    efos_sentencia_lista = [e for e in efos_lista_full if e["situacion"] == "Sentencia Favorable"]
+    efos_definitivo_count = len(efos_definitivo_lista)
+    efos_presunto_count = len(efos_presunto_lista)
+    efos_desvirtuado_count = len(efos_desvirtuado_lista)
+    efos_sentencia_count = len(efos_sentencia_lista)
+    efos_riesgo_count = efos_definitivo_count + efos_presunto_count
+    # Compat retrocompatible: efos_count y efos_lista ahora solo cuentan los de RIESGO.
+    efos_count = efos_riesgo_count
+    efos_lista = efos_definitivo_lista + efos_presunto_lista
 
     # ── Formas de pago ──────────────────────────────────────────────
     forma_pago_dist = (
@@ -230,6 +281,9 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         ) if total_gastos > 0 else 0
 
     # ── Tendencia IVA 6 meses ───────────────────────────────────────
+    # Usa el mismo criterio fiscal que el bloque principal:
+    # IVA trasladado = ventas (tipo I, emisor=empresa) - notas E emitidas.
+    # IVA acreditable = compras (tipo I, receptor=empresa) - notas E recibidas.
     tendencia_iva = []
     for i in range(5, -1, -1):
         m_date = date(fecha_fin.year, fecha_fin.month, 1) - timedelta(days=i * 28)
@@ -238,25 +292,14 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             m_fin_d = date(m_date.year + 1, 1, 1) - timedelta(days=1)
         else:
             m_fin_d = date(m_date.year, m_date.month + 1, 1) - timedelta(days=1)
-
-        m_cfdis = CFDI.objects.filter(
-            rfc_empresa=rfc,
-            fecha__date__gte=m_inicio,
-            fecha__date__lte=m_fin_d,
-            estado_sat="vigente",
-        )
-        m_iva_trasl = _safe(
-            m_cfdis.filter(tipo_comprobante="I")
-            .aggregate(s=Sum("iva"))["s"]
-        )
-        m_iva_acred = _safe(
-            m_cfdis.filter(tipo_comprobante="E")
-            .exclude(forma_pago="01", total__gt=2000)
-            .aggregate(s=Sum("iva"))["s"]
-        )
+        per = _calc_periodo_simple(rfc, m_inicio, m_fin_d)
         tendencia_iva.append({
             "mes": f"{MONTH_SHORT[m_inicio.month]} {str(m_inicio.year)[2:]}",
-            "iva_neto": m_iva_trasl - m_iva_acred,
+            "iva_neto": per["iva_trasladado"] - per["iva_acreditable"],
+            "ingresos": per["total_ingresos"],
+            "gastos": per["total_gastos"],
+            "iva_trasladado": per["iva_trasladado"],
+            "iva_acreditable": per["iva_acreditable"],
         })
 
     # ── Health Score ─────────────────────────────────────────────────
@@ -306,10 +349,12 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
     except Exception:
         pass
 
-    # ── CFDIs no deducibles (tabla) ─────────────────────────────────
-    cfdi_no_deducibles = []
-    for c in gastos_no_deducibles_qs:
-        cfdi_no_deducibles.append({
+    # ── CFDIs en RIESGO de no deducibilidad (tabla informativa) ─────
+    # Criterio 2: gastos efectivo>$2K NO se descuentan auto del resultado,
+    # solo se marcan aqui para revision manual. Incluye su IVA.
+    cfdis_riesgo_no_deducible = []
+    for c in gastos_riesgo_efectivo_qs:
+        cfdis_riesgo_no_deducible.append({
             "uuid": str(c.uuid),
             "fecha": c.fecha.date(),
             "rfc_emisor": c.rfc_emisor,
@@ -317,7 +362,10 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             "forma_pago_label": FORMA_PAGO_LABELS.get(c.forma_pago, c.forma_pago),
             "motivo": "Efectivo > $2,000",
             "total": c.total,
+            "iva": c.iva or Decimal("0"),
         })
+    # Alias retrocompatible para templates existentes.
+    cfdi_no_deducibles = cfdis_riesgo_no_deducible
 
     # ── Acciones dinámicas ──────────────────────────────────────────
     acciones = []
@@ -362,6 +410,57 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             "cta": "Ver guía",
         })
 
+    # ── Aggregates extra para vistas web ─────────────────────────────
+    ingresos_count = ingresos_qs.count()
+    gastos_count = gastos_qs.count()
+    total_emitidos_count = CFDI.objects.filter(
+        rfc_empresa=rfc, rfc_emisor=rfc,
+        fecha__date__gte=fecha_inicio, fecha__date__lte=fecha_fin,
+        estado_sat='vigente',
+    ).count()
+    total_recibidos_count = CFDI.objects.filter(
+        rfc_empresa=rfc, rfc_receptor=rfc,
+        fecha__date__gte=fecha_inicio, fecha__date__lte=fecha_fin,
+        estado_sat='vigente',
+    ).count()
+    factura_max = _safe(ingresos_qs.aggregate(m=Max("total"))["m"])
+    ticket_promedio = (total_ingresos / ingresos_count) if ingresos_count > 0 else Decimal("0")
+
+    # IVA por tasa (de ingresos / ventas)
+    ing_ivable = ingresos_qs.filter(subtotal__gt=0)
+    iva_por_tasa_16 = _safe(
+        ing_ivable.filter(iva__gt=F("subtotal") * Decimal("0.10"))
+        .aggregate(s=Sum("iva"))["s"]
+    )
+    iva_por_tasa_8 = _safe(
+        ing_ivable.filter(iva__gt=0, iva__lte=F("subtotal") * Decimal("0.10"))
+        .aggregate(s=Sum("iva"))["s"]
+    )
+    ventas_tasa_0 = _safe(ingresos_qs.filter(iva=0).aggregate(s=Sum("total"))["s"])
+
+    # Top clientes (a partir de ingresos = ventas)
+    top_clientes = list(
+        ingresos_qs.values("rfc_receptor", "nombre_receptor")
+        .annotate(total_cliente=Sum("total"))
+        .order_by("-total_cliente")[:5]
+    )
+
+    # Distribuciones para Resumen Rapido (base = todos los CFDIs vigentes del periodo)
+    dist_por_tipo = list(
+        cfdis.values("tipo_comprobante").annotate(n=Count("uuid")).order_by("-n")
+    )
+    dist_por_forma_pago = list(
+        cfdis.exclude(forma_pago="").values("forma_pago")
+        .annotate(n=Count("uuid")).order_by("-n")[:6]
+    )
+
+    # Actividad diaria del periodo (count + monto por dia)
+    from django.db.models.functions import ExtractDay
+    actividad_dia_raw = list(
+        cfdis.annotate(dia=ExtractDay("fecha")).values("dia")
+        .annotate(n=Count("uuid"), monto=Sum("total")).order_by("dia")
+    )
+
     return {
         # Empresa
         "empresa_nombre": empresa.nombre,
@@ -373,23 +472,46 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
 
         # CFDIs
         "cfdi_count": cfdi_count,
-        "ingresos_count": ingresos_qs.count(),
-        "gastos_count": gastos_qs.count(),
+        "ingresos_count": ingresos_count,
+        "gastos_count": gastos_count,
         "pagos_count": pagos_qs.count(),
+        "total_emitidos_count": total_emitidos_count,
+        "total_recibidos_count": total_recibidos_count,
+        "factura_max": factura_max,
+        "ticket_promedio": ticket_promedio,
 
         # KPIs
         "total_ingresos": total_ingresos,
+        "total_ingresos_bruto": total_ingresos_bruto,
         "total_gastos": total_gastos,
+        "total_gastos_bruto": total_gastos_bruto,
         "total_gastos_deducibles": total_gastos_deducibles,
+        # total_no_deducible / pct_no_deducible / iva_no_acreditable son INFORMATIVOS:
+        # senalan riesgo de no deducibilidad por efectivo>$2K, no descuentan auto.
         "total_no_deducible": total_no_deducible,
+        "total_riesgo_no_deducible": total_riesgo_no_deducible,
+        "iva_riesgo_no_deducible": iva_riesgo_no_deducible,
         "resultado_fiscal": resultado_fiscal,
+
+        # Notas E (criterio 1: ajuste a ingresos/gastos)
+        "notas_e_recibidas_count": notas_e_recibidas_qs.count(),
+        "notas_e_recibidas_total": notas_e_recibidas_total,
+        "notas_e_recibidas_iva": notas_e_recibidas_iva,
+        "notas_e_emitidas_count": notas_e_emitidas_qs.count(),
+        "notas_e_emitidas_total": notas_e_emitidas_total,
+        "notas_e_emitidas_iva": notas_e_emitidas_iva,
 
         # IVA
         "iva_trasladado": iva_trasladado,
+        "iva_trasladado_bruto": iva_trasladado_bruto,
         "iva_acreditable": iva_acreditable,
+        "iva_acreditable_bruto": iva_acreditable_bruto,
         "iva_retenido": iva_retenido_total,
         "iva_no_acreditable": iva_no_acreditable,
         "iva_neto": iva_neto,
+        "iva_por_tasa_16": iva_por_tasa_16,
+        "iva_por_tasa_8": iva_por_tasa_8,
+        "ventas_tasa_0": ventas_tasa_0,
         "isr_retenido": isr_retenido,
         "isr_provisional": isr_provisional,
         "reserva_fiscal_minima": reserva_fiscal_minima,
@@ -402,18 +524,33 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         "ppd_sin_rep": ppd_sin_rep,
         "ppd_sin_rep_monto": ppd_sin_rep_monto,
 
-        # EFOS
-        "efos_count": efos_count,
-        "efos_lista": efos_lista,
+        # EFOS segmentado (criterio 3)
+        "efos_count": efos_count,  # solo riesgo (definitivo+presunto)
+        "efos_riesgo_count": efos_riesgo_count,
+        "efos_lista": efos_lista,  # solo riesgo
+        "efos_definitivo_count": efos_definitivo_count,
+        "efos_presunto_count": efos_presunto_count,
+        "efos_desvirtuado_count": efos_desvirtuado_count,
+        "efos_sentencia_count": efos_sentencia_count,
+        "efos_definitivo_lista": efos_definitivo_lista,
+        "efos_presunto_lista": efos_presunto_lista,
+        "efos_desvirtuado_lista": efos_desvirtuado_lista,
+        "efos_sentencia_lista": efos_sentencia_lista,
 
         # Formas de pago
         "formas_pago": formas_pago,
         "pct_por_definir": round(pct_por_definir, 1),
 
-        # Top proveedores
+        # Top proveedores / clientes
         "top_proveedores": top_proveedores,
+        "top_clientes": top_clientes,
 
-        # Tendencia IVA
+        # Distribuciones (base = todos los CFDI del periodo)
+        "dist_por_tipo": dist_por_tipo,
+        "dist_por_forma_pago": dist_por_forma_pago,
+        "actividad_dia_raw": actividad_dia_raw,
+
+        # Tendencia (IVA + ingresos + gastos por mes)
         "tendencia_iva": tendencia_iva,
 
         # Health Score
@@ -422,12 +559,45 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
 
         # Tablas
         "cfdi_no_deducibles": cfdi_no_deducibles,
+        "cfdis_riesgo_no_deducible": cfdis_riesgo_no_deducible,
 
         # Acciones
         "acciones": acciones,
 
         # IA (se llena después, si se solicita)
         "resumen_ia": None,
+    }
+
+
+def _calc_periodo_simple(rfc, fecha_inicio, fecha_fin):
+    """Resumen fiscal minimo de un periodo con los mismos criterios que calcular_reporte.
+
+    Usado por la tendencia 6-meses y por las vistas web que necesitan
+    comparar periodos sin pagar el costo completo de calcular_reporte
+    (PPD-sin-REP, EFOS, acciones, etc.). Aplica criterio 1 (notas E como ajuste)
+    pero NO criterio 2/3 (no calcula riesgos ni EFOS).
+    """
+    base = dict(rfc_empresa=rfc, fecha__date__gte=fecha_inicio,
+                fecha__date__lte=fecha_fin, estado_sat='vigente')
+    ingresos = CFDI.objects.filter(tipo_comprobante='I', rfc_emisor=rfc, **base)
+    gastos = CFDI.objects.filter(tipo_comprobante='I', rfc_receptor=rfc, **base)
+    notas_emi = CFDI.objects.filter(tipo_comprobante='E', rfc_emisor=rfc, **base)
+    notas_rec = CFDI.objects.filter(tipo_comprobante='E', rfc_receptor=rfc, **base)
+    ti_b = _safe(ingresos.aggregate(s=Sum("total"))["s"])
+    tg_b = _safe(gastos.aggregate(s=Sum("total"))["s"])
+    iv_t_b = _safe(ingresos.aggregate(s=Sum("iva"))["s"])
+    iv_a_b = _safe(gastos.aggregate(s=Sum("iva"))["s"])
+    ne_emi_t = _safe(notas_emi.aggregate(s=Sum("total"))["s"])
+    ne_rec_t = _safe(notas_rec.aggregate(s=Sum("total"))["s"])
+    ne_emi_iv = _safe(notas_emi.aggregate(s=Sum("iva"))["s"])
+    ne_rec_iv = _safe(notas_rec.aggregate(s=Sum("iva"))["s"])
+    return {
+        "total_ingresos": ti_b - ne_emi_t,
+        "total_gastos": tg_b - ne_rec_t,
+        "iva_trasladado": iv_t_b - ne_emi_iv,
+        "iva_acreditable": iv_a_b - ne_rec_iv,
+        "ingresos_count": ingresos.count(),
+        "gastos_count": gastos.count(),
     }
 
 
