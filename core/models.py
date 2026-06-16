@@ -6,6 +6,7 @@ APIKey for external apps, DescargaLog for scrapper runs, ScheduleConfig.
 """
 
 import uuid
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
@@ -243,6 +244,87 @@ class CFDI(models.Model):
 
     def __str__(self):
         return f"{self.uuid} | {self.rfc_emisor} → {self.rfc_receptor} | ${self.total}"
+
+
+class PagoDoctoRelacionado(models.Model):
+    """Detalle del complemento pago20 (REP / Recibo Electrónico de Pagos).
+
+    Una fila por <pago20:DoctoRelacionado>. Un CFDI tipo='P' (REP) puede
+    contener N <pago20:Pago>, y cada Pago contiene N <pago20:DoctoRelacionado>.
+    Se aplana a una fila por (rep, pago_index, docto_index) para que el cruce
+    PPD-sin-REP se haga por UUID real (id_documento) en vez de heurística.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+
+    # REP que contiene este DoctoRelacionado.
+    rep_cfdi = models.ForeignKey(
+        CFDI, on_delete=models.CASCADE,
+        related_name="doctos_relacionados",
+        db_column="rep_cfdi_uuid",
+        help_text="CFDI tipo='P' que contiene el complemento pago20",
+    )
+    pago_index = models.PositiveSmallIntegerField(
+        help_text="Indice 1-based del <pago20:Pago> dentro del REP",
+    )
+    docto_index = models.PositiveSmallIntegerField(
+        help_text="Indice 1-based del <pago20:DoctoRelacionado> dentro del Pago",
+    )
+
+    # Datos del <pago20:Pago> (denormalizado; misma info se repite por cada docto del mismo Pago).
+    pago_fecha = models.DateTimeField(help_text="@FechaPago")
+    pago_forma = models.CharField(max_length=10, blank=True, help_text="@FormaDePagoP")
+    pago_moneda = models.CharField(max_length=10, default="MXN", help_text="@MonedaP")
+    pago_tipo_cambio = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("1"))
+    pago_monto = models.DecimalField(max_digits=18, decimal_places=2, help_text="@Monto del Pago completo")
+    pago_num_operacion = models.CharField(
+        max_length=100, blank=True,
+        help_text="@NumOperacion (referencia bancaria, # cheque, etc.)",
+    )
+
+    # Datos del <pago20:DoctoRelacionado>.
+    id_documento = models.CharField(
+        max_length=36, db_index=True,
+        help_text="UUID de la factura PPD pagada (@IdDocumento) — clave del cruce PPD<->REP",
+    )
+    folio = models.CharField(max_length=40, blank=True)
+    serie = models.CharField(max_length=25, blank=True)
+    moneda_dr = models.CharField(max_length=10, default="MXN")
+    equivalencia_dr = models.DecimalField(max_digits=14, decimal_places=10, default=Decimal("1"))
+    num_parcialidad = models.PositiveSmallIntegerField()
+    imp_saldo_anterior = models.DecimalField(max_digits=18, decimal_places=2)
+    imp_pagado = models.DecimalField(max_digits=18, decimal_places=2)
+    imp_saldo_insoluto = models.DecimalField(max_digits=18, decimal_places=2)
+    objeto_imp_dr = models.CharField(
+        max_length=10, blank=True,
+        help_text="01=no objeto / 02=si objeto IVA / 03=no obligado a desglosar",
+    )
+
+    # Vinculo opcional al CFDI de la factura pagada (NULL si no esta en nuestra BD).
+    factura_cfdi = models.ForeignKey(
+        CFDI, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="reps_recibidos",
+        db_column="factura_cfdi_uuid",
+        help_text="CFDI tipo='I' (factura PPD) que este DoctoRelacionado paga, si esta en BD",
+    )
+
+    creado_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("rep_cfdi", "pago_index", "docto_index")
+        indexes = [
+            models.Index(fields=["id_documento"], name="pdr_id_doc_idx"),
+            models.Index(fields=["factura_cfdi"], name="pdr_factura_idx"),
+        ]
+        verbose_name = "DoctoRelacionado de REP (pago20)"
+        verbose_name_plural = "DoctosRelacionados de REPs"
+
+    def __str__(self):
+        return (
+            f"REP {self.rep_cfdi_id} -> {self.id_documento[:8]} "
+            f"(parc.{self.num_parcialidad}, ${self.imp_pagado})"
+        )
 
 
 class APIKey(models.Model):
