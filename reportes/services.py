@@ -201,23 +201,31 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         pct_deducible = 100.0
         pct_no_deducible = 0.0
 
-    # ── PPD sin REP (T4: tabla detallada con monto/IVA/fecha-limite) ─
+    # ── PPD sin REP (T4 fiscal-grade: cruce por UUID real, no heuristica) ─
     # Regla 2.7.1.35 RMF: REP debe emitirse a mas tardar el dia 5 del mes
-    # SIGUIENTE al pago. Aqui usamos la fecha de emision del PPD como proxy
-    # del periodo de pago (criterio conservador). Cuando hoy > fecha_limite,
-    # marca "vencido"; si no, "pendiente".
+    # SIGUIENTE al pago. Una factura PPD esta CUBIERTA si existe AL MENOS un
+    # <pago20:DoctoRelacionado> que la referencie por UUID (id_documento).
+    # Bloque A reemplazo la heuristica antigua (rfc_emisor + rango +/-60d)
+    # por este cruce exacto via core_pagodoctorelacionado.
+    from core.models import PagoDoctoRelacionado
     hoy = date.today()
     ppd_gastos = gastos_qs.filter(metodo_pago="PPD")
+    # Set de UUIDs (upper) que tienen REP recibido por esta empresa.
+    ppd_uuids = list(ppd_gastos.values_list("uuid", flat=True))
+    ppd_uuids_upper = [str(u).upper() for u in ppd_uuids]
+    uuids_con_rep = set(
+        PagoDoctoRelacionado.objects
+        .filter(
+            id_documento__in=ppd_uuids_upper,
+            rep_cfdi__rfc_empresa=rfc,
+            rep_cfdi__rfc_receptor=rfc,  # REPs RECIBIDOS por la empresa (compras)
+            rep_cfdi__estado_sat="vigente",
+        )
+        .values_list("id_documento", flat=True)
+    )
     ppd_sin_rep = []
     for cfdi in ppd_gastos.iterator():
-        tiene_rep = CFDI.objects.filter(
-            rfc_empresa=rfc,
-            tipo_comprobante="P",
-            rfc_emisor=cfdi.rfc_emisor,
-            fecha__date__gte=fecha_inicio,
-            fecha__date__lte=fecha_fin + timedelta(days=60),
-            estado_sat="vigente",
-        ).exists()
+        tiene_rep = str(cfdi.uuid).upper() in uuids_con_rep
         if not tiene_rep:
             cfdi_fecha = cfdi.fecha.date()
             # Fecha limite = dia 5 del mes siguiente a la emision.
