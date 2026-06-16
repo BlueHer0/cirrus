@@ -201,7 +201,12 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         pct_deducible = 100.0
         pct_no_deducible = 0.0
 
-    # ── PPD sin REP ─────────────────────────────────────────────────
+    # ── PPD sin REP (T4: tabla detallada con monto/IVA/fecha-limite) ─
+    # Regla 2.7.1.35 RMF: REP debe emitirse a mas tardar el dia 5 del mes
+    # SIGUIENTE al pago. Aqui usamos la fecha de emision del PPD como proxy
+    # del periodo de pago (criterio conservador). Cuando hoy > fecha_limite,
+    # marca "vencido"; si no, "pendiente".
+    hoy = date.today()
     ppd_gastos = gastos_qs.filter(metodo_pago="PPD")
     ppd_sin_rep = []
     for cfdi in ppd_gastos.iterator():
@@ -214,14 +219,30 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             estado_sat="vigente",
         ).exists()
         if not tiene_rep:
+            cfdi_fecha = cfdi.fecha.date()
+            # Fecha limite = dia 5 del mes siguiente a la emision.
+            if cfdi_fecha.month == 12:
+                fecha_limite = date(cfdi_fecha.year + 1, 1, 5)
+            else:
+                fecha_limite = date(cfdi_fecha.year, cfdi_fecha.month + 1, 5)
+            dias_transcurridos = (hoy - cfdi_fecha).days
+            status = "vencido" if hoy > fecha_limite else "pendiente"
             ppd_sin_rep.append({
                 "uuid": str(cfdi.uuid),
-                "fecha": cfdi.fecha.date(),
+                "fecha": cfdi_fecha,
                 "rfc_emisor": cfdi.rfc_emisor,
                 "nombre_emisor": cfdi.nombre_emisor or cfdi.rfc_emisor,
+                "subtotal": cfdi.subtotal or Decimal("0"),
+                "iva": cfdi.iva or Decimal("0"),
                 "total": cfdi.total,
+                "dias_transcurridos": dias_transcurridos,
+                "fecha_limite": fecha_limite,
+                "status": status,
             })
-    ppd_sin_rep_monto = sum(x["total"] for x in ppd_sin_rep)
+    ppd_sin_rep_monto = sum((x["total"] for x in ppd_sin_rep), Decimal("0"))
+    ppd_sin_rep_subtotal_riesgo = sum((x["subtotal"] for x in ppd_sin_rep), Decimal("0"))
+    ppd_sin_rep_iva_riesgo = sum((x["iva"] for x in ppd_sin_rep), Decimal("0"))
+    ppd_sin_rep_vencidos = sum(1 for x in ppd_sin_rep if x["status"] == "vencido")
 
     # ── EFOS segmentado por situacion (criterio 3) ──────────────────
     # Definitivo / Presunto = riesgo real. Desvirtuado / Sentencia Favorable = limpio.
@@ -520,9 +541,12 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         "pct_deducible": round(pct_deducible, 1),
         "pct_no_deducible": round(pct_no_deducible, 1),
 
-        # PPD sin REP
+        # PPD sin REP (T4: detalle por factura + totales en riesgo)
         "ppd_sin_rep": ppd_sin_rep,
         "ppd_sin_rep_monto": ppd_sin_rep_monto,
+        "ppd_sin_rep_subtotal_riesgo": ppd_sin_rep_subtotal_riesgo,
+        "ppd_sin_rep_iva_riesgo": ppd_sin_rep_iva_riesgo,
+        "ppd_sin_rep_vencidos": ppd_sin_rep_vencidos,
 
         # EFOS segmentado (criterio 3)
         "efos_count": efos_count,  # solo riesgo (definitivo+presunto)

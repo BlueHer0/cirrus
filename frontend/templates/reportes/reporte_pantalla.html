@@ -191,6 +191,77 @@
 </div>
 {% endif %}
 
+<!-- PPD sin REP — tabla detallada (T4) -->
+<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+    <h3 class="text-sm font-semibold text-[#e6edf3] mb-3 flex items-center gap-2">
+        <span>📋</span> Facturas PPD sin Complemento de Pago (REP)
+        <span class="text-[11px] font-normal text-[#8b949e]">— Regla 2.7.1.35 RMF</span>
+    </h3>
+    {% if datos.ppd_sin_rep %}
+    <p class="text-xs text-[#8b949e] mb-3 leading-relaxed">
+        Sin el REP correspondiente, el gasto NO es deducible para ISR ni acreditable para IVA.
+        Plazo: día 5 del mes siguiente al pago. Solicita al proveedor su emisión.
+    </p>
+    <div class="overflow-x-auto rounded-lg border border-[#30363d]">
+        <table class="w-full text-xs">
+            <thead style="background: #0d1117;">
+                <tr class="text-[10px] text-[#8b949e] uppercase tracking-wider">
+                    <th class="px-3 py-2 text-left font-semibold">Proveedor</th>
+                    <th class="px-3 py-2 text-left font-semibold">Fecha emisión</th>
+                    <th class="px-3 py-2 text-right font-semibold">Subtotal (deducible)</th>
+                    <th class="px-3 py-2 text-right font-semibold">IVA</th>
+                    <th class="px-3 py-2 text-right font-semibold">Total</th>
+                    <th class="px-3 py-2 text-center font-semibold">Días</th>
+                    <th class="px-3 py-2 text-left font-semibold">Fecha límite REP</th>
+                    <th class="px-3 py-2 text-center font-semibold">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in datos.ppd_sin_rep %}
+                <tr class="border-t border-[#30363d]" style="background: {% if p.status == 'vencido' %}rgba(248,81,73,0.05){% else %}rgba(227,179,65,0.05){% endif %};">
+                    <td class="px-3 py-2 text-[#e6edf3]">
+                        <div>{{ p.nombre_emisor }}</div>
+                        <div class="font-mono text-[10px] text-[#6e7681]">{{ p.rfc_emisor }}</div>
+                    </td>
+                    <td class="px-3 py-2 font-mono text-[#8b949e]">{{ p.fecha|date:"Y-m-d" }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">${{ p.subtotal|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">${{ p.iva|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">${{ p.total|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-center font-mono text-[#8b949e]">{{ p.dias_transcurridos }}</td>
+                    <td class="px-3 py-2 font-mono text-[#8b949e]">{{ p.fecha_limite|date:"Y-m-d" }}</td>
+                    <td class="px-3 py-2 text-center">
+                        {% if p.status == 'vencido' %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold" style="background: rgba(248,81,73,0.15); color: #f85149;">VENCIDO</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold" style="background: rgba(227,179,65,0.15); color: #e3b341;">Pendiente</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background: #0d1117;">
+                <tr class="border-t-2 border-[#30363d] text-[#e6edf3] font-semibold">
+                    <td class="px-3 py-2 text-[11px] uppercase tracking-wider" colspan="2">Total en riesgo</td>
+                    <td class="px-3 py-2 text-right font-mono">${{ datos.ppd_sin_rep_subtotal_riesgo|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono">${{ datos.ppd_sin_rep_iva_riesgo|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono">${{ datos.ppd_sin_rep_monto|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-center text-[10px] text-[#8b949e]" colspan="3">
+                        {{ datos.ppd_sin_rep|length }} factura(s){% if datos.ppd_sin_rep_vencidos %} · <span class="text-[#f85149]">{{ datos.ppd_sin_rep_vencidos }} vencida(s)</span>{% endif %}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="text-[10px] text-[#6e7681] mt-2 italic">
+        Deducible en riesgo = suma de subtotales (la base ISR). IVA en riesgo = IVA acreditable que podrías perder si no llega el REP.
+    </p>
+    {% else %}
+    <div class="rounded-lg p-3 border border-[#30363d] text-center" style="background: #0d1117;">
+        <span class="text-sm text-[#3fb950]">✓ Todos los complementos de pago recibidos en el periodo.</span>
+    </div>
+    {% endif %}
+</div>
+
 <!-- KPIs Grid -->
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 font-plus">
     
@@ -269,8 +340,9 @@
             
             <div class="grid grid-cols-2 gap-3">
                 <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.ppd_sin_rep %}#f85149{% else %}#30363d{% endif %};">
-                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Emitidos PPD sin REP</div>
+                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">PPD sin REP</div>
                     <div class="text-lg font-mono font-bold mt-1 {% if datos.ppd_sin_rep %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.ppd_sin_rep|length }}</div>
+                    {% if datos.ppd_sin_rep_vencidos %}<div class="text-[9px] text-[#f85149] mt-0.5">{{ datos.ppd_sin_rep_vencidos }} vencido(s)</div>{% endif %}
                 </div>
                 
                 <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.efos_riesgo_count > 0 %}#f85149{% else %}#30363d{% endif %};">
