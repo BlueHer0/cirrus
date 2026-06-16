@@ -327,6 +327,76 @@ class PagoDoctoRelacionado(models.Model):
         )
 
 
+class NominaDetalle(models.Model):
+    """Totales fiscales del complemento nomina12 (sin datos personales).
+
+    Una fila por CFDI tipo='N'. Captura los totales del complemento que
+    el modelo CFDI base no parsea: TotalPercepciones / TotalDeducciones /
+    TotalOtrosPagos del nodo raiz, desglose de Percepciones, ISR retenido
+    al empleado (clave fiscal), SubsidioAlEmpleo, y algunos atributos no
+    sensibles (tipo_regimen, periodicidad_pago, registro_patronal).
+
+    Datos personales del trabajador (CURP, NSS, fechas, salarios, banco,
+    cuenta, num_empleado, departamento, puesto, etc.) NO se almacenan.
+    El detalle por concepto (<Percepcion>/<Deduccion> individuales) queda
+    fuera de esta iteracion; sigue disponible en el XML crudo en MinIO.
+    """
+
+    cfdi = models.OneToOneField(
+        CFDI, on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="nomina_detalle",
+        db_column="cfdi_uuid",
+    )
+
+    # Nodo raiz <nomina12:Nomina>
+    version = models.CharField(max_length=10, default="1.2")
+    num_dias_pagados = models.DecimalField(max_digits=8, decimal_places=3, default=Decimal("0"))
+    total_percepciones = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_deducciones = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_otros_pagos = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+
+    # Desglose de <nomina12:Percepciones>
+    total_sueldos = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_gravado = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_exento = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_separacion_indemnizacion = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_jubilacion_pension = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+
+    # Desglose de <nomina12:Deducciones> — ISR del empleado retenido por el patron
+    total_impuestos_retenidos_nomina = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+    total_otras_deducciones = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+
+    # <nomina12:SubsidioAlEmpleo @SubsidioCausado>
+    subsidio_causado = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0"))
+
+    # Atributos no sensibles, utiles fiscalmente
+    tipo_regimen = models.CharField(
+        max_length=10, blank=True,
+        help_text="02=Sueldos / 09=Asimilados / 13=Indemnizaciones / ... (catalogo SAT)",
+    )
+    periodicidad_pago = models.CharField(
+        max_length=10, blank=True,
+        help_text="01=Diario / 02=Semanal / 04=Quincenal / 05=Mensual / ... (catalogo SAT)",
+    )
+    registro_patronal = models.CharField(
+        max_length=30, blank=True,
+        help_text="Registro IMSS del patron (@nomina12:Emisor/@RegistroPatronal)",
+    )
+
+    creado_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Detalle de Nomina (complemento)"
+        verbose_name_plural = "Detalles de Nomina"
+
+    def __str__(self):
+        return (
+            f"NominaDetalle {self.cfdi_id} | "
+            f"percep ${self.total_percepciones} - deduc ${self.total_deducciones}"
+        )
+
+
 class APIKey(models.Model):
     """API Key para que las apps externas consulten Cirrus.
 
