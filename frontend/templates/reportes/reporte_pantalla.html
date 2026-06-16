@@ -262,6 +262,69 @@
     {% endif %}
 </div>
 
+<!-- Gastos sin forma de pago — T5 (Art. 27-III LISR) -->
+{% if datos.gastos_sin_fp_count > 0 %}
+<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+    <h3 class="text-sm font-semibold text-[#e6edf3] mb-3 flex items-center gap-2">
+        <span>💳</span> Gastos sin forma de pago identificada
+        <span class="text-[11px] font-normal text-[#8b949e]">— Art. 27 fracción III LISR</span>
+    </h3>
+    <p class="text-xs text-[#8b949e] mb-3 leading-relaxed">
+        Facturas con <code class="font-mono text-[10px] px-1 rounded bg-[#0d1117] text-[#e3b341]">forma_pago='99'</code>
+        o vacía. Sin medio de pago bancarizado, la deducibilidad puede ser cuestionada por el SAT en una auditoría.
+        Solicita al proveedor un CFDI con la forma de pago correcta.
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: #e3b341;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Total en riesgo</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e3b341]">${{ datos.gastos_sin_fp_total|floatformat:2 }}</div>
+            <div class="text-[10px] text-[#6e7681]">{{ datos.gastos_sin_fp_count }} factura(s) · {{ datos.pct_por_definir }}% de gastos</div>
+        </div>
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Subtotal (deducible)</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">${{ datos.gastos_sin_fp_subtotal_riesgo|floatformat:2 }}</div>
+            <div class="text-[10px] text-[#6e7681]">Base ISR en riesgo</div>
+        </div>
+        <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+            <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">IVA acreditable</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">${{ datos.gastos_sin_fp_iva_riesgo|floatformat:2 }}</div>
+            <div class="text-[10px] text-[#6e7681]">IVA que podrías perder</div>
+        </div>
+    </div>
+    <div class="overflow-x-auto rounded-lg border border-[#30363d]">
+        <table class="w-full text-xs">
+            <thead style="background: #0d1117;">
+                <tr class="text-[10px] text-[#8b949e] uppercase tracking-wider">
+                    <th class="px-3 py-2 text-left font-semibold">Proveedor</th>
+                    <th class="px-3 py-2 text-center font-semibold"># facturas</th>
+                    <th class="px-3 py-2 text-right font-semibold">Subtotal</th>
+                    <th class="px-3 py-2 text-right font-semibold">IVA</th>
+                    <th class="px-3 py-2 text-right font-semibold">Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in datos.gastos_sin_fp_por_proveedor %}
+                <tr class="border-t border-[#30363d]">
+                    <td class="px-3 py-2 text-[#e6edf3]">
+                        <div>{{ p.nombre_emisor }}</div>
+                        <div class="font-mono text-[10px] text-[#6e7681]">{{ p.rfc_emisor }}</div>
+                    </td>
+                    <td class="px-3 py-2 text-center font-mono text-[#8b949e]">{{ p.n_facturas }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">${{ p.subtotal|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">${{ p.iva|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e3b341]">${{ p.monto|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-[11px] text-[#8b949e] mt-3 italic flex items-start gap-1.5">
+        <span class="text-[#58a6ff]">→</span>
+        <span>Acción sugerida: solicita a estos proveedores un CFDI corregido con la forma de pago correcta (03 Transferencia, 02 Cheque nominativo, 04 Tarjeta crédito, 28 Tarjeta débito) según el medio real utilizado.</span>
+    </p>
+</div>
+{% endif %}
+
 <!-- KPIs Grid -->
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 font-plus">
     

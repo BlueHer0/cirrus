@@ -284,11 +284,31 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             "pct": round(pct, 1),
         })
 
-    # Porcentaje de "por definir"
-    gastos_sin_fp = gastos_qs.filter(
+    # ── Gastos sin forma de pago (T5: Art. 27-III LISR) ─────────────
+    # Mismo conjunto que alimenta pct_por_definir en el health score.
+    # Quedarse con queryset materializado para construir el detalle por proveedor.
+    sin_fp_qs = gastos_qs.filter(
         Q(forma_pago="99") | Q(forma_pago="") | Q(forma_pago__isnull=True)
-    ).aggregate(s=Sum("total"))["s"] or Decimal("0")
+    )
+    sin_fp_agg = sin_fp_qs.aggregate(
+        s_total=Sum("total"), s_sub=Sum("subtotal"), s_iva=Sum("iva"), n=Count("uuid"),
+    )
+    gastos_sin_fp = sin_fp_agg["s_total"] or Decimal("0")
+    sin_fp_subtotal_riesgo = sin_fp_agg["s_sub"] or Decimal("0")
+    sin_fp_iva_riesgo = sin_fp_agg["s_iva"] or Decimal("0")
+    sin_fp_count = sin_fp_agg["n"] or 0
     pct_por_definir = float(gastos_sin_fp / total_gastos * 100) if total_gastos > 0 else 0
+    # Desglose por proveedor (ordenado por monto desc).
+    sin_fp_por_proveedor = list(
+        sin_fp_qs.values("rfc_emisor", "nombre_emisor")
+        .annotate(
+            n_facturas=Count("uuid"),
+            monto=Sum("total"),
+            subtotal=Sum("subtotal"),
+            iva=Sum("iva"),
+        )
+        .order_by("-monto")
+    )
 
     # ── Top proveedores ─────────────────────────────────────────────
     top_proveedores = list(
@@ -564,6 +584,13 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         # Formas de pago
         "formas_pago": formas_pago,
         "pct_por_definir": round(pct_por_definir, 1),
+
+        # Gastos sin forma de pago — T5 (Art. 27-III LISR)
+        "gastos_sin_fp_total": gastos_sin_fp,
+        "gastos_sin_fp_subtotal_riesgo": sin_fp_subtotal_riesgo,
+        "gastos_sin_fp_iva_riesgo": sin_fp_iva_riesgo,
+        "gastos_sin_fp_count": sin_fp_count,
+        "gastos_sin_fp_por_proveedor": sin_fp_por_proveedor,
 
         # Top proveedores / clientes
         "top_proveedores": top_proveedores,
