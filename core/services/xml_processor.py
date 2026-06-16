@@ -230,6 +230,91 @@ def _extract_nomina(xml_bytes: bytes) -> dict:
     return result
 
 
+def extract_nomina12_detalle(xml_bytes: bytes) -> dict | None:
+    """Extrae los totales fiscales del complemento nomina12:Nomina.
+
+    Devuelve un dict con las llaves del modelo NominaDetalle, listo para
+    crear/actualizar la fila. Soporta nomina12 y nomina13. Tolera
+    atributos/nodos ausentes (defaults Decimal('0') / '').
+
+    Returns None si el XML no tiene complemento nomina (e.g. no es tipo='N').
+    No extrae datos personales del trabajador (CURP, NSS, salarios, banco).
+    """
+    try:
+        root = etree.fromstring(xml_bytes)
+    except etree.XMLSyntaxError:
+        return None
+
+    ns_candidates = [
+        ("http://www.sat.gob.mx/nomina12", "1.2"),
+        ("http://www.sat.gob.mx/nomina13", "1.3"),
+    ]
+    nom = None
+    ns_used = None
+    version_fallback = "1.2"
+    for ns_uri, ver in ns_candidates:
+        elem = root.find(f".//{{{ns_uri}}}Nomina")
+        if elem is not None:
+            nom = elem
+            ns_used = ns_uri
+            version_fallback = ver
+            break
+    if nom is None:
+        return None
+
+    def _dec(v):
+        return _safe_decimal(v if v not in (None, "") else "0")
+
+    out = {
+        "version": nom.get("Version", version_fallback),
+        "num_dias_pagados": _dec(nom.get("NumDiasPagados")),
+        "total_percepciones": _dec(nom.get("TotalPercepciones")),
+        "total_deducciones": _dec(nom.get("TotalDeducciones")),
+        "total_otros_pagos": _dec(nom.get("TotalOtrosPagos")),
+        "total_sueldos": Decimal("0"),
+        "total_gravado": Decimal("0"),
+        "total_exento": Decimal("0"),
+        "total_separacion_indemnizacion": Decimal("0"),
+        "total_jubilacion_pension": Decimal("0"),
+        "total_impuestos_retenidos_nomina": Decimal("0"),
+        "total_otras_deducciones": Decimal("0"),
+        "subsidio_causado": Decimal("0"),
+        "tipo_regimen": "",
+        "periodicidad_pago": "",
+        "registro_patronal": "",
+    }
+
+    percep = nom.find(f"{{{ns_used}}}Percepciones")
+    if percep is not None:
+        out["total_sueldos"] = _dec(percep.get("TotalSueldos"))
+        out["total_gravado"] = _dec(percep.get("TotalGravado"))
+        out["total_exento"] = _dec(percep.get("TotalExento"))
+        out["total_separacion_indemnizacion"] = _dec(percep.get("TotalSeparacionIndemnizacion"))
+        out["total_jubilacion_pension"] = _dec(percep.get("TotalJubilacionPensionRetiro"))
+
+    deduc = nom.find(f"{{{ns_used}}}Deducciones")
+    if deduc is not None:
+        out["total_impuestos_retenidos_nomina"] = _dec(deduc.get("TotalImpuestosRetenidos"))
+        out["total_otras_deducciones"] = _dec(deduc.get("TotalOtrasDeducciones"))
+
+    subsidio = nom.find(f"{{{ns_used}}}OtrosPagos/{{{ns_used}}}OtroPago/{{{ns_used}}}SubsidioAlEmpleo")
+    if subsidio is None:
+        subsidio = nom.find(f".//{{{ns_used}}}SubsidioAlEmpleo")
+    if subsidio is not None:
+        out["subsidio_causado"] = _dec(subsidio.get("SubsidioCausado"))
+
+    receptor = nom.find(f"{{{ns_used}}}Receptor")
+    if receptor is not None:
+        out["tipo_regimen"] = receptor.get("TipoRegimen", "")[:10]
+        out["periodicidad_pago"] = receptor.get("PeriodicidadPago", "")[:10]
+
+    emisor = nom.find(f"{{{ns_used}}}Emisor")
+    if emisor is not None:
+        out["registro_patronal"] = emisor.get("RegistroPatronal", "")[:30]
+
+    return out
+
+
 def extract_pago20(xml_bytes: bytes) -> list:
     """Extrae el complemento pago20:Pagos en una lista de filas DoctoRelacionado.
 
