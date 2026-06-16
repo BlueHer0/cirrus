@@ -230,6 +230,85 @@ def _extract_nomina(xml_bytes: bytes) -> dict:
     return result
 
 
+def extract_pago20(xml_bytes: bytes) -> list:
+    """Extrae el complemento pago20:Pagos en una lista de filas DoctoRelacionado.
+
+    Cada fila representa un <pago20:DoctoRelacionado> con los datos de su
+    <pago20:Pago> padre denormalizados. Soporta pago20 y pago22.
+
+    Returns: list[dict] con las llaves del modelo PagoDoctoRelacionado.
+    Vacia si el XML no tiene complemento de pago o falla el parseo.
+    """
+    rows = []
+    try:
+        root = etree.fromstring(xml_bytes)
+    except etree.XMLSyntaxError:
+        return rows
+
+    ns_pago_candidates = [
+        "{http://www.sat.gob.mx/Pagos20}",
+        "{http://www.sat.gob.mx/Pagos22}",
+    ]
+    pagos_root = None
+    for ns_p in ns_pago_candidates:
+        for elem in root.iter(f"{ns_p}Pagos"):
+            pagos_root = elem
+            ns_used = ns_p
+            break
+        if pagos_root is not None:
+            break
+    if pagos_root is None:
+        return rows
+
+    def _dec(s, default="0"):
+        return _safe_decimal(s if s not in (None, "") else default)
+
+    def _dt(s):
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s)
+        except (ValueError, TypeError):
+            return None
+
+    pago_elems = pagos_root.findall(f"{ns_used}Pago")
+    for p_idx, pago in enumerate(pago_elems, start=1):
+        pago_fecha = _dt(pago.get("FechaPago"))
+        if pago_fecha is None:
+            continue
+        pago_forma = pago.get("FormaDePagoP", "")
+        pago_moneda = pago.get("MonedaP", "MXN")
+        pago_tipo_cambio = _dec(pago.get("TipoCambioP"), "1")
+        pago_monto = _dec(pago.get("Monto"))
+        pago_num_operacion = pago.get("NumOperacion", "")
+        doctos = pago.findall(f"{ns_used}DoctoRelacionado")
+        for d_idx, dr in enumerate(doctos, start=1):
+            id_doc = (dr.get("IdDocumento") or "").strip().upper()
+            if not id_doc:
+                continue
+            rows.append({
+                "pago_index": p_idx,
+                "docto_index": d_idx,
+                "pago_fecha": pago_fecha,
+                "pago_forma": pago_forma,
+                "pago_moneda": pago_moneda,
+                "pago_tipo_cambio": pago_tipo_cambio,
+                "pago_monto": pago_monto,
+                "pago_num_operacion": pago_num_operacion,
+                "id_documento": id_doc,
+                "folio": dr.get("Folio", ""),
+                "serie": dr.get("Serie", ""),
+                "moneda_dr": dr.get("MonedaDR", "MXN"),
+                "equivalencia_dr": _dec(dr.get("EquivalenciaDR"), "1"),
+                "num_parcialidad": int(dr.get("NumParcialidad") or 1),
+                "imp_saldo_anterior": _dec(dr.get("ImpSaldoAnt")),
+                "imp_pagado": _dec(dr.get("ImpPagado")),
+                "imp_saldo_insoluto": _dec(dr.get("ImpSaldoInsoluto")),
+                "objeto_imp_dr": dr.get("ObjetoImpDR", ""),
+            })
+    return rows
+
+
 def _extract_taxes(xml_bytes: bytes) -> dict:
     """Extract tax totals directly from XML.
 
