@@ -75,12 +75,12 @@
             </div>
             <div>
                 <div class="text-[11px] font-semibold text-[#8b949e] tracking-wider uppercase mb-1">Health Score</div>
-                <div class="text-sm text-[#e6edf3]">
-                    {% if datos.health_score > 70 %}Salud Fiscal Óptima{% elif datos.health_score >= 40 %}Riesgo Moderado{% else %}Riesgo Alto{% endif %}
+                <div class="text-sm font-semibold {% if datos.health_score_color == 'verde' %}text-[#3fb950]{% elif datos.health_score_color == 'ambar' %}text-[#e3b341]{% else %}text-[#f85149]{% endif %}">
+                    {{ datos.health_score_label }}
                 </div>
                 {% if datos.health_score_delta is not None %}
                 <div class="text-xs mt-1 font-mono font-bold {% if datos.health_score_delta >= 0 %}text-[#3fb950]{% else %}text-[#f85149]{% endif %}">
-                    {% if datos.health_score_delta >= 0 %}▲ +{% else %}▼ {% endif %}{{ datos.health_score_delta }}
+                    {% if datos.health_score_delta >= 0 %}▲ +{% else %}▼ {% endif %}{{ datos.health_score_delta }} vs mes anterior
                 </div>
                 {% endif %}
             </div>
@@ -141,9 +141,55 @@
             
             <p class="text-[10px] text-[#6e7681] mt-3 leading-tight italic">Estimado base en CFDIs del periodo. Confirma con tu contador antes de declarar.</p>
         </div>
-        
+
     </div>
 </div>
+
+<!-- Desglose del Health Score (T3) -->
+{% if datos.health_penalizaciones or datos.health_datos_informativos %}
+<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+    <h3 class="text-sm font-semibold text-[#e6edf3] mb-4 flex items-center gap-2">
+        <span>🩺</span> Desglose del Health Score
+        <span class="text-[11px] font-normal text-[#8b949e]">— por qué tu score es {{ datos.health_score }}</span>
+    </h3>
+    {% if datos.health_penalizaciones %}
+    <div class="mb-4">
+        <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider mb-2">Lo que bajó tu score</div>
+        <div class="space-y-2">
+            {% for p in datos.health_penalizaciones %}
+            <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if p.puntos <= -10 %}#f85149{% else %}#e3b341{% endif %};">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-sm font-semibold text-[#e6edf3]">{{ p.motivo }}</span>
+                            <span class="font-mono text-xs font-bold {% if p.puntos <= -10 %}text-[#f85149]{% else %}text-[#e3b341]{% endif %}">{{ p.puntos }} pts</span>
+                        </div>
+                        <p class="text-xs text-[#8b949e] leading-relaxed">{{ p.detalle }}</p>
+                        <p class="text-[10px] text-[#6e7681] mt-1 italic">{{ p.fundamento }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <p class="text-xs text-[#3fb950] mb-4">Sin penalizaciones — el periodo está limpio.</p>
+    {% endif %}
+    {% if datos.health_datos_informativos %}
+    <div>
+        <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider mb-2">Datos informativos (no afectan score)</div>
+        <div class="space-y-1.5">
+            {% for i in datos.health_datos_informativos %}
+            <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
+                <div class="text-sm text-[#e6edf3] mb-1">{{ i.dato }}</div>
+                <p class="text-xs text-[#8b949e] leading-relaxed">{{ i.detalle }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 
 <!-- KPIs Grid -->
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 font-plus">
@@ -227,9 +273,10 @@
                     <div class="text-lg font-mono font-bold mt-1 {% if datos.ppd_sin_rep %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.ppd_sin_rep|length }}</div>
                 </div>
                 
-                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.efos_count > 0 %}#f85149{% else %}#30363d{% endif %};">
-                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Proveedores EFOS</div>
-                    <div class="text-lg font-mono font-bold mt-1 {% if datos.efos_count > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.efos_count }}</div>
+                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.efos_riesgo_count > 0 %}#f85149{% else %}#30363d{% endif %};">
+                    <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Proveedores EFOS (riesgo)</div>
+                    <div class="text-lg font-mono font-bold mt-1 {% if datos.efos_riesgo_count > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.efos_riesgo_count }}</div>
+                    <div class="text-[10px] text-[#6e7681] mt-1">Def {{ datos.efos_definitivo_count }} · Pre {{ datos.efos_presunto_count }}</div>
                 </div>
                 
                 <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.pct_por_definir > 20 %}#e3b341{% else %}#30363d{% endif %};">
@@ -241,6 +288,39 @@
                     <div class="text-[10px] text-[#8b949e] uppercase font-semibold">No Deducible Efe.</div>
                     <div class="text-lg font-mono font-bold mt-1 {% if datos.total_no_deducible > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">${{ datos.total_no_deducible|floatformat:0 }}</div>
                 </div>
+            </div>
+
+            <!-- EFOS segmentado (T3) -->
+            <div class="mt-4 pt-4 border-t border-white/5">
+                <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider mb-2">EFOS — Lista 69-B SAT</div>
+                {% if datos.efos_definitivo_count == 0 and datos.efos_presunto_count == 0 and datos.efos_desvirtuado_count == 0 and datos.efos_sentencia_count == 0 %}
+                <div class="rounded-lg p-3 border border-[#30363d] text-center" style="background: #0d1117;">
+                    <span class="text-xs text-[#3fb950]">✓ Sin proveedores en lista 69-B</span>
+                </div>
+                {% else %}
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="rounded-lg p-2.5 border" style="background: #0d1117; border-color: {% if datos.efos_definitivo_count > 0 %}#f85149{% else %}#30363d{% endif %};">
+                        <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Definitivo</div>
+                        <div class="text-base font-mono font-bold {% if datos.efos_definitivo_count > 0 %}text-[#f85149]{% else %}text-[#6e7681]{% endif %}">{{ datos.efos_definitivo_count }}</div>
+                        <div class="text-[9px] text-[#6e7681]">Crítico, no deducible</div>
+                    </div>
+                    <div class="rounded-lg p-2.5 border" style="background: #0d1117; border-color: {% if datos.efos_presunto_count > 0 %}#e3b341{% else %}#30363d{% endif %};">
+                        <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Presunto</div>
+                        <div class="text-base font-mono font-bold {% if datos.efos_presunto_count > 0 %}text-[#e3b341]{% else %}text-[#6e7681]{% endif %}">{{ datos.efos_presunto_count }}</div>
+                        <div class="text-[9px] text-[#6e7681]">Alerta, reversible</div>
+                    </div>
+                    <div class="rounded-lg p-2.5 border border-[#30363d]" style="background: #0d1117;">
+                        <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Desvirtuado</div>
+                        <div class="text-base font-mono font-bold text-[#6e7681]">{{ datos.efos_desvirtuado_count }}</div>
+                        <div class="text-[9px] text-[#6e7681]">Limpio, sin penalización</div>
+                    </div>
+                    <div class="rounded-lg p-2.5 border border-[#30363d]" style="background: #0d1117;">
+                        <div class="text-[10px] text-[#8b949e] uppercase font-semibold">Sentencia Favorable</div>
+                        <div class="text-base font-mono font-bold text-[#6e7681]">{{ datos.efos_sentencia_count }}</div>
+                        <div class="text-[9px] text-[#6e7681]">Limpio, sin penalización</div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
         

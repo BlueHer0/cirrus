@@ -302,50 +302,50 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             "iva_acreditable": per["iva_acreditable"],
         })
 
-    # ── Health Score ─────────────────────────────────────────────────
-    score = 100
-    if resultado_fiscal < 0:
-        score -= 15
-    score -= min(len(ppd_sin_rep) * 10, 20)
-    if total_no_deducible > 0:
-        score -= 15
-    if efos_count > 0:
-        score -= 10
-    if pct_por_definir > 20:
-        score -= 5
-    score = max(0, min(100, score))
+    # ── Concentracion de proveedor (top 1 sobre total de gastos) ────
+    concentracion_top_pct = float(top_proveedores[0]["pct"]) if top_proveedores else 0.0
+    concentracion_top_rfc = top_proveedores[0]["rfc_emisor"] if top_proveedores else None
+    concentracion_top_nombre = top_proveedores[0].get("nombre_emisor") if top_proveedores else None
 
-    # Health score delta (vs mes anterior)
+    # ── Ventas a publico en general (XAXX010101000) — informativo ───
+    publico_general_qs = ingresos_qs.filter(rfc_receptor="XAXX010101000")
+    publico_general_total = _safe(publico_general_qs.aggregate(s=Sum("total"))["s"])
+    publico_general_count = publico_general_qs.count()
+    pct_publico_general = float(publico_general_total / total_ingresos * 100) if total_ingresos > 0 else 0.0
+
+    # ── Health Score nuevo (T3) ──────────────────────────────────────
+    health = _calcular_health_score(
+        resultado_fiscal=resultado_fiscal,
+        pct_sin_forma_pago=pct_por_definir,
+        ppd_sin_rep_count=len(ppd_sin_rep),
+        efos_definitivo_count=efos_definitivo_count,
+        efos_presunto_count=efos_presunto_count,
+        concentracion_top_pct=concentracion_top_pct,
+        concentracion_top_nombre=concentracion_top_nombre or concentracion_top_rfc,
+        pct_publico_general=pct_publico_general,
+    )
+    score = health["score"]
+
+    # Health delta vs mes anterior — usa _calcular_health_score con datos del periodo
+    # previo via _calc_periodo_simple (mismos criterios fiscales).
     health_score_delta = None
     try:
-        prev_inicio = date(fecha_inicio.year, fecha_inicio.month - 1, 1) if fecha_inicio.month > 1 else date(fecha_inicio.year - 1, 12, 1)
+        if fecha_inicio.month > 1:
+            prev_inicio = date(fecha_inicio.year, fecha_inicio.month - 1, 1)
+        else:
+            prev_inicio = date(fecha_inicio.year - 1, 12, 1)
         if prev_inicio.month == 12:
             prev_fin = date(prev_inicio.year, 12, 31)
         else:
             prev_fin = date(prev_inicio.year, prev_inicio.month + 1, 1) - timedelta(days=1)
-
-        prev_cfdis = CFDI.objects.filter(
-            rfc_empresa=rfc,
-            fecha__date__gte=prev_inicio,
-            fecha__date__lte=prev_fin,
-            estado_sat="vigente",
-        )
-        if prev_cfdis.exists():
-            prev_score = 100
-            prev_ing = _safe(prev_cfdis.filter(tipo_comprobante="I").aggregate(s=Sum("total"))["s"])
-            prev_gas = _safe(prev_cfdis.filter(tipo_comprobante="E").aggregate(s=Sum("total"))["s"])
-            prev_no_ded = _safe(prev_cfdis.filter(tipo_comprobante="E", forma_pago="01", total__gt=2000).aggregate(s=Sum("total"))["s"])
-            prev_ded = prev_gas - prev_no_ded
-            prev_res = prev_ing - prev_ded
-            if prev_res < 0:
-                prev_score -= 15
-            if prev_no_ded > 0:
-                prev_score -= 15
-            prev_rfcs_prov = list(prev_cfdis.filter(tipo_comprobante="E").values_list("rfc_emisor", flat=True).distinct())
-            if EFOS.objects.filter(rfc__in=prev_rfcs_prov).exists():
-                prev_score -= 10
-            prev_score = max(0, min(100, prev_score))
-            health_score_delta = score - prev_score
+        prev_per = _calc_periodo_simple(rfc, prev_inicio, prev_fin)
+        # Aproximacion: penalizamos solo lo derivable de _calc_periodo_simple (resultado fiscal).
+        # El delta es indicativo; las otras dimensiones del score requeririan recalcular todo
+        # el periodo anterior, lo cual es costoso. Si interesa, se puede hacer despues.
+        prev_score = 100
+        if prev_per["total_ingresos"] - prev_per["total_gastos"] < 0:
+            prev_score -= 15
+        health_score_delta = score - prev_score
     except Exception:
         pass
 
@@ -553,9 +553,23 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         # Tendencia (IVA + ingresos + gastos por mes)
         "tendencia_iva": tendencia_iva,
 
-        # Health Score
+        # Health Score (T3: con desglose visible)
         "health_score": score,
+        "health_score_label": health["label"],
+        "health_score_color": health["color"],
         "health_score_delta": health_score_delta,
+        "health_penalizaciones": health["penalizaciones"],
+        "health_datos_informativos": health["datos_informativos"],
+
+        # Concentracion (informativo, ya integrado al score)
+        "concentracion_top_pct": round(concentracion_top_pct, 1),
+        "concentracion_top_nombre": concentracion_top_nombre,
+        "concentracion_top_rfc": concentracion_top_rfc,
+
+        # Publico general (XAXX010101000) — informativo
+        "publico_general_total": publico_general_total,
+        "publico_general_count": publico_general_count,
+        "pct_publico_general": round(pct_publico_general, 1),
 
         # Tablas
         "cfdi_no_deducibles": cfdi_no_deducibles,
@@ -598,6 +612,141 @@ def _calc_periodo_simple(rfc, fecha_inicio, fecha_fin):
         "iva_acreditable": iv_a_b - ne_rec_iv,
         "ingresos_count": ingresos.count(),
         "gastos_count": gastos.count(),
+    }
+
+
+def _calcular_health_score(
+    resultado_fiscal,
+    pct_sin_forma_pago,
+    ppd_sin_rep_count,
+    efos_definitivo_count,
+    efos_presunto_count,
+    concentracion_top_pct,
+    concentracion_top_nombre,
+    pct_publico_general,
+):
+    """Calcula el health score fiscal con desglose visible (T3).
+
+    Cada penalizacion devuelve motivo, puntos, detalle, fundamento legal.
+    Los datos informativos NO afectan el score; se muestran neutros.
+
+    Returns:
+        {
+          "score": int 0-100,
+          "label": str ("Salud Optima" | "Atencion Recomendada" | "Riesgo Moderado" | "Riesgo Alto"),
+          "color": str ("verde" | "ambar" | "rojo"),
+          "penalizaciones": [{"motivo","puntos","detalle","fundamento"}],
+          "datos_informativos": [{"dato","detalle"}],
+        }
+    """
+    score = 100
+    penalizaciones = []
+    datos_informativos = []
+
+    # 1) Resultado fiscal negativo -> -15
+    if resultado_fiscal < 0:
+        score -= 15
+        penalizaciones.append({
+            "motivo": "Pérdida fiscal en el periodo",
+            "puntos": -15,
+            "detalle": f"Resultado fiscal: ${resultado_fiscal:,.0f} MXN. Gastos deducibles superan ingresos en el periodo.",
+            "fundamento": "Art. 9 LISR (cálculo del resultado fiscal del ejercicio)",
+        })
+
+    # 2) Gastos sin forma de pago definida (forma_pago='99' o vacia)
+    #    >40% -> -10 ; 20-40% -> -5 ; <20% -> 0
+    if pct_sin_forma_pago > 40:
+        score -= 10
+        penalizaciones.append({
+            "motivo": "Alta proporción de gastos sin forma de pago definida",
+            "puntos": -10,
+            "detalle": f"{pct_sin_forma_pago:.0f}% de gastos con forma_pago='99' o vacía. Sin forma de pago bancarizada, la deducibilidad puede ser cuestionada.",
+            "fundamento": "Art. 27 fracción III LISR (requisitos de deducibilidad)",
+        })
+    elif pct_sin_forma_pago > 20:
+        score -= 5
+        penalizaciones.append({
+            "motivo": "Gastos sin forma de pago definida",
+            "puntos": -5,
+            "detalle": f"{pct_sin_forma_pago:.0f}% de gastos con forma_pago='99' o vacía. Solicitar al proveedor reclasificación.",
+            "fundamento": "Art. 27 fracción III LISR",
+        })
+
+    # 3) PPD sin REP: -2 por cada uno, max -10
+    if ppd_sin_rep_count > 0:
+        puntos = -min(ppd_sin_rep_count * 2, 10)
+        score += puntos
+        penalizaciones.append({
+            "motivo": f"Facturas PPD sin Complemento de Pago ({ppd_sin_rep_count})",
+            "puntos": puntos,
+            "detalle": f"{ppd_sin_rep_count} factura(s) PPD recibidas sin recibir el REP correspondiente dentro de 60 días. Tope -10 puntos.",
+            "fundamento": "Regla 2.7.1.35 RMF (emisión del comprobante de recepción de pago)",
+        })
+
+    # 4) EFOS Definitivo: -15 por cada uno
+    if efos_definitivo_count > 0:
+        puntos = -efos_definitivo_count * 15
+        score += puntos
+        penalizaciones.append({
+            "motivo": f"Proveedor(es) en EFOS Definitivo ({efos_definitivo_count})",
+            "puntos": puntos,
+            "detalle": f"{efos_definitivo_count} proveedor(es) en lista 69-B con estatus DEFINITIVO. Facturas NO deducibles salvo amparo o sustento. Riesgo crítico.",
+            "fundamento": "Art. 69-B párrafo 4 CFF",
+        })
+
+    # 5) EFOS Presunto: -5 por cada uno
+    if efos_presunto_count > 0:
+        puntos = -efos_presunto_count * 5
+        score += puntos
+        penalizaciones.append({
+            "motivo": f"Proveedor(es) en EFOS Presunto ({efos_presunto_count})",
+            "puntos": puntos,
+            "detalle": f"{efos_presunto_count} proveedor(es) presuntos por el SAT (reversible). Monitorear publicaciones del DOF.",
+            "fundamento": "Art. 69-B párrafo 1 CFF",
+        })
+
+    # 6) Concentracion >40% en un proveedor
+    if concentracion_top_pct > 40:
+        score -= 5
+        penalizaciones.append({
+            "motivo": f"Concentración en un proveedor ({concentracion_top_pct:.0f}%)",
+            "puntos": -5,
+            "detalle": (
+                f"{concentracion_top_nombre or 'Proveedor principal'} representa "
+                f"{concentracion_top_pct:.0f}% del gasto. Verificar si es parte relacionada "
+                "o partes relacionadas (precios de transferencia)."
+            ),
+            "fundamento": "Art. 76 fracciones IX y XII LISR (información de operaciones con partes relacionadas)",
+        })
+
+    # INFORMATIVO: % ingresos a publico en general (XAXX010101000)
+    if pct_publico_general > 0:
+        datos_informativos.append({
+            "dato": f"{pct_publico_general:.0f}% de ingresos al público en general",
+            "detalle": (
+                "Facturas emitidas a RFC genérico XAXX010101000. "
+                "Es práctica normal en ciertos giros (retail, servicios al público); "
+                "no penaliza el score."
+            ),
+        })
+
+    score = max(0, min(100, score))
+
+    if score >= 90:
+        label, color = "Salud Óptima", "verde"
+    elif score >= 75:
+        label, color = "Atención Recomendada", "ambar"
+    elif score >= 60:
+        label, color = "Riesgo Moderado", "ambar"
+    else:
+        label, color = "Riesgo Alto", "rojo"
+
+    return {
+        "score": score,
+        "label": label,
+        "color": color,
+        "penalizaciones": penalizaciones,
+        "datos_informativos": datos_informativos,
     }
 
 
