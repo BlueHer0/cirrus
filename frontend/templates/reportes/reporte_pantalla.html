@@ -224,9 +224,9 @@
                         <div class="font-mono text-[10px] text-[#6e7681]">{{ p.rfc_emisor }}</div>
                     </td>
                     <td class="px-3 py-2 font-mono text-[#8b949e]">{{ p.fecha|date:"Y-m-d" }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">${{ p.subtotal|floatformat:2 }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">${{ p.iva|floatformat:2 }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">${{ p.total|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">{{ p.subtotal|mxn }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">{{ p.iva|mxn }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">{{ p.total|mxn }}</td>
                     <td class="px-3 py-2 text-center font-mono text-[#8b949e]">{{ p.dias_transcurridos }}</td>
                     <td class="px-3 py-2 font-mono text-[#8b949e]">{{ p.fecha_limite|date:"Y-m-d" }}</td>
                     <td class="px-3 py-2 text-center">
@@ -242,9 +242,9 @@
             <tfoot style="background: #0d1117;">
                 <tr class="border-t-2 border-[#30363d] text-[#e6edf3] font-semibold">
                     <td class="px-3 py-2 text-[11px] uppercase tracking-wider" colspan="2">Total en riesgo</td>
-                    <td class="px-3 py-2 text-right font-mono">${{ datos.ppd_sin_rep_subtotal_riesgo|floatformat:2 }}</td>
-                    <td class="px-3 py-2 text-right font-mono">${{ datos.ppd_sin_rep_iva_riesgo|floatformat:2 }}</td>
-                    <td class="px-3 py-2 text-right font-mono">${{ datos.ppd_sin_rep_monto|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono">{{ datos.ppd_sin_rep_subtotal_riesgo|mxn }}</td>
+                    <td class="px-3 py-2 text-right font-mono">{{ datos.ppd_sin_rep_iva_riesgo|mxn }}</td>
+                    <td class="px-3 py-2 text-right font-mono">{{ datos.ppd_sin_rep_monto|mxn }}</td>
                     <td class="px-3 py-2 text-center text-[10px] text-[#8b949e]" colspan="3">
                         {{ datos.ppd_sin_rep|length }} factura(s){% if datos.ppd_sin_rep_vencidos %} · <span class="text-[#f85149]">{{ datos.ppd_sin_rep_vencidos }} vencida(s)</span>{% endif %}
                     </td>
@@ -277,17 +277,17 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: #e3b341;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Total en riesgo</div>
-            <div class="text-xl font-mono font-bold mt-1 text-[#e3b341]">${{ datos.gastos_sin_fp_total|floatformat:2 }}</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e3b341]">{{ datos.gastos_sin_fp_total|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">{{ datos.gastos_sin_fp_count }} factura(s) · {{ datos.pct_por_definir }}% de gastos</div>
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Subtotal (deducible)</div>
-            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">${{ datos.gastos_sin_fp_subtotal_riesgo|floatformat:2 }}</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">{{ datos.gastos_sin_fp_subtotal_riesgo|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">Base ISR en riesgo</div>
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">IVA acreditable</div>
-            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">${{ datos.gastos_sin_fp_iva_riesgo|floatformat:2 }}</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">{{ datos.gastos_sin_fp_iva_riesgo|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">IVA que podrías perder</div>
         </div>
     </div>
@@ -310,9 +310,9 @@
                         <div class="font-mono text-[10px] text-[#6e7681]">{{ p.rfc_emisor }}</div>
                     </td>
                     <td class="px-3 py-2 text-center font-mono text-[#8b949e]">{{ p.n_facturas }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">${{ p.subtotal|floatformat:2 }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">${{ p.iva|floatformat:2 }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#e3b341]">${{ p.monto|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">{{ p.subtotal|mxn }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#8b949e]">{{ p.iva|mxn }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e3b341]">{{ p.monto|mxn }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -360,7 +360,7 @@
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Neto pagado</div>
-            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">${{ datos.nomina_panel.neto_pagado|floatformat:2 }}</div>
+            <div class="text-xl font-mono font-bold mt-1 text-[#e6edf3]">{{ datos.nomina_panel.neto_pagado|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">Percepciones − Deducciones + Otros</div>
         </div>
     </div>
@@ -369,25 +369,25 @@
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Percepciones (bruto)</div>
-            <div class="text-base font-mono font-bold mt-1 text-[#3fb950]">${{ datos.nomina_panel.total_percepciones|floatformat:2 }}</div>
+            <div class="text-base font-mono font-bold mt-1 text-[#3fb950]">{{ datos.nomina_panel.total_percepciones|mxn }}</div>
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Deducciones</div>
-            <div class="text-base font-mono font-bold mt-1 text-[#f85149]">${{ datos.nomina_panel.total_deducciones|floatformat:2 }}</div>
+            <div class="text-base font-mono font-bold mt-1 text-[#f85149]">{{ datos.nomina_panel.total_deducciones|mxn }}</div>
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">ISR retenido</div>
-            <div class="text-base font-mono font-bold mt-1 {% if datos.nomina_panel.isr_retenido > 0 %}text-[#e3b341]{% else %}text-[#6e7681]{% endif %}">${{ datos.nomina_panel.isr_retenido|floatformat:2 }}</div>
+            <div class="text-base font-mono font-bold mt-1 {% if datos.nomina_panel.isr_retenido > 0 %}text-[#e3b341]{% else %}text-[#6e7681]{% endif %}">{{ datos.nomina_panel.isr_retenido|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">Retención al empleado</div>
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Otras deducciones</div>
-            <div class="text-base font-mono font-bold mt-1 text-[#8b949e]">${{ datos.nomina_panel.otras_deducciones|floatformat:2 }}</div>
+            <div class="text-base font-mono font-bold mt-1 text-[#8b949e]">{{ datos.nomina_panel.otras_deducciones|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">IMSS, INFONAVIT, etc.</div>
         </div>
         <div class="rounded-lg p-3 border border-[#30363d]" style="background: #0d1117;">
             <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider">Subsidio al empleo</div>
-            <div class="text-base font-mono font-bold mt-1 {% if datos.nomina_panel.subsidio_causado > 0 %}text-[#58a6ff]{% else %}text-[#6e7681]{% endif %}">${{ datos.nomina_panel.subsidio_causado|floatformat:2 }}</div>
+            <div class="text-base font-mono font-bold mt-1 {% if datos.nomina_panel.subsidio_causado > 0 %}text-[#58a6ff]{% else %}text-[#6e7681]{% endif %}">{{ datos.nomina_panel.subsidio_causado|mxn }}</div>
             <div class="text-[10px] text-[#6e7681]">Causado en el periodo</div>
         </div>
     </div>
@@ -423,7 +423,7 @@
                         <div class="font-mono text-[10px] text-[#6e7681]">{{ t.rfc_receptor }}</div>
                     </td>
                     <td class="px-3 py-2 text-center font-mono text-[#8b949e]">{{ t.n }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">${{ t.monto|floatformat:2 }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-[#e6edf3]">{{ t.monto|mxn }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -529,7 +529,7 @@
                 
                 <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: {% if datos.total_no_deducible > 0 %}#f85149{% else %}#30363d{% endif %};">
                     <div class="text-[10px] text-[#8b949e] uppercase font-semibold">No Deducible Efe.</div>
-                    <div class="text-lg font-mono font-bold mt-1 {% if datos.total_no_deducible > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">${{ datos.total_no_deducible|floatformat:0 }}</div>
+                    <div class="text-lg font-mono font-bold mt-1 {% if datos.total_no_deducible > 0 %}text-[#f85149]{% else %}text-[#e6edf3]{% endif %}">{{ datos.total_no_deducible|mxn }}</div>
                 </div>
             </div>
 
@@ -667,7 +667,7 @@
                                 <span class="font-mono">{{ cfdi.rfc_emisor }}</span><br>
                                 <span class="text-[10px] text-[#8b949e] truncate max-w-[150px] inline-block">{{ cfdi.nombre_emisor }}</span>
                             </td>
-                            <td class="px-4 py-2 font-mono text-right">${{ cfdi.total|floatformat:2 }}</td>
+                            <td class="px-4 py-2 font-mono text-right">{{ cfdi.total|mxn }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

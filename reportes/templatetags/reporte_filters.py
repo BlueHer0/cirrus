@@ -28,14 +28,20 @@ def pesos(value):
 
 @register.filter
 def pesos_decimal(value):
-    """Format number as '$180,382.50'."""
-    try:
-        val = Decimal(str(value))
-        if val < 0:
-            return f"-${abs(val):,.2f}"
-        return f"${val:,.2f}"
-    except (TypeError, ValueError, ArithmeticError):
-        return "$0.00"
+    """Format number as '$180,382.50' (delega al helper central fmt_mxn)."""
+    from cirrus.utils.formatters import fmt_mxn
+    return fmt_mxn(value, decimals=2)
+
+
+@register.filter
+def mxn(value):
+    """Filtro central de moneda. Equivalente a pesos_decimal pero con nombre corto.
+
+    Usar como {{ valor|mxn }} para cualquier monto monetario. Reemplaza el uso
+    de floatformat:2 que NO incluye separadores de miles.
+    """
+    from cirrus.utils.formatters import fmt_mxn
+    return fmt_mxn(value, decimals=2)
 
 
 @register.filter
