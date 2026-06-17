@@ -281,7 +281,7 @@ def generar_y_enviar_reporte_anual(self, empresa_id, anio, emails_extra=None, ov
 
 
 @shared_task(bind=True, max_retries=2, soft_time_limit=120, time_limit=150)
-def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None):
+def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, subject_prefix=None):
     """Envia el PDF v4 del reporte de un periodo segun el tipo de corte.
 
     corte_tipo:
@@ -352,33 +352,165 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None):
         logger.error("Error generando PDF: %s", e)
         raise self.retry(exc=e, countdown=60)
 
-    # Subject + cuerpo
+    # ── Display values for email ─────────────────────────────────────────
+    import uuid as _uuid
+    from html import escape as _he
+    from cirrus.utils.formatters import fmt_mxn as _fmt
+
+    en = _he(empresa.nombre)
+    er = _he(empresa.rfc)
+    resultado_fmt = _fmt(datos['resultado_fiscal'])
+    iva_fmt = _fmt(abs(datos['iva_neto']))
+    hs = datos['health_score']
+    hl = _he(datos['health_score_label'])
+    n_alertas = len(datos['alertas_activas'])
+
+    lbl_resultado = 'Utilidad fiscal' if datos['resultado_fiscal'] >= 0 else 'Pérdida fiscal'
+    lbl_iva = 'Saldo a favor SAT' if datos['iva_neto'] <= 0 else 'A pagar al SAT'
+    lbl_alertas = ('Sin alertas activas' if n_alertas == 0
+                   else '1 alerta activa' if n_alertas == 1
+                   else f'{n_alertas} alertas activas')
+
+    _hs_clr = {'verde': '#16a34a', 'ambar': '#d97706', 'rojo': '#dc2626'}
+    clr_resultado = '#16a34a' if datos['resultado_fiscal'] >= 0 else '#dc2626'
+    clr_iva       = '#16a34a' if datos['iva_neto'] <= 0 else '#d97706'
+    clr_health    = _hs_clr.get(datos.get('health_score_color', ''), '#374151')
+    clr_alertas   = ('#dc2626' if any(a.get('nivel') == 'rojo' for a in datos['alertas_activas'])
+                     else '#d97706' if n_alertas > 0 else '#16a34a')
+
+    # ── Subject ──────────────────────────────────────────────────────────
     asunto = f"Cirrus · Reporte {periodo_label} — {empresa.nombre}"
+    if subject_prefix:
+        asunto = f"[{subject_prefix}] {asunto}"
+
+    # ── Message-ID único con dominio nubex.me (alineado con DKIM) ────────
+    msg_id = (
+        f"<cirrus.{empresa.rfc.lower()}.{corte_tipo}."
+        f"{fecha_inicio.strftime('%Y%m%d')}.{_uuid.uuid4().hex[:10]}@nubex.me>"
+    )
+
+    # ── Plain text ────────────────────────────────────────────────────────
+    _sep = "─" * 44
     cuerpo_text = (
-        f"Reporte fiscal del periodo: {sub_periodo}\n"
-        f"Empresa: {empresa.nombre} ({empresa.rfc})\n"
-        f"Resultado fiscal: ${datos['resultado_fiscal']:,.2f}\n"
-        f"IVA neto: ${datos['iva_neto']:,.2f}"
-        f" ({'a favor' if datos['iva_neto'] < 0 else 'a pagar'})\n"
-        f"Health Score: {datos['health_score']} ({datos['health_score_label']})\n"
-        f"Alertas activas: {len(datos['alertas_activas'])}\n\n"
-        f"Adjunto: PDF de 4 paginas con el detalle completo.\n\n"
-        f"Correo automatico, no responder."
+        f"CIRRUS · Inteligencia Fiscal\n"
+        f"{empresa.nombre} ({empresa.rfc})\n"
+        f"Reporte: {periodo_label}\n"
+        f"{_sep}\n"
+        f"INDICADORES CLAVE — {sub_periodo}\n\n"
+        f"Resultado Fiscal:  {resultado_fmt}  ({lbl_resultado})\n"
+        f"IVA Neto:          {iva_fmt}  ({lbl_iva})\n"
+        f"Health Score:      {hs}/100 ({datos['health_score_label']})\n"
+        f"Alertas Activas:   {n_alertas}  ({lbl_alertas})\n"
+        f"{_sep}\n\n"
+        f"Se adjunta el reporte ejecutivo completo en PDF (4 páginas):\n"
+        f"análisis fiscal, IVA, proveedores, nómina, historial 6 meses\n"
+        f"y acciones sugeridas para el periodo.\n\n"
+        f"Correo automático · Cirrus · cirrus.nubex.me\n"
+        f"Para cancelar: cirrus-reportes@nubex.me  asunto: unsubscribe"
     )
-    cuerpo_html = (
-        f"<p>Reporte fiscal del periodo: <strong>{sub_periodo}</strong></p>"
-        f"<p><strong>{empresa.nombre}</strong> ({empresa.rfc})</p>"
-        f"<ul>"
-        f"<li>Resultado fiscal: <strong>${datos['resultado_fiscal']:,.2f}</strong></li>"
-        f"<li>IVA neto: <strong>${datos['iva_neto']:,.2f}</strong> "
-        f"({'a favor' if datos['iva_neto'] < 0 else 'a pagar'})</li>"
-        f"<li>Health Score: <strong>{datos['health_score']}</strong> "
-        f"({datos['health_score_label']})</li>"
-        f"<li>Alertas activas: <strong>{len(datos['alertas_activas'])}</strong></li>"
-        f"</ul>"
-        f"<p>Adjunto: PDF de 4 paginas con el detalle completo.</p>"
-        f"<p style='color:#94a3b8;font-size:11px;'>Correo automatico, no responder.</p>"
+
+    # ── HTML body (tabla para compatibilidad email) ───────────────────────
+    _kpi_cell = (
+        "background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;"
+        "padding:12px 14px;vertical-align:top;"
     )
+    cuerpo_html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Reporte {periodo_label}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e293b;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f1f5f9;">
+<tr><td align="center" style="padding:28px 12px;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="560"
+       style="max-width:560px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;">
+
+<!-- HEADER -->
+<tr><td style="background:#0f172a;padding:20px 26px;border-radius:8px 8px 0 0;">
+  <p style="margin:0;font-size:10px;letter-spacing:2px;color:#475569;text-transform:uppercase;font-weight:700;">CIRRUS &middot; INTELIGENCIA FISCAL</p>
+  <p style="margin:5px 0 0;font-size:19px;font-weight:800;color:#f8fafc;line-height:1.2;">{en}</p>
+  <p style="margin:4px 0 0;font-size:12px;color:#64748b;">{er} &nbsp;&middot;&nbsp; {periodo_label}</p>
+</td></tr>
+
+<!-- INTRO -->
+<tr><td style="padding:20px 26px 10px;">
+  <p style="margin:0;font-size:14px;color:#374151;line-height:1.65;">
+    Se adjunta el reporte fiscal de <strong>{en}</strong> para el periodo
+    <strong>{sub_periodo}</strong>. A continuaci&oacute;n los indicadores clave:
+  </p>
+</td></tr>
+
+<!-- KPIs — fila 1 -->
+<tr><td style="padding:0 26px 0;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+<tr>
+  <td width="49%" style="{_kpi_cell}">
+    <p style="margin:0 0 2px;font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Resultado Fiscal</p>
+    <p style="margin:0;font-size:16px;font-weight:800;font-family:'Courier New',monospace;color:{clr_resultado};">{resultado_fmt}</p>
+    <p style="margin:3px 0 0;font-size:11px;color:#94a3b8;">{lbl_resultado}</p>
+  </td>
+  <td width="2%"></td>
+  <td width="49%" style="{_kpi_cell}">
+    <p style="margin:0 0 2px;font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">IVA Neto del Periodo</p>
+    <p style="margin:0;font-size:16px;font-weight:800;font-family:'Courier New',monospace;color:{clr_iva};">{iva_fmt}</p>
+    <p style="margin:3px 0 0;font-size:11px;color:#94a3b8;">{lbl_iva}</p>
+  </td>
+</tr>
+<tr><td colspan="3" style="height:8px;"></td></tr>
+<!-- KPIs — fila 2 -->
+<tr>
+  <td width="49%" style="{_kpi_cell}">
+    <p style="margin:0 0 2px;font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Health Score Fiscal</p>
+    <p style="margin:0;font-size:16px;font-weight:800;font-family:'Courier New',monospace;color:{clr_health};">{hs}/100</p>
+    <p style="margin:3px 0 0;font-size:11px;color:#94a3b8;">{hl}</p>
+  </td>
+  <td width="2%"></td>
+  <td width="49%" style="{_kpi_cell}">
+    <p style="margin:0 0 2px;font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Alertas Activas</p>
+    <p style="margin:0;font-size:16px;font-weight:800;font-family:'Courier New',monospace;color:{clr_alertas};">{n_alertas}</p>
+    <p style="margin:3px 0 0;font-size:11px;color:#94a3b8;">{lbl_alertas}</p>
+  </td>
+</tr>
+</table>
+</td></tr>
+
+<!-- PDF NOTE -->
+<tr><td style="padding:16px 26px 20px;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+       style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:0 6px 6px 0;">
+<tr><td style="padding:11px 15px;">
+  <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#1d4ed8;">Reporte PDF adjunto</p>
+  <p style="margin:0;font-size:12px;color:#374151;line-height:1.55;">
+    El archivo adjunto contiene el an&aacute;lisis completo de 4 p&aacute;ginas:
+    estado de resultados, desglose de IVA, proveedores con alertas de concentraci&oacute;n
+    (Art.&nbsp;76 LISR), panel de n&oacute;mina, historial de 6 meses y acciones sugeridas.
+  </p>
+</td></tr>
+</table>
+</td></tr>
+
+<!-- FOOTER -->
+<tr><td style="padding:14px 26px 20px;border-top:1px solid #e2e8f0;">
+  <p style="margin:0 0 5px;font-size:11px;color:#94a3b8;line-height:1.5;">
+    Correo generado autom&aacute;ticamente por <strong style="color:#64748b;">Cirrus &middot; cirrus.nubex.me</strong>.<br>
+    An&aacute;lisis basado en CFDIs del SAT. No constituye opini&oacute;n fiscal contable.<br>
+    Valida con tu contador antes de tomar decisiones con impacto fiscal.
+  </p>
+  <p style="margin:0;font-size:11px;color:#cbd5e1;">
+    Para cancelar este reporte escribe a
+    <a href="mailto:cirrus-reportes@nubex.me?subject=unsubscribe"
+       style="color:#94a3b8;text-decoration:underline;">cirrus-reportes@nubex.me</a>
+    con asunto &ldquo;unsubscribe&rdquo;.
+  </p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
 
     fname = (
         f"Cirrus_{empresa.rfc}_{corte_tipo}_"
@@ -390,6 +522,12 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None):
         body=cuerpo_text,
         from_email=settings.EMAIL_REPORTES_FROM,
         to=[dest_email],
+        reply_to=["noreply@nubex.me"],
+        headers={
+            "List-Unsubscribe": "<mailto:cirrus-reportes@nubex.me?subject=unsubscribe>",
+            "Message-ID": msg_id,
+            "X-Mailer": "Cirrus/1.0",
+        },
         connection=_get_reportes_connection(),
     )
     msg.attach_alternative(cuerpo_html, "text/html")
