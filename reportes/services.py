@@ -510,25 +510,38 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         .annotate(n=Count("uuid"), monto=Sum("total")).order_by("dia")
     )
 
-    # ── Panel de nomina (T6 — informativo, NO entra al resultado fiscal) ─
-    # Solo lee los campos que YA estan poblados en BD (header del complemento).
-    # El bloque Percepciones/Deducciones del complemento nomina12 NO esta parseado
-    # — se marca con bandera para que la web lo declare explicitamente.
+    # ── Panel de nomina (T6 completo — datos reales de NominaDetalle) ─
+    # Informativo. NO entra al resultado fiscal (criterio fiscal lo define
+    # la contadora aparte). Tras Bloque B el complemento de nomina12 se
+    # parsea por completo; los totales vienen de core_nominadetalle.
+    from core.models import NominaDetalle
+    # Captura nominas donde la empresa participa, ya sea como patron-emisor
+    # (paga a empleados) o como trabajador-receptor (asimilado a salarios).
+    # Sin restringir rfc_emisor: VEN paga 3 empleados; AIPF recibe pagos como
+    # asimilado. El panel sirve a ambos casos.
     nominas_qs = CFDI.objects.filter(
-        rfc_empresa=rfc, tipo_comprobante='N', rfc_emisor=rfc,
+        rfc_empresa=rfc, tipo_comprobante='N',
         fecha__date__gte=fecha_inicio, fecha__date__lte=fecha_fin,
         estado_sat='vigente',
     )
+    nomina_rol = (
+        "patron" if nominas_qs.filter(rfc_emisor=rfc).exists()
+        else "asimilado" if nominas_qs.filter(rfc_receptor=rfc).exists()
+        else "n/d"
+    )
     nominas_count = nominas_qs.count()
     nomina_total_pagado = _safe(nominas_qs.aggregate(s=Sum("total"))["s"])
-    # Set elimina duplicados del Meta.ordering implicito que desactiva DISTINCT en Django.
-    nomina_trabajadores = list({r for r in nominas_qs.values_list("rfc_receptor", flat=True)})
+    # En rol patron: trabajadores = receptores. En rol asimilado: patrones = emisores.
+    if nomina_rol == "patron":
+        nomina_trabajadores = list({r for r in nominas_qs.values_list("rfc_receptor", flat=True)})
+    else:
+        nomina_trabajadores = list({r for r in nominas_qs.values_list("rfc_emisor", flat=True)})
     nomina_ordinarias = nominas_qs.filter(tipo_nomina='O').count()
     nomina_extraordinarias = nominas_qs.filter(tipo_nomina='E').count()
-    # Periodicidad: inferir a partir de la duracion de los periodos cubiertos.
+
+    # Periodicidad (mediana del span fecha_inicial->fecha_final).
     nomina_periodicidad = "n/d"
     if nominas_count > 0:
-        # Mediana del span fecha_final - fecha_inicial (en dias) si ambos existen.
         spans = []
         for n in nominas_qs.exclude(fecha_inicial_pago__isnull=True).exclude(fecha_final_pago__isnull=True):
             spans.append((n.fecha_final_pago - n.fecha_inicial_pago).days + 1)
@@ -545,25 +558,80 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
                 nomina_periodicidad = "Decenal"
             else:
                 nomina_periodicidad = f"{mediana} días (irregular)"
-    # Top trabajadores por neto pagado (informativo)
-    nomina_top_trabajadores = list(
-        nominas_qs.values("rfc_receptor", "nombre_receptor")
-        .annotate(n=Count("uuid"), monto=Sum("total"))
-        .order_by("-monto")[:10]
+
+    # Totales desde NominaDetalle (poblado en Bloque B).
+    detalles_qs = NominaDetalle.objects.filter(cfdi__in=nominas_qs)
+    detalles_n = detalles_qs.count()
+    agg = detalles_qs.aggregate(
+        percepciones=Sum("total_percepciones"),
+        deducciones=Sum("total_deducciones"),
+        otros_pagos=Sum("total_otros_pagos"),
+        isr_retenido=Sum("total_impuestos_retenidos_nomina"),
+        otras_deducciones=Sum("total_otras_deducciones"),
+        subsidio=Sum("subsidio_causado"),
     )
+    nom_percepciones = _safe(agg["percepciones"])
+    nom_deducciones = _safe(agg["deducciones"])
+    nom_otros_pagos = _safe(agg["otros_pagos"])
+    nom_isr_retenido = _safe(agg["isr_retenido"])
+    nom_otras_deducciones = _safe(agg["otras_deducciones"])
+    nom_subsidio = _safe(agg["subsidio"])
+    nom_neto = nom_percepciones - nom_deducciones + nom_otros_pagos
+
+    # Top trabajadores (rol patron) o top patrones (rol asimilado).
+    if nomina_rol == "patron":
+        nomina_top_trabajadores = list(
+            nominas_qs.values("rfc_receptor", "nombre_receptor")
+            .annotate(n=Count("uuid"), monto=Sum("total"))
+            .order_by("-monto")[:10]
+        )
+    else:
+        # En rol asimilado, las "contrapartes" son los patrones (emisores).
+        # Anotamos con alias distintos a campos del modelo para evitar conflicto.
+        nomina_top_trabajadores = [
+            {"rfc_receptor": r["rfc_emisor"], "nombre_receptor": r["nombre_emisor"],
+             "n": r["n"], "monto": r["monto"]}
+            for r in nominas_qs.values("rfc_emisor", "nombre_emisor")
+            .annotate(n=Count("uuid"), monto=Sum("total"))
+            .order_by("-monto")[:10]
+        ]
+
+    # Alertas informativas (NO penalizan score por ahora).
+    nomina_alertas = []
+    if nom_percepciones > 0 and nom_isr_retenido == 0:
+        nomina_alertas.append({
+            "nivel": "warning",
+            "mensaje": "Percepciones > $0 pero ISR retenido = $0. Verificar retencion al empleado (puede ser asimilado a salarios o no gravable).",
+        })
+    if total_ingresos > 0 and (nom_percepciones / total_ingresos) > Decimal("0.4"):
+        pct = float(nom_percepciones / total_ingresos * 100)
+        nomina_alertas.append({
+            "nivel": "info",
+            "mensaje": f"Carga laboral: nomina representa {pct:.0f}% de los ingresos.",
+        })
+
     nomina_panel = {
+        "rol": nomina_rol,  # 'patron' / 'asimilado' / 'n/d'
         "nominas_count": nominas_count,
-        "total_pagado": nomina_total_pagado,
         "trabajadores_count": len(nomina_trabajadores),
         "ordinarias_count": nomina_ordinarias,
         "extraordinarias_count": nomina_extraordinarias,
         "periodicidad": nomina_periodicidad,
+        # Datos reales desde NominaDetalle:
+        "total_percepciones": nom_percepciones,
+        "total_deducciones": nom_deducciones,
+        "total_otros_pagos": nom_otros_pagos,
+        "isr_retenido": nom_isr_retenido,
+        "otras_deducciones": nom_otras_deducciones,
+        "subsidio_causado": nom_subsidio,
+        "neto_pagado": nom_neto,
+        # Compat con template: el "total_pagado" historicamente era el neto del CFDI raiz.
+        "total_pagado": nomina_total_pagado,
         "top_trabajadores": nomina_top_trabajadores,
-        # Bandera: el complemento de nomina12 NO esta parseado en xml_processor.
-        # total_pagado refleja el NETO (después de deducciones), no las percepciones
-        # brutas. ISR retenido en nómina = $0 en BD para TODOS los CFDIs tipo N,
-        # lo cual no representa el dato fiscal real.
-        "complemento_parseado": False,
+        # Cobertura del detalle: si todos los CFDIs N del periodo tienen NominaDetalle.
+        "detalles_disponibles": detalles_n,
+        "complemento_parseado": detalles_n >= nominas_count and nominas_count > 0,
+        "alertas": nomina_alertas,
     }
 
     return {
