@@ -278,3 +278,134 @@ def generar_y_enviar_reporte_anual(self, empresa_id, anio, emails_extra=None, ov
             raise e
 
     return f"Reporte enviado a {to_emails} para {empresa.rfc} {anio}"
+
+
+@shared_task(bind=True, max_retries=2, soft_time_limit=120, time_limit=150)
+def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None):
+    """Envia el PDF v4 del reporte de un periodo segun el tipo de corte.
+
+    corte_tipo:
+      - 'cierre_mes_anterior': dia 1 a ultimo dia del mes anterior (cierre)
+      - 'avance_10': dia 1 al 10 del mes en curso
+      - 'avance_20': dia 1 al 20 del mes en curso
+
+    El periodo se calcula con timezone.localdate() en America/Mexico_City
+    (configurado en settings.TIME_ZONE) para evitar bordes de dia por UTC.
+    """
+    from datetime import date, timedelta
+    import calendar as _cal
+    from django.template.loader import render_to_string
+    from django.core.mail import EmailMultiAlternatives
+    from django.utils import timezone
+    from core.models import Empresa
+    from reportes.services import calcular_reporte, MONTH_NAMES
+
+    try:
+        empresa = Empresa.objects.get(id=empresa_id)
+    except Empresa.DoesNotExist:
+        logger.error("Empresa %s no encontrada", empresa_id)
+        return f"Error: empresa {empresa_id} no encontrada"
+
+    usuario = empresa.owner
+    if dest_email is None:
+        dest_email = usuario.email if usuario else None
+    if not dest_email:
+        return f"Skip: sin destinatario para {empresa.rfc}"
+
+    hoy = timezone.localdate()  # zona MX por settings.TIME_ZONE
+
+    if corte_tipo == "cierre_mes_anterior":
+        primer_dia_actual = hoy.replace(day=1)
+        fecha_fin = primer_dia_actual - timedelta(days=1)
+        fecha_inicio = fecha_fin.replace(day=1)
+        periodo_label = f"Cierre {MONTH_NAMES[fecha_fin.month]} {fecha_fin.year}"
+        sub_periodo = f"{MONTH_NAMES[fecha_fin.month]} {fecha_fin.year}"
+    elif corte_tipo == "avance_10":
+        fecha_inicio = hoy.replace(day=1)
+        fecha_fin = hoy.replace(day=10)
+        periodo_label = f"Avance 1-10 {MONTH_NAMES[hoy.month]} {hoy.year}"
+        sub_periodo = f"{MONTH_NAMES[hoy.month]} {hoy.year} (1-10)"
+    elif corte_tipo == "avance_20":
+        fecha_inicio = hoy.replace(day=1)
+        fecha_fin = hoy.replace(day=20)
+        periodo_label = f"Avance 1-20 {MONTH_NAMES[hoy.month]} {hoy.year}"
+        sub_periodo = f"{MONTH_NAMES[hoy.month]} {hoy.year} (1-20)"
+    else:
+        return f"Error: corte_tipo desconocido '{corte_tipo}'"
+
+    try:
+        datos = calcular_reporte(str(empresa_id), fecha_inicio, fecha_fin, usuario)
+    except Exception as e:
+        logger.error("Error calculando reporte VEN corte %s: %s", corte_tipo, e)
+        raise self.retry(exc=e, countdown=60)
+
+    # Render PDF v4
+    try:
+        from weasyprint import HTML
+        html = render_to_string("reportes/reporte_pdf.html", {
+            "datos": datos,
+            "empresa": empresa,
+            "fecha_generacion": timezone.localtime().strftime("%d/%m/%Y %H:%M"),
+        })
+        pdf_bytes = HTML(string=html).write_pdf()
+    except Exception as e:
+        logger.error("Error generando PDF: %s", e)
+        raise self.retry(exc=e, countdown=60)
+
+    # Subject + cuerpo
+    asunto = f"Cirrus · Reporte {periodo_label} — {empresa.nombre}"
+    cuerpo_text = (
+        f"Reporte fiscal del periodo: {sub_periodo}\n"
+        f"Empresa: {empresa.nombre} ({empresa.rfc})\n"
+        f"Resultado fiscal: ${datos['resultado_fiscal']:,.2f}\n"
+        f"IVA neto: ${datos['iva_neto']:,.2f}"
+        f" ({'a favor' if datos['iva_neto'] < 0 else 'a pagar'})\n"
+        f"Health Score: {datos['health_score']} ({datos['health_score_label']})\n"
+        f"Alertas activas: {len(datos['alertas_activas'])}\n\n"
+        f"Adjunto: PDF de 4 paginas con el detalle completo.\n\n"
+        f"Correo automatico, no responder."
+    )
+    cuerpo_html = (
+        f"<p>Reporte fiscal del periodo: <strong>{sub_periodo}</strong></p>"
+        f"<p><strong>{empresa.nombre}</strong> ({empresa.rfc})</p>"
+        f"<ul>"
+        f"<li>Resultado fiscal: <strong>${datos['resultado_fiscal']:,.2f}</strong></li>"
+        f"<li>IVA neto: <strong>${datos['iva_neto']:,.2f}</strong> "
+        f"({'a favor' if datos['iva_neto'] < 0 else 'a pagar'})</li>"
+        f"<li>Health Score: <strong>{datos['health_score']}</strong> "
+        f"({datos['health_score_label']})</li>"
+        f"<li>Alertas activas: <strong>{len(datos['alertas_activas'])}</strong></li>"
+        f"</ul>"
+        f"<p>Adjunto: PDF de 4 paginas con el detalle completo.</p>"
+        f"<p style='color:#94a3b8;font-size:11px;'>Correo automatico, no responder.</p>"
+    )
+
+    fname = (
+        f"Cirrus_{empresa.rfc}_{corte_tipo}_"
+        f"{fecha_inicio.strftime('%Y%m%d')}_{fecha_fin.strftime('%Y%m%d')}.pdf"
+    )
+
+    msg = EmailMultiAlternatives(
+        subject=asunto,
+        body=cuerpo_text,
+        from_email=settings.EMAIL_REPORTES_FROM,
+        to=[dest_email],
+        connection=_get_reportes_connection(),
+    )
+    msg.attach_alternative(cuerpo_html, "text/html")
+    msg.attach(fname, pdf_bytes, "application/pdf")
+
+    try:
+        sent = msg.send(fail_silently=False)
+        logger.info(
+            "📧 Reporte corte %s enviado a %s para %s (%s)",
+            corte_tipo, dest_email, empresa.rfc, periodo_label,
+        )
+    except Exception as e:
+        logger.error("Error enviando email reporte corte: %s", e)
+        raise self.retry(exc=e, countdown=60)
+
+    return (
+        f"Reporte {periodo_label} enviado a {dest_email} para {empresa.rfc} "
+        f"(PDF {len(pdf_bytes)} bytes, sent={sent})"
+    )
