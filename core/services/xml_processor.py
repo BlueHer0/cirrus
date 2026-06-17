@@ -230,6 +230,57 @@ def _extract_nomina(xml_bytes: bytes) -> dict:
     return result
 
 
+def extract_cfdi_atributos_basicos(xml_bytes: bytes) -> dict:
+    """Bloque C: extrae atributos sueltos del CFDI raiz que el parser previo
+    no leia.
+
+    Returns: dict con regimen_fiscal_emisor, regimen_fiscal_receptor, uso_cfdi.
+    Tolera atributos ausentes (default '').
+    """
+    out = {"regimen_fiscal_emisor": "", "regimen_fiscal_receptor": "", "uso_cfdi": ""}
+    try:
+        root = etree.fromstring(xml_bytes)
+    except etree.XMLSyntaxError:
+        return out
+    tag = root.tag.lower()
+    ns = NS_40 if "cfd/4" in tag else NS_33
+    emisor = root.find("cfdi:Emisor", namespaces=ns)
+    if emisor is not None:
+        out["regimen_fiscal_emisor"] = (emisor.get("RegimenFiscal") or "")[:10]
+    receptor = root.find("cfdi:Receptor", namespaces=ns)
+    if receptor is not None:
+        out["regimen_fiscal_receptor"] = (receptor.get("RegimenFiscalReceptor") or "")[:5]
+        out["uso_cfdi"] = (receptor.get("UsoCFDI") or "")[:10]
+    return out
+
+
+def extract_cfdi_relacionados(xml_bytes: bytes) -> list:
+    """Bloque C: extrae <cfdi:CfdiRelacionados> en lista de relaciones.
+
+    Returns: list[dict{uuid_relacionado, tipo_relacion}]. Vacia si no hay
+    nodo CfdiRelacionados o el XML no parsea. Para v4.0 el SAT permite UN solo
+    nodo CfdiRelacionados (con un TipoRelacion) con N CfdiRelacionado dentro.
+    """
+    rows = []
+    try:
+        root = etree.fromstring(xml_bytes)
+    except etree.XMLSyntaxError:
+        return rows
+    tag = root.tag.lower()
+    ns = NS_40 if "cfd/4" in tag else NS_33
+    # Pueden existir multiples nodos CfdiRelacionados (v4.0 permite varios con distinto TipoRelacion)
+    for rels in root.findall("cfdi:CfdiRelacionados", namespaces=ns):
+        tipo_relacion = (rels.get("TipoRelacion") or "")[:2]
+        if not tipo_relacion:
+            continue
+        for rel in rels.findall("cfdi:CfdiRelacionado", namespaces=ns):
+            uuid_rel = (rel.get("UUID") or "").strip().upper()
+            if not uuid_rel:
+                continue
+            rows.append({"uuid_relacionado": uuid_rel, "tipo_relacion": tipo_relacion})
+    return rows
+
+
 def extract_nomina12_detalle(xml_bytes: bytes) -> dict | None:
     """Extrae los totales fiscales del complemento nomina12:Nomina.
 
