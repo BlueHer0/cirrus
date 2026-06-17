@@ -347,6 +347,7 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
             "iva_neto": per["iva_trasladado"] - per["iva_acreditable"],
             "ingresos": per["total_ingresos"],
             "gastos": per["total_gastos"],
+            "resultado": per["total_ingresos"] - per["total_gastos"],
             "iva_trasladado": per["iva_trasladado"],
             "iva_acreditable": per["iva_acreditable"],
         })
