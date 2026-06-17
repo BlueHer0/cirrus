@@ -179,6 +179,10 @@ class CFDI(models.Model):
     rfc_receptor = models.CharField(max_length=13, db_index=True)
     nombre_receptor = models.CharField(max_length=300, blank=True)
     uso_cfdi = models.CharField(max_length=10, blank=True)
+    regimen_fiscal_receptor = models.CharField(
+        max_length=5, blank=True, default="",
+        help_text="@RegimenFiscalReceptor (catalogo SAT c_RegimenFiscal). Bloque C.",
+    )
 
     # Impuestos (extraídos del XML para consulta rápida)
     total_impuestos_trasladados = models.DecimalField(
@@ -394,6 +398,63 @@ class NominaDetalle(models.Model):
         return (
             f"NominaDetalle {self.cfdi_id} | "
             f"percep ${self.total_percepciones} - deduc ${self.total_deducciones}"
+        )
+
+
+class CfdiRelacionadoLink(models.Model):
+    """Relacion 1-a-muchos entre un CFDI y los CFDIs que ajusta/relaciona.
+
+    El XML del CFDI raiz puede traer <cfdi:CfdiRelacionados @TipoRelacion>
+    con N <cfdi:CfdiRelacionado @UUID>. Cada UUID relacionado se almacena
+    como una fila aqui. Caso de uso principal: notas de credito (tipo='E'
+    con TipoRelacion='01') que ajustan facturas (tipo='I') especificas.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+
+    # CFDI emisor de la relacion (e.g. la nota E que se emite)
+    cfdi_origen = models.ForeignKey(
+        CFDI, on_delete=models.CASCADE,
+        related_name="relacionados_emitidos",
+        db_column="cfdi_origen_uuid",
+        help_text="CFDI que contiene el nodo <cfdi:CfdiRelacionados>",
+    )
+    # UUID del CFDI relacionado (factura ajustada). Puede o no estar en BD.
+    uuid_relacionado = models.CharField(
+        max_length=36, db_index=True,
+        help_text="UUID del CFDI relacionado (la factura ajustada por una nota, etc.)",
+    )
+    # Tipo de relacion (catalogo SAT c_TipoRelacion). Sin choices para no romper
+    # si el SAT agrega tipos al catalogo: 01 nota credito, 02 nota debito,
+    # 03 devolucion, 04 sustitucion, 05 traslado, 06 cfdi traslado, 07 anticipo, ...
+    tipo_relacion = models.CharField(
+        max_length=2,
+        help_text="Catalogo SAT c_TipoRelacion (01-07+)",
+    )
+    # Vinculo opcional al CFDI relacionado si esta en nuestra BD
+    cfdi_relacionado = models.ForeignKey(
+        CFDI, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="relaciones_recibidas",
+        db_column="cfdi_relacionado_uuid",
+        help_text="CFDI relacionado si esta en BD (NULL si no lo tenemos)",
+    )
+
+    creado_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("cfdi_origen", "uuid_relacionado")
+        indexes = [
+            models.Index(fields=["uuid_relacionado"], name="crl_uuid_rel_idx"),
+            models.Index(fields=["tipo_relacion"], name="crl_tipo_idx"),
+        ]
+        verbose_name = "CFDI relacionado (link)"
+        verbose_name_plural = "CFDIs relacionados (links)"
+
+    def __str__(self):
+        return (
+            f"{str(self.cfdi_origen_id)[:8]} -[{self.tipo_relacion}]-> "
+            f"{self.uuid_relacionado[:8]}"
         )
 
 
