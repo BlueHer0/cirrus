@@ -355,6 +355,45 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
     concentracion_top_pct = float(top_proveedores[0]["pct"]) if top_proveedores else 0.0
     concentracion_top_rfc = top_proveedores[0]["rfc_emisor"] if top_proveedores else None
     concentracion_top_nombre = top_proveedores[0].get("nombre_emisor") if top_proveedores else None
+    concentracion_top2_pct = (
+        float(top_proveedores[0]["pct"]) + float(top_proveedores[1]["pct"])
+        if len(top_proveedores) >= 2 else concentracion_top_pct
+    )
+
+    # ── Alertas de concentracion (T8 — Art. 76 / 76-A LISR) ─────────
+    # Dato objetivo, no asume problema: la concentracion puede ser legitima
+    # segun el giro. Solo se senala para que el usuario verifique si hay
+    # relacion de partes relacionadas / precios de transferencia.
+    alertas_concentracion = []
+    if concentracion_top_pct > 40 and concentracion_top_rfc:
+        alertas_concentracion.append({
+            "nivel": "ambar",
+            "tipo": "top1",
+            "rfc": concentracion_top_rfc,
+            "nombre": concentracion_top_nombre or concentracion_top_rfc,
+            "pct": round(concentracion_top_pct, 1),
+            "mensaje": (
+                f"Un proveedor representa {concentracion_top_pct:.1f}% del gasto. "
+                f"Verificar si existe relación de partes relacionadas."
+            ),
+            "fundamento": "Art. 76 LISR (información de operaciones con partes relacionadas)",
+        })
+    if concentracion_top2_pct > 70 and len(top_proveedores) >= 2:
+        alertas_concentracion.append({
+            "nivel": "ambar",
+            "tipo": "top2",
+            "rfc": [top_proveedores[0]["rfc_emisor"], top_proveedores[1]["rfc_emisor"]],
+            "nombre": [
+                top_proveedores[0].get("nombre_emisor") or top_proveedores[0]["rfc_emisor"],
+                top_proveedores[1].get("nombre_emisor") or top_proveedores[1]["rfc_emisor"],
+            ],
+            "pct": round(concentracion_top2_pct, 1),
+            "mensaje": (
+                f"Los 2 principales proveedores concentran {concentracion_top2_pct:.1f}% del gasto. "
+                f"Posible riesgo de revisión por precios de transferencia."
+            ),
+            "fundamento": "Art. 76-A LISR (declaraciones informativas de partes relacionadas)",
+        })
 
     # ── Ventas a publico en general (XAXX010101000) — informativo ───
     publico_general_qs = ingresos_qs.filter(rfc_receptor="XAXX010101000")
@@ -749,7 +788,9 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
 
         # Concentracion (informativo, ya integrado al score)
         "concentracion_top_pct": round(concentracion_top_pct, 1),
+        "concentracion_top2_pct": round(concentracion_top2_pct, 1),
         "concentracion_top_nombre": concentracion_top_nombre,
+        "alertas_concentracion": alertas_concentracion,
         "concentracion_top_rfc": concentracion_top_rfc,
 
         # Publico general (XAXX010101000) — informativo

@@ -681,6 +681,33 @@
             <div class="p-4 border-b border-[#30363d]">
                 <h3 class="text-sm font-semibold text-[#e6edf3]">Top 5 Proveedores</h3>
             </div>
+
+            {# Alertas de concentracion (T8 - Art. 76 / 76-A LISR). Informativo. #}
+            {% if datos.alertas_concentracion %}
+            <div class="px-4 py-3 border-b border-[#30363d] space-y-2" style="background: rgba(227,179,65,0.05);">
+                {% for a in datos.alertas_concentracion %}
+                <div class="rounded-lg p-3 border" style="background: #0d1117; border-color: #e3b341;">
+                    <div class="flex items-start gap-2">
+                        <span class="text-[#e3b341] text-sm">⚠️</span>
+                        <div class="flex-1">
+                            <div class="text-xs text-[#e6edf3] leading-relaxed">{{ a.mensaje }}</div>
+                            {% if a.tipo == 'top1' %}
+                            <div class="mt-1 text-[11px] font-mono text-[#8b949e]">
+                                <span class="text-[#58a6ff]">{{ a.rfc }}</span> · {{ a.nombre }} · <strong class="text-[#e3b341]">{{ a.pct }}%</strong>
+                            </div>
+                            {% else %}
+                            <div class="mt-1 text-[11px] font-mono text-[#8b949e]">
+                                <span class="text-[#58a6ff]">{{ a.rfc.0 }}</span> + <span class="text-[#58a6ff]">{{ a.rfc.1 }}</span> · <strong class="text-[#e3b341]">{{ a.pct }}%</strong> acumulado
+                            </div>
+                            {% endif %}
+                            <div class="mt-1 text-[10px] text-[#6e7681] italic">{{ a.fundamento }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left">
                     <thead class="bg-[#0d1117] text-[#8b949e] border-b border-[#30363d]">
@@ -697,8 +724,8 @@
                                 <span class="font-mono text-[#58a6ff]">{{ p.rfc_emisor }}</span><br>
                                 <span class="text-[10px] text-[#8b949e] truncate max-w-[200px] inline-block">{{ p.nombre_emisor }}</span>
                             </td>
-                            <td class="px-4 py-2 text-right text-[#8b949e]">{{ p.pct }}%</td>
-                            <td class="px-4 py-2 font-mono text-right text-[#e6edf3]">{{ p.total_proveedor|pesos_decimal }}</td>
+                            <td class="px-4 py-2 text-right {% if p.pct >= 40 %}text-[#e3b341] font-semibold{% else %}text-[#8b949e]{% endif %}">{{ p.pct }}%</td>
+                            <td class="px-4 py-2 font-mono text-right text-[#e6edf3]">{{ p.total_proveedor|mxn }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="3" class="px-4 py-6 text-center text-[#8b949e]">Sin gastos registrados en el periodo.</td></tr>
