@@ -56,14 +56,18 @@
 <!-- 6-month comparative chart -->
 <div class="section">
   <div class="section-title">Comparativo 6 Meses — Ingresos vs Gastos</div>
-  <div style="display: grid; grid-template-columns: repeat({{ data.tendencia|length }}, 1fr); gap: 12px; height: 220px; align-items: end;">
+  <div style="display: grid; grid-template-columns: repeat({{ data.tendencia|length }}, 1fr); gap: 12px; height: 240px; align-items: end;">
     {% for t in data.tendencia %}
     <div style="display: flex; flex-direction: column; align-items: center; height: 100%;">
-      <div style="flex: 1; display: flex; align-items: flex-end; gap: 3px; width: 100%; justify-content: center;">
+      <div style="flex: 1; display: flex; align-items: flex-end; gap: 3px; width: 100%; justify-content: center; position: relative;">
         <!-- Ingresos bar -->
-        <div style="width: 40%; height: {{ t.ing_pct }}%; background: linear-gradient(to top, #10b981, #34d399); border-radius: 3px 3px 0 0; min-height: 2px;" title="Ingresos: ${{ t.ing_fmt }}"></div>
+        <div style="width: 40%; height: {{ t.ing_pct }}%; background: linear-gradient(to top, #10b981, #34d399); border-radius: 3px 3px 0 0; min-height: 2px; position: relative;" title="{{ t.mes_nombre }} {{ t.year }} · Ingresos: ${{ t.ing_fmt }}">
+          <div style="position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; color: #10b981; font-weight: 700; white-space: nowrap;">${{ t.ing_fmt }}</div>
+        </div>
         <!-- Gastos bar -->
-        <div style="width: 40%; height: {{ t.gas_pct }}%; background: linear-gradient(to top, #3b82f6, #60a5fa); border-radius: 3px 3px 0 0; min-height: 2px;" title="Gastos: ${{ t.gas_fmt }}"></div>
+        <div style="width: 40%; height: {{ t.gas_pct }}%; background: linear-gradient(to top, #3b82f6, #60a5fa); border-radius: 3px 3px 0 0; min-height: 2px; position: relative;" title="{{ t.mes_nombre }} {{ t.year }} · Gastos: ${{ t.gas_fmt }}">
+          <div style="position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9px; color: #60a5fa; font-weight: 700; white-space: nowrap;">${{ t.gas_fmt }}</div>
+        </div>
       </div>
       <div style="font-size: 10px; color: #718096; margin-top: 6px; text-align: center;">{{ t.mes_nombre }}</div>
     </div>

@@ -1901,7 +1901,13 @@ def analysis_iva_view(request):
         per = _calc_periodo_simple(empresa.rfc, _date(y, m, 1), _date(y, m, last))
         v = float(per["iva_trasladado"]) - float(per["iva_acreditable"])
         max_tend = max(max_tend, abs(v))
-        tendencia.append({"mes": f"{MONTH_NAMES_ES[m][:3]} {y}", "valor": v, "valor_fmt": _fmt(v)})
+        tendencia.append({
+            "mes": f"{MONTH_NAMES_ES[m][:3]} {y}",
+            "valor": v,
+            "valor_fmt": _fmt(v),
+            "iva_trasladado_fmt": _fmt(float(per["iva_trasladado"])),
+            "iva_acreditable_fmt": _fmt(float(per["iva_acreditable"])),
+        })
     for t in tendencia:
         t["pct"] = round(abs(t["valor"]) / max_tend * 100) if max_tend > 0 else 0
 

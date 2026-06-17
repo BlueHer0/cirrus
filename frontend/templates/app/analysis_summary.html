@@ -75,15 +75,24 @@
   </div>
   <div class="section">
     <div class="section-title">Actividad Diaria</div>
-    <div class="daily-chart">
-      {% for d in data.actividad_diaria %}
-      <div class="daily-bar" style="height: {{ d.pct }}%;" title="Día {{ d.dia }}: {{ d.count }} CFDIs — ${{ d.monto_fmt }}"></div>
-      {% endfor %}
+    <div style="display: flex; gap: 8px; align-items: flex-end;">
+      {# Eje Y simple con marcas relativas #}
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 140px; font-size: 9px; color: #718096; padding-right: 4px; text-align: right; min-width: 36px;">
+        <span>100%</span>
+        <span>50%</span>
+        <span>0%</span>
+      </div>
+      <div class="daily-chart" style="flex: 1; border-left: 1px solid #30363d; border-bottom: 1px solid #30363d; padding: 0 2px;">
+        {% for d in data.actividad_diaria %}
+        <div class="daily-bar" style="height: {{ d.pct }}%;" title="Día {{ d.dia }} · {{ d.count }} CFDIs · Total: ${{ d.monto_fmt }}"></div>
+        {% endfor %}
+      </div>
     </div>
-    <div class="daily-labels">
-      <span>1</span>
-      <span>{{ data.days_in_month }}</span>
+    <div class="daily-labels" style="padding-left: 44px;">
+      <span>Día 1</span>
+      <span>Día {{ data.days_in_month }}</span>
     </div>
+    <div style="font-size: 10px; color: #6e7681; margin-top: 4px; font-style: italic; padding-left: 44px;">Eje Y proporcional al día con más CFDIs del mes.</div>
   </div>
 </div>
 

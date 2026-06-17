@@ -50,12 +50,19 @@
     {% endfor %}
   </div>
   <div class="section">
-    <div class="section-title">Tendencia IVA a Pagar (6 meses)</div>
+    <div class="section-title">Tendencia IVA Neto (6 meses)</div>
+    <div style="display: flex; gap: 14px; font-size: 11px; color: #94a3b8; margin: 4px 0 10px 70px;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#10b981;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Saldo a favor</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>A pagar</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#ef4444;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>A pagar alto (&gt;$30k)</span>
+      <span style="margin-left:auto; font-style:italic; color:#6e7681;">Umbral visual, no regla fiscal</span>
+    </div>
     {% for t in data.tendencia %}
-    <div class="bar-row">
+    <div class="bar-row" title="{{ t.mes }} · IVA Trasladado: ${{ t.iva_trasladado_fmt|default:'—' }} · IVA Acreditable: ${{ t.iva_acreditable_fmt|default:'—' }} · Neto: ${{ t.valor_fmt }}">
       <div class="bar-label" style="width: 70px; font-size: 11px;">{{ t.mes }}</div>
       <div class="bar-track">
-        <div class="bar-fill {% if t.valor >= 0 %}bg-indigo{% else %}bg-red{% endif %}" style="width: {{ t.pct }}%;">${{ t.valor_fmt }}</div>
+        {# Colores semanticos: verde = a favor (neto<=0), ambar = a pagar normal, rojo = a pagar > $30k #}
+        <div class="bar-fill" style="width: {{ t.pct }}%; background: {% if t.valor <= 0 %}#10b981{% elif t.valor > 30000 %}#ef4444{% else %}#f59e0b{% endif %}; color: white;">${{ t.valor_fmt }}{% if t.valor <= 0 %} (a favor){% endif %}</div>
       </div>
     </div>
     {% endfor %}
