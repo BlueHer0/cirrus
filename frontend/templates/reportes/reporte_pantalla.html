@@ -145,9 +145,43 @@
     </div>
 </div>
 
+<!-- Panel de Alertas Activas (T11 — consolidado al top) -->
+{% if datos.alertas_activas %}
+<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+    <h3 class="text-sm font-semibold text-[#e6edf3] mb-3 flex items-center gap-2">
+        <span>🔔</span> Alertas Activas del Periodo
+        <span class="text-[11px] font-normal text-[#8b949e]">— resumen de los riesgos detectados, ordenados por gravedad</span>
+    </h3>
+    <div class="space-y-2">
+        {% for a in datos.alertas_activas %}
+        <a href="{{ a.ancla }}" class="block rounded-lg p-3 border hover:bg-[#1c2128] transition-colors no-underline"
+           style="background: #0d1117; border-color: {% if a.nivel == 'rojo' %}#f85149{% else %}#e3b341{% endif %};">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-start gap-2 flex-1 min-w-0">
+                    <span class="text-base shrink-0">{{ a.icono }}</span>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-semibold {% if a.nivel == 'rojo' %}text-[#f85149]{% else %}text-[#e3b341]{% endif %}">{{ a.titulo }}</div>
+                        <div class="text-xs text-[#8b949e] mt-0.5 leading-relaxed">{{ a.detalle }}</div>
+                        <div class="text-[10px] text-[#6e7681] mt-1 italic">{{ a.fundamento }}</div>
+                    </div>
+                </div>
+                {% if a.monto is not None %}
+                <div class="text-right shrink-0">
+                    <div class="font-mono text-sm font-bold {% if a.nivel == 'rojo' %}text-[#f85149]{% else %}text-[#e3b341]{% endif %}">{{ a.monto|mxn }}</div>
+                    <div class="text-[10px] text-[#6e7681]">{% if a.monto < 0 %}resultado{% else %}en riesgo{% endif %}</div>
+                </div>
+                {% endif %}
+                <span class="text-[#6e7681] text-xs shrink-0 self-center">→</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Desglose del Health Score (T3) -->
 {% if datos.health_penalizaciones or datos.health_datos_informativos %}
-<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+<div id="alerta-perdida" class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
     <h3 class="text-sm font-semibold text-[#e6edf3] mb-4 flex items-center gap-2">
         <span>🩺</span> Desglose del Health Score
         <span class="text-[11px] font-normal text-[#8b949e]">— por qué tu score es {{ datos.health_score }}</span>
@@ -192,7 +226,7 @@
 {% endif %}
 
 <!-- PPD sin REP — tabla detallada (T4) -->
-<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+<div id="alerta-ppd" class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
     <h3 class="text-sm font-semibold text-[#e6edf3] mb-3 flex items-center gap-2">
         <span>📋</span> Facturas PPD sin Complemento de Pago (REP)
         <span class="text-[11px] font-normal text-[#8b949e]">— Regla 2.7.1.35 RMF</span>
@@ -264,7 +298,7 @@
 
 <!-- Gastos sin forma de pago — T5 (Art. 27-III LISR) -->
 {% if datos.gastos_sin_fp_count > 0 %}
-<div class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
+<div id="alerta-sin-fp" class="glass rounded-2xl p-5 mb-6 font-plus" style="background: #161b22; border: 1px solid #30363d;">
     <h3 class="text-sm font-semibold text-[#e6edf3] mb-3 flex items-center gap-2">
         <span>💳</span> Gastos sin forma de pago identificada
         <span class="text-[11px] font-normal text-[#8b949e]">— Art. 27 fracción III LISR</span>
@@ -534,7 +568,7 @@
             </div>
 
             <!-- EFOS segmentado (T3) -->
-            <div class="mt-4 pt-4 border-t border-white/5">
+            <div id="alerta-efos" class="mt-4 pt-4 border-t border-white/5">
                 <div class="text-[10px] text-[#8b949e] uppercase font-semibold tracking-wider mb-2">EFOS — Lista 69-B SAT</div>
                 {% if datos.efos_definitivo_count == 0 and datos.efos_presunto_count == 0 and datos.efos_desvirtuado_count == 0 and datos.efos_sentencia_count == 0 %}
                 <div class="rounded-lg p-3 border border-[#30363d] text-center" style="background: #0d1117;">
@@ -677,7 +711,7 @@
         {% endif %}
 
         <!-- Top Proveedores Table -->
-        <div class="glass rounded-xl p-0 overflow-hidden" style="background: #161b22; border: 1px solid #30363d;">
+        <div id="alerta-concentracion" class="glass rounded-xl p-0 overflow-hidden" style="background: #161b22; border: 1px solid #30363d;">
             <div class="p-4 border-b border-[#30363d]">
                 <h3 class="text-sm font-semibold text-[#e6edf3]">Top 5 Proveedores</h3>
             </div>

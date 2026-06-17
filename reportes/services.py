@@ -673,6 +673,102 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         "alertas": nomina_alertas,
     }
 
+    # ── Panel consolidado de alertas activas (T11) ───────────────────
+    # Reune las alertas ya calculadas en otras secciones. NO calcula nuevas.
+    # Orden: rojo (criticidad fiscal alta) -> ambar -> info.
+    alertas_activas = []
+
+    # 1) EFOS Definitivo (rojo) — Art. 69-B parr. 4 CFF
+    if efos_definitivo_count > 0:
+        nombres = ", ".join(e["nombre"] or e["rfc"] for e in efos_definitivo_lista[:2])
+        if len(efos_definitivo_lista) > 2:
+            nombres += f" (+{len(efos_definitivo_lista) - 2} mas)"
+        alertas_activas.append({
+            "nivel": "rojo",
+            "icono": "🚨",
+            "titulo": f"Proveedor(es) en EFOS Definitivo ({efos_definitivo_count})",
+            "detalle": f"{nombres}. Facturas NO deducibles salvo amparo.",
+            "fundamento": "Art. 69-B párrafo 4 CFF",
+            "ancla": "#alerta-efos",
+        })
+
+    # 2) EFOS Presunto (rojo) — Art. 69-B parr. 1
+    if efos_presunto_count > 0:
+        nombres = ", ".join(e["nombre"] or e["rfc"] for e in efos_presunto_lista[:2])
+        if len(efos_presunto_lista) > 2:
+            nombres += f" (+{len(efos_presunto_lista) - 2} mas)"
+        alertas_activas.append({
+            "nivel": "rojo",
+            "icono": "⚠️",
+            "titulo": f"Proveedor(es) presuntos en lista 69-B ({efos_presunto_count})",
+            "detalle": f"{nombres}. Monitorear publicaciones del DOF.",
+            "fundamento": "Art. 69-B párrafo 1 CFF",
+            "ancla": "#alerta-efos",
+        })
+
+    # 3) PPD sin REP vencidos (rojo) — Regla 2.7.1.35 RMF
+    if ppd_sin_rep_vencidos > 0:
+        alertas_activas.append({
+            "nivel": "rojo",
+            "icono": "📋",
+            "titulo": f"Facturas PPD sin REP vencidas ({ppd_sin_rep_vencidos})",
+            "detalle": "Sin REP, el gasto no es deducible ni el IVA acreditable.",
+            "monto": ppd_sin_rep_monto,
+            "fundamento": "Regla 2.7.1.35 RMF",
+            "ancla": "#alerta-ppd",
+        })
+
+    # 4) PPD sin REP pendientes (ambar)
+    pendientes = len(ppd_sin_rep) - ppd_sin_rep_vencidos
+    if pendientes > 0:
+        alertas_activas.append({
+            "nivel": "ambar",
+            "icono": "📋",
+            "titulo": f"Facturas PPD sin REP pendientes ({pendientes})",
+            "detalle": "Solicitar al proveedor antes del dia 5 del mes siguiente.",
+            "fundamento": "Regla 2.7.1.35 RMF",
+            "ancla": "#alerta-ppd",
+        })
+
+    # 5) Gastos sin forma de pago (ambar) — Art. 27-III LISR
+    if sin_fp_count > 0 and pct_por_definir > 20:
+        alertas_activas.append({
+            "nivel": "ambar",
+            "icono": "💳",
+            "titulo": f"Gastos sin forma de pago identificada ({sin_fp_count})",
+            "detalle": f"{pct_por_definir:.0f}% de gastos con forma_pago='99' o vacia.",
+            "monto": gastos_sin_fp,
+            "fundamento": "Art. 27 fracción III LISR",
+            "ancla": "#alerta-sin-fp",
+        })
+
+    # 6) Concentracion de proveedores (ambar) — Art. 76 / 76-A LISR
+    for a_conc in alertas_concentracion:
+        alertas_activas.append({
+            "nivel": "ambar",
+            "icono": "👥",
+            "titulo": (
+                f"Concentración top 1: {a_conc['pct']}% del gasto"
+                if a_conc["tipo"] == "top1"
+                else f"Concentración top 2: {a_conc['pct']}% acumulado"
+            ),
+            "detalle": a_conc["mensaje"],
+            "fundamento": a_conc["fundamento"],
+            "ancla": "#alerta-concentracion",
+        })
+
+    # 7) Perdida fiscal (informativo/ambar) — Art. 9 LISR
+    if resultado_fiscal < 0:
+        alertas_activas.append({
+            "nivel": "ambar",
+            "icono": "📉",
+            "titulo": "Pérdida fiscal en el periodo",
+            "detalle": "Gastos deducibles superan ingresos. Verificar con contadora.",
+            "monto": resultado_fiscal,
+            "fundamento": "Art. 9 LISR",
+            "ancla": "#alerta-perdida",
+        })
+
     return {
         # Empresa
         "empresa_nombre": empresa.nombre,
@@ -791,6 +887,9 @@ def calcular_reporte(empresa_id, fecha_inicio, fecha_fin, usuario):
         "concentracion_top2_pct": round(concentracion_top2_pct, 1),
         "concentracion_top_nombre": concentracion_top_nombre,
         "alertas_concentracion": alertas_concentracion,
+
+        # Panel consolidado T11 (recopila las alertas anteriores, no calcula nuevas)
+        "alertas_activas": alertas_activas,
         "concentracion_top_rfc": concentracion_top_rfc,
 
         # Publico general (XAXX010101000) — informativo
