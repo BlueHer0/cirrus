@@ -22,6 +22,43 @@ logger = logging.getLogger("reportes")
 
 APP_LOGIN_URL = "/app/login/"
 
+# ── Descarga segura de reportes PDF ──────────────────────────────────────────
+REPORTE_DESCARGA_MAX_AGE = 7 * 24 * 3600  # 7 días en segundos
+
+
+def descargar_reporte_view(request, token):
+    """Descarga un reporte PDF desde MinIO vía token firmado temporal.
+
+    El token fue generado con django.core.signing.dumps() — incluye firma
+    HMAC (SECRET_KEY) y timestamp.  Caduca a los 7 días.
+    Token inválido, manipulado o caducado → 404, sin filtrar información.
+    """
+    from django.core.signing import loads, BadSignature, SignatureExpired
+    from django.http import Http404
+    from core.services.storage_minio import download_bytes
+    from botocore.exceptions import ClientError
+
+    try:
+        payload = loads(token, salt="reporte_descarga_v1", max_age=REPORTE_DESCARGA_MAX_AGE)
+        minio_key = payload["key"]
+        filename = payload.get("filename", minio_key.rsplit("/", 1)[-1])
+    except SignatureExpired:
+        raise Http404
+    except (BadSignature, KeyError, Exception):
+        raise Http404
+
+    try:
+        pdf_bytes = download_bytes(minio_key)
+    except ClientError:
+        raise Http404
+    except Exception:
+        raise Http404
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Content-Length"] = len(pdf_bytes)
+    return response
+
 MONTH_NAMES = [
     "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",

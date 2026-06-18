@@ -11,4 +11,5 @@ urlpatterns = [
     path("pdf/", views.pdf_view, name="pdf"),
     path("generar-ia/", views.generar_ia_view, name="generar_ia"),
     path("trigger-email/", views.trigger_email_view, name="trigger_email"),
+    path("descargar/<path:token>/", views.descargar_reporte_view, name="descargar_reporte"),
 ]

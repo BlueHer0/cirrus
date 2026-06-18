@@ -352,6 +352,29 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, su
         logger.error("Error generando PDF: %s", e)
         raise self.retry(exc=e, countdown=60)
 
+    # ── Subir PDF a MinIO + generar link temporal (7 días) ───────────────
+    from django.core.signing import dumps as _token_dumps
+    from core.services.storage_minio import upload_bytes as _upload_bytes
+
+    _pdf_fname = (
+        f"Cirrus_{empresa.rfc}_{corte_tipo}_"
+        f"{fecha_inicio.strftime('%Y%m%d')}_{fecha_fin.strftime('%Y%m%d')}.pdf"
+    )
+    _minio_key = f"reportes/{empresa.rfc}/{fecha_inicio.strftime('%Y-%m')}/{_pdf_fname}"
+    try:
+        _upload_bytes(pdf_bytes, _minio_key, content_type="application/pdf")
+    except Exception as _ue:
+        logger.error("Error subiendo PDF a MinIO: %s", _ue)
+        raise self.retry(exc=_ue, countdown=60)
+
+    _dl_token = _token_dumps(
+        {"key": _minio_key, "filename": _pdf_fname},
+        salt="reporte_descarga_v1",
+    )
+    _site_url = getattr(settings, "SITE_URL", "https://cirrus.nubex.me")
+    dl_url = f"{_site_url}/reportes/descargar/{_dl_token}/"
+    logger.info("📁 PDF subido a MinIO: %s", _minio_key)
+
     # ── Display values for email ─────────────────────────────────────────
     import uuid as _uuid
     from html import escape as _he
@@ -402,9 +425,10 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, su
         f"Health Score:      {hs}/100 ({datos['health_score_label']})\n"
         f"Alertas Activas:   {n_alertas}  ({lbl_alertas})\n"
         f"{_sep}\n\n"
-        f"Se adjunta el reporte ejecutivo completo en PDF (4 páginas):\n"
-        f"análisis fiscal, IVA, proveedores, nómina, historial 6 meses\n"
-        f"y acciones sugeridas para el periodo.\n\n"
+        f"REPORTE PDF DISPONIBLE\n"
+        f"{dl_url}\n"
+        f"Contenido: análisis fiscal, IVA, proveedores, nómina, historial 6 meses.\n"
+        f"El enlace caduca en 7 días.\n\n"
         f"Correo automático · Cirrus · cirrus.nubex.me\n"
         f"Para cancelar: cirrus-reportes@nubex.me  asunto: unsubscribe"
     )
@@ -476,16 +500,24 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, su
 </table>
 </td></tr>
 
-<!-- PDF NOTE -->
+<!-- DOWNLOAD LINK -->
 <tr><td style="padding:16px 26px 20px;">
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
        style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:0 6px 6px 0;">
-<tr><td style="padding:11px 15px;">
-  <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#1d4ed8;">Reporte PDF adjunto</p>
-  <p style="margin:0;font-size:12px;color:#374151;line-height:1.55;">
-    El archivo adjunto contiene el an&aacute;lisis completo de 4 p&aacute;ginas:
-    estado de resultados, desglose de IVA, proveedores con alertas de concentraci&oacute;n
-    (Art.&nbsp;76 LISR), panel de n&oacute;mina, historial de 6 meses y acciones sugeridas.
+<tr><td style="padding:14px 16px;">
+  <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#1d4ed8;">Reporte PDF disponible</p>
+  <p style="margin:0 0 12px;font-size:12px;color:#374151;line-height:1.55;">
+    An&aacute;lisis completo de 4 p&aacute;ginas: resultados, IVA, proveedores
+    (Art.&nbsp;76 LISR), n&oacute;mina, historial 6 meses y acciones sugeridas.
+  </p>
+  <a href="{dl_url}"
+     style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;
+            font-size:13px;font-weight:700;padding:10px 22px;border-radius:6px;
+            font-family:Arial,Helvetica,sans-serif;">
+    &#x1F4C4;&nbsp; Descargar reporte PDF
+  </a>
+  <p style="margin:10px 0 0;font-size:11px;color:#64748b;">
+    El enlace caduca en 7 d&iacute;as.
   </p>
 </td></tr>
 </table>
@@ -512,11 +544,6 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, su
 </body>
 </html>"""
 
-    fname = (
-        f"Cirrus_{empresa.rfc}_{corte_tipo}_"
-        f"{fecha_inicio.strftime('%Y%m%d')}_{fecha_fin.strftime('%Y%m%d')}.pdf"
-    )
-
     msg = EmailMultiAlternatives(
         subject=asunto,
         body=cuerpo_text,
@@ -531,13 +558,13 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, su
         connection=_get_reportes_connection(),
     )
     msg.attach_alternative(cuerpo_html, "text/html")
-    msg.attach(fname, pdf_bytes, "application/pdf")
+    # Sin adjunto — el PDF se descarga desde MinIO vía link temporal (7 días)
 
     try:
         sent = msg.send(fail_silently=False)
         logger.info(
-            "📧 Reporte corte %s enviado a %s para %s (%s)",
-            corte_tipo, dest_email, empresa.rfc, periodo_label,
+            "📧 Reporte corte %s enviado a %s para %s (%s) — link: %s",
+            corte_tipo, dest_email, empresa.rfc, periodo_label, dl_url,
         )
     except Exception as e:
         logger.error("Error enviando email reporte corte: %s", e)
@@ -545,5 +572,5 @@ def enviar_reporte_corte_email(self, empresa_id, corte_tipo, dest_email=None, su
 
     return (
         f"Reporte {periodo_label} enviado a {dest_email} para {empresa.rfc} "
-        f"(PDF {len(pdf_bytes)} bytes, sent={sent})"
+        f"(sent={sent}, MinIO: {_minio_key})"
     )
