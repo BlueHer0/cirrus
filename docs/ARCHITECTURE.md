@@ -80,3 +80,59 @@
 - Parsea XML original de MinIO para datos completos (emisor, receptor, conceptos, impuestos, timbre)
 - Botones: PDF (genera con WeasyPrint), XML (descarga raw), Excel (3 hojas: comprobante, conceptos, impuestos)
 - Fallback: si XML no disponible, muestra datos del modelo Django
+
+## ⚠️ Problemas conocidos de integridad de descarga (diagnóstico 2026-07-08)
+
+### Bug del "paquete equivocado" (CORREGIDO 2026-07-12/13 — ver fix abajo)
+Cadena de 3 fallas en la descarga masiva por RPA:
+1. `sat_navigator._select_all_and_request_download` (líneas ~417-428) extrae el
+   folio de la solicitud con un regex de UUID sobre TODO el HTML — la página
+   está llena de folios fiscales de CFDIs, así que captura casi siempre el
+   folio del primer CFDI de la tabla, NO el de la solicitud.
+2. `sat_navigator._recover_downloads` (líneas ~579-584): si el folio no aparece
+   en el grid de "Recuperar Descargas" (lista residuales de hasta 3 días), hace
+   fallback a la fila 0 (paquete más reciente) con solo un warning → puede
+   bajar un paquete de OTRA solicitud/periodo.
+3. `xml_processor.process_single_xml` no valida que la fecha del CFDI caiga en
+   el rango solicitado por el job, ni que empresa.rfc sea emisor o receptor.
+   Solo dedup por UUID (eso sí evita duplicados).
+
+Consecuencia: el CFDI se guarda con sus datos correctos (fecha del XML), pero
+el mes solicitado queda marcado "completado" con datos de otro periodo. El
+dedup de `tasks.descargar_cfdis` (DescargaLog completado que cubre el rango →
+skip) impide reintentarlo: el mes real queda en punto ciego permanente.
+
+Auditoría BD 2026-07-08: **1,282 CFDIs** entraron por paquetes cuyo rango
+solicitado está a >35 días de la fecha del CFDI (ITA 1,132; AFE 49; AIPF 45;
+VEN 31; LUF 25). Ej.: corrida 2026-06-01 pidiendo 2025-07 de AFE insertó 20
+CFDIs de 2026-05.
+
+Fix implementado (2026-07-12/13, requiere reinicio de cirrus-worker):
+- Folio de solicitud: se extrae del alert de confirmación (contenedor de
+  `#btnAlertDCCerrar`), con fallback a "UUID del body que NO esté en la tabla
+  de resultados". Sin folio → SATNavigatorError (nunca descargar a ciegas).
+- `_recover_downloads`: si el folio no aparece en GridViewReporte → sigue
+  polling hasta timeout (el fallback a fila 0 se eliminó). Timeout → error →
+  retry de tasks.py.
+- `validar_paquete_descargado` (core/services/scrapper.py): antes de procesar,
+  ≥95% de los XMLs deben tener fecha en [rango solicitado ±3 días] y contener
+  el RFC de la empresa; si no, el paquete se DESCARTA completo y el job queda
+  en error para retry (fase `package_validation` en telemetría).
+
+### Gap estructural de timbres tardíos (CONFIRMADO)
+- La descarga es 1 vez por mes y el refetch (`refetch_meses_recientes_vacios`)
+  solo re-encola meses con 0 CFDIs. Un CFDI timbrado DESPUÉS de que su mes ya
+  se descargó (con datos) nunca se recupera. Casos confirmados VEN: factura
+  Stripe mayo (timbrada 2-jun), 27 CFDIs de marzo (~$509k, timbrados 13-31 mar
+  tras la descarga del 16-mar), 21 facturas del 29-jun + 3 nóminas jun/jul
+  (timbradas horas después del job del 3-jul).
+- Solución diseñada (NO implementada): ventanas de descarga múltiples
+  solapadas por mes (días 1, 5, 10, 15, 20, 25 con solape de 5-10 días).
+- El portal SAT SÍ devuelve búsquedas retrospectivas >3 meses (verificado
+  2026-07-08: feb y mar 2026 completos en tabla), pero las re-consultas de
+  producción a veces devuelven vacíos falsos; el guard 'fallo ≠ vacío' de
+  `_wait_for_results_or_empty` cubre el caso de filtros muertos, no el de
+  paquete equivocado.
+- Alternativa robusta identificada: Web Service oficial de Descarga Masiva
+  v1.5 del SAT (SOAP + FIEL, librería `python-satcfdi`) como vía primaria,
+  RPA como fallback.

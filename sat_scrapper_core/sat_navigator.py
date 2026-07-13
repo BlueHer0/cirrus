@@ -414,18 +414,56 @@ class SATNavigator:
         await asyncio.sleep(3)
         await self._screenshot("10_download_requested")
 
-        # Extraer folio UUID de la respuesta
-        content = await self.page.content()
-        folio_match = re.search(
-            r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
-            content,
-        )
-        folio = folio_match.group(0) if folio_match else None
+        # Extraer folio de la SOLICITUD (no un folio fiscal de la tabla).
+        # La página de resultados está llena de UUIDs de CFDIs, por lo que un
+        # regex sobre todo el HTML capturaba casi siempre un folio equivocado
+        # (bug 'paquete equivocado', diagnóstico 2026-07-08). El folio real
+        # vive en el alert de confirmación (contenedor de #btnAlertDCCerrar).
+        js_extraer = r"""() => {
+            const UUID_G = /[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/g;
+            const tbl = document.getElementById('ctl00_MainContent_tblResult');
+            const enTabla = new Set();
+            if (tbl) {
+                for (const m of (tbl.innerText || '').matchAll(UUID_G)) enTabla.add(m[0].toUpperCase());
+            }
+            // 1) Alert de confirmación: subir máx 4 niveles desde el botón de
+            //    cierre, SIN entrar a contenedores que incluyan la tabla de
+            //    resultados (evita capturar folios fiscales de CFDIs).
+            const btn = document.getElementById('btnAlertDCCerrar');
+            let el = btn ? btn.parentElement : null;
+            for (let i = 0; el && el !== document.body && i < 4; i++) {
+                if (!el.contains(tbl)) {
+                    const m = (el.innerText || '').match(UUID_G);
+                    if (m && m.length && !enTabla.has(m[0].toUpperCase())) {
+                        return {folio: m[0], origen: 'alert'};
+                    }
+                }
+                el = el.parentElement;
+            }
+            // 2) Fallback: UUID del body que NO sea folio fiscal de la tabla
+            for (const m of (document.body.innerText || '').matchAll(UUID_G)) {
+                if (!enTabla.has(m[0].toUpperCase())) return {folio: m[0], origen: 'body-sin-tabla'};
+            }
+            return {folio: null, origen: null,
+                    tabla_uuids: enTabla.size, boton_alert: !!btn};
+        }"""
+        # El alert puede tardar en poblarse: intentar hasta ~12s
+        res = {}
+        for _ in range(6):
+            res = await self.page.evaluate(js_extraer)
+            if res.get("folio"):
+                break
+            await asyncio.sleep(2)
+        folio = res.get("folio")
         if folio:
-            logger.info("📋 Folio de descarga: %s", folio)
+            logger.info("📋 Folio de solicitud: %s (origen: %s)", folio, res.get("origen"))
             self.folios.append(folio)
         else:
-            logger.warning("No se encontró folio UUID en la respuesta")
+            logger.warning(
+                "⚠️ No se extrajo folio del alert (alert=%s, uuids_en_tabla=%s) — "
+                "la recuperación dependerá de detectar el folio NUEVO en el grid",
+                res.get("boton_alert"), res.get("tabla_uuids"),
+            )
 
         # Cerrar alerta del SAT si aparece
         try:
@@ -442,12 +480,42 @@ class SATNavigator:
     #  RECUPERAR DESCARGAS (POLLING)
     # ──────────────────────────────────────────────────────────────────
 
+    async def _leer_folios_grid(self) -> list[str] | None:
+        """Lee los folios listados en GridViewReporte de Recuperar Descargas.
+
+        Navega a la página y devuelve la lista de folios (upper). Devuelve
+        None si la página no cargó/el link no existe (fallo de UI, no vacío).
+        Si el panel 'sin resultados' está visible, devuelve [] (grid vacío).
+        """
+        try:
+            await self.page.goto(
+                SAT_PORTAL_URL,
+                wait_until="domcontentloaded",
+                timeout=self.config.browser_timeout,
+            )
+            await asyncio.sleep(2)
+            clicked = await safe_click(self.page, [SEL_RECUPERAR_DESCARGAS], timeout=10_000)
+            if not clicked:
+                return None
+            await asyncio.sleep(3)
+            return await self.page.evaluate(r"""() => {
+                const tbl = document.getElementById('ctl00_MainContent_GridViewReporte');
+                if (!tbl) return [];
+                return Array.from(tbl.rows).slice(1)
+                    .map(r => (r.cells[1]?.innerText || '').trim().toUpperCase())
+                    .filter(f => f);
+            }""")
+        except Exception as e:
+            logger.warning("No se pudo leer el grid de Recuperar Descargas: %s", e)
+            return None
+
     async def _recover_downloads(
         self,
         bot,
         folio: str | None = None,
         max_retries: int = 18,
         poll_interval_s: int = 50,
+        folios_previos: list[str] | None = None,
     ) -> list[Path]:
         """Recupera el paquete ZIP solicitado vía polling de ConsultaDescargaMasiva.aspx.
 
@@ -482,8 +550,20 @@ class SATNavigator:
             de "SAT aún no terminó". Solo el timeout terminal decide.
         """
         total_min = (max_retries * poll_interval_s) / 60.0
+        if not folio and folios_previos is None:
+            # Sin folio Y sin snapshot previo del grid no hay forma de saber
+            # qué paquete corresponde a ESTA solicitud (el grid lista
+            # residuales de hasta 3 días). Bajar "el más reciente" fue la
+            # causa del bug 'paquete equivocado'.
+            raise SATNavigatorError(
+                "Solicitud sin folio capturado ni snapshot previo del grid — "
+                "no se puede identificar el paquete. NO descargar a ciegas."
+            )
         logger.info(
-            "📦 Recuperando descargas (polling hasta ~%.0f min: %d × %ds)...",
+            "📦 Recuperando descargas (folio=%s, snapshot_previo=%s folios, "
+            "polling hasta ~%.0f min: %d × %ds)...",
+            folio[:36] if folio else "N/D",
+            len(folios_previos) if folios_previos is not None else "N/D",
             total_min, max_retries, poll_interval_s,
         )
 
@@ -556,18 +636,12 @@ class SATNavigator:
                     if (!tbl) return {error: 'GridViewReporte no existe'};
                     const data_rows = Array.from(tbl.rows).slice(1);
                     if (data_rows.length === 0) return {error: 'GridViewReporte sin filas de datos'};
-                    let idx = -1;
-                    if (target) {
-                        idx = data_rows.findIndex(r =>
-                            (r.cells[1]?.innerText || '').trim().toUpperCase() === target
-                        );
-                    }
-                    const fallback = idx < 0;
-                    if (fallback) idx = 0;
+                    const folios = data_rows.map(r => (r.cells[1]?.innerText || '').trim().toUpperCase());
+                    const idx = folios.indexOf(target);
                     return {
-                        idx, fallback,
+                        idx,
                         n_data_rows: data_rows.length,
-                        row_folio: (data_rows[idx]?.cells[1]?.innerText || '').trim(),
+                        folios: folios,
                     };
                 }""", target_folio_up)
 
@@ -576,37 +650,65 @@ class SATNavigator:
                         f"PnlResultados visible pero {row_info['error']}"
                     )
 
-                if row_info.get("fallback"):
-                    logger.warning(
-                        "⚠️ Folio solicitado %r no aparece en GridViewReporte (%d filas); "
-                        "fallback a fila 0 (más reciente: %s)",
-                        folio, row_info["n_data_rows"], row_info["row_folio"][:36],
-                    )
-                else:
+                folios_grid = row_info["folios"]
+                idx = row_info["idx"]
+                identificado_por = "folio"
+
+                if idx < 0 and folios_previos is not None:
+                    # Identificación por diferencia: el paquete de ESTA
+                    # solicitud es el folio que NO estaba en el grid antes de
+                    # solicitar. Si hay más de uno nuevo, es ambiguo → seguir
+                    # esperando (nunca adivinar).
+                    previos = {f.upper() for f in folios_previos}
+                    nuevos = [i for i, f in enumerate(folios_grid) if f not in previos]
+                    if len(nuevos) == 1:
+                        idx = nuevos[0]
+                        identificado_por = "diff-grid"
+                    elif len(nuevos) > 1:
+                        logger.warning(
+                            "⚠️ %d folios nuevos en el grid (%s) — ambiguo, seguir polling",
+                            len(nuevos), [folios_grid[i][:13] for i in nuevos],
+                        )
+
+                if idx < 0:
+                    # El paquete de ESTA solicitud aún no aparece en el grid
+                    # (los listados son residuales de otras solicitudes).
+                    # NUNCA bajar la fila 0 por default — eso fue la causa del
+                    # bug 'paquete equivocado'. Seguir polling hasta timeout.
                     logger.info(
-                        "✅ Paquete listo (ciclo %d/%d): fila %d/%d, folio=%s",
-                        attempt, max_retries, row_info["idx"] + 1,
-                        row_info["n_data_rows"], row_info["row_folio"][:36],
+                        "⏳ Polling %d/%d: paquete de esta solicitud aún no "
+                        "identificable en GridViewReporte (%d filas: %s) — esperando",
+                        attempt, max_retries, row_info["n_data_rows"],
+                        [f[:13] for f in folios_grid[:10]],
                     )
+                    if attempt < max_retries:
+                        await asyncio.sleep(poll_interval_s)
+                    continue
+
+                logger.info(
+                    "✅ Paquete listo (ciclo %d/%d): fila %d/%d, folio=%s (via %s)",
+                    attempt, max_retries, idx + 1,
+                    row_info["n_data_rows"], folios_grid[idx][:36], identificado_por,
+                )
                 await self._screenshot(f"11_pkg_ready_attempt_{attempt}")
 
                 # Click directo sobre el <span id="BtnDescarga"> de ESA fila.
                 # Todos los spans comparten id="BtnDescarga" (HTML inválido pero
                 # ASP.NET lo permite); Playwright los distingue por orden con nth().
-                btn = self.page.locator("[id='BtnDescarga']").nth(row_info["idx"])
+                btn = self.page.locator("[id='BtnDescarga']").nth(idx)
                 try:
                     path = await bot.wait_for_download(
                         lambda: btn.click(), timeout=120_000,
                     )
                 except Exception as e:
                     raise SATNavigatorError(
-                        f"Click BtnDescarga[{row_info['idx']}] falló "
-                        f"(folio={row_info['row_folio'][:36]}): {e}"
+                        f"Click BtnDescarga[{idx}] falló "
+                        f"(folio={folios_grid[idx][:36]}): {e}"
                     )
                 if not path:
                     raise SATNavigatorError(
-                        f"Click BtnDescarga[{row_info['idx']}] ejecutado pero "
-                        f"no produjo descarga (folio={row_info['row_folio'][:36]})"
+                        f"Click BtnDescarga[{idx}] ejecutado pero "
+                        f"no produjo descarga (folio={folios_grid[idx][:36]})"
                     )
                 logger.info("✅ ZIP descargado: %s", path.name)
                 return [path]
@@ -686,6 +788,17 @@ class SATNavigator:
         if not self.logged_in:
             await self.login()
 
+        # Snapshot de folios ya listados en Recuperar Descargas ANTES de
+        # solicitar: permite identificar el paquete de ESTA solicitud como el
+        # folio NUEVO del grid aunque el alert no entregue folio (fix bug
+        # 'paquete equivocado').
+        folios_previos = await self._leer_folios_grid()
+        if folios_previos is not None:
+            logger.info(
+                "📸 Snapshot Recuperar Descargas: %d paquetes residuales",
+                len(folios_previos),
+            )
+
         await self._navigate_to_query(tipo)
 
         if tipo == "emitidos":
@@ -718,12 +831,14 @@ class SATNavigator:
         # has_results: continuar con descarga por paquete
         folio = await self._select_all_and_request_download()
 
-        if folio:
+        if folio or folios_previos is not None:
             logger.info("⏳ Esperando %ds para que el SAT genere el ZIP...", 35)
             await asyncio.sleep(35)
-            # Pasar el folio para que _recover_downloads ubique la fila correcta
-            # en GridViewReporte (hay paquetes residuales de hasta 3 días).
-            files = await self._recover_downloads(bot, folio=folio)
+            # Identificación del paquete: por folio exacto y/o por diferencia
+            # contra el snapshot del grid (nunca fila 0 a ciegas).
+            files = await self._recover_downloads(
+                bot, folio=folio, folios_previos=folios_previos,
+            )
             if files:
                 return files
 
