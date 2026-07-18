@@ -234,11 +234,13 @@ SESSION_COOKIE_SAMESITE = "Lax"           # CSRF protection
 CSRF_COOKIE_SECURE = True                 # CSRF only HTTPS
 
 # ── Docling (CSF Parser) ────────────────────────────────────────────────
-DOCLING_URL = config("DOCLING_URL", default="http://10.20.0.5:8000/extract")
+# Corre en Spark, tailscale. Migrado 2026-07-18 (era 10.20.0.5 wireguard).
+DOCLING_URL = config("DOCLING_URL", default="http://100.88.37.127:8000/extract")
 
 # ── Cerebro Fiscal (RAG sobre legislación fiscal) ──────────────────────
 # Embeddings locales via Ollama en Spark DGX — sin API key, sin costo variable.
-OLLAMA_BASE_URL = config("OLLAMA_BASE_URL", default="http://10.20.0.6:11434")
+# Migrado 2026-07-18 (era 10.20.0.6 wireguard).
+OLLAMA_BASE_URL = config("OLLAMA_BASE_URL", default="http://100.88.37.127:11434")
 OLLAMA_EMBEDDING_MODEL = config("OLLAMA_EMBEDDING_MODEL", default="bge-m3")
 OLLAMA_TIMEOUT = config("OLLAMA_TIMEOUT", default=60, cast=int)
 CEREBRO_EMBEDDING_DIMS = config("CEREBRO_EMBEDDING_DIMS", default=1024, cast=int)

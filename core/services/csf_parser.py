@@ -12,7 +12,7 @@ logger = logging.getLogger("core.csf_parser")
 
 # Docling endpoint — configurable via env var, defaults to nodo5
 from django.conf import settings
-DOCLING_URL = getattr(settings, "DOCLING_URL", "http://10.20.0.5:8000/extract")
+DOCLING_URL = getattr(settings, "DOCLING_URL", "http://100.88.37.127:8000/extract")
 
 
 def parsear_csf_con_docling(pdf_bytes):

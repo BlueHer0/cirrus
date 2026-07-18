@@ -1,6 +1,6 @@
 """Cerebro Fiscal — servicio RAG sobre legislación fiscal mexicana.
 
-Usa embeddings locales via Ollama en el Spark DGX (10.20.0.6:11434),
+Usa embeddings locales via Ollama en el Spark DGX (tailscale 100.88.37.127:11434),
 modelo bge-m3 (1024 dimensiones, multilingüe, bueno para español legal).
 
 Ventajas del setup local:
@@ -457,7 +457,7 @@ def _extraer_con_docling(path, content_type: str) -> str:
 
     Raises requests exceptions al caller si la conexión falla.
     """
-    url = settings.DOCLING_URL  # http://10.20.0.5:8000/extract
+    url = settings.DOCLING_URL  # tailscale 100.88.37.127:8000/extract
     with open(path, "rb") as f:
         r = requests.post(
             url,
