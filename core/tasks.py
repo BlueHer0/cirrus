@@ -1336,10 +1336,14 @@ def supervisor_cirrus():
 
 # Configuración de nodos
 SAT_HEALTH_NODES = [
-    {'id': 'vps2',  'ip': '10.20.0.2',   'url': 'http://10.20.0.2:8300'},
-    {'id': 'vpsx',  'ip': '10.20.0.100', 'url': 'http://10.20.0.100:8300'},
-    {'id': 'spark', 'ip': '10.20.0.6',   'url': 'http://10.20.0.6:8300'},
+    {'id': 'vps2',  'ip': '127.0.0.1',      'url': 'http://127.0.0.1:8300'},
+    {'id': 'spark', 'ip': '100.88.37.127',  'url': 'http://100.88.37.127:8300'},
 ]
+# Nota (2026-07-18): vpsx decomisionado (migración wireguard→tailscale).
+# Raspberry Pi también decomisionada. Cirrus solo opera desde vps2 + Spark
+# (Spark = cerebro de la infra: Ollama, Docling, health probe).
+# Spark requiere sat-health-worker corriendo en :8300 para que su probe
+# funcione (si no, solo vps2 mide y no hay corroboración distribuida).
 
 # RFCs en orden de rotación (empresas con FIEL válida)
 SAT_HEALTH_RFCS = [

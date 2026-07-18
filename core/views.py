@@ -1798,10 +1798,10 @@ def monitor_view(request):
     }
 
     # Section B: Node status (health check each worker)
+    # vpsx decomisionado 2026-07-18 (migración a tailscale, solo vps2 + Spark).
     sat_nodes_config = [
-        {'id': 'vps2',  'ip': '10.20.0.2'},
-        {'id': 'vpsx',  'ip': '10.20.0.100'},
-        {'id': 'spark', 'ip': '10.20.0.6'},
+        {'id': 'vps2',  'ip': '127.0.0.1'},
+        {'id': 'spark', 'ip': '100.88.37.127'},
     ]
     sat_nodes = []
     try:
