@@ -44,6 +44,7 @@ urlpatterns = [
 
     # Account
     path("perfil/", views.app_perfil, name="perfil"),
+    path("ayuda/", views.app_ayuda, name="ayuda"),
     path("facturacion/", views.app_facturacion, name="facturacion"),
 
     # Analysis

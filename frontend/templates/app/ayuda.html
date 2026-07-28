@@ -1,0 +1,62 @@
+{% extends "app/base_app.html" %}
+
+{% block title %}Ayuda{% endblock %}
+{% block page_title %}Centro de ayuda{% endblock %}
+{% block page_subtitle %}Guía, preguntas frecuentes y soporte{% endblock %}
+
+{% block content %}
+<div class="glass rounded-xl p-5 mb-6 border border-indigo-500/20 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+    <div class="flex-1">
+        <h3 class="text-white font-semibold">¿No encuentras la respuesta?</h3>
+        <p class="text-gray-400 text-sm">Escríbenos y te respondemos el mismo día hábil.</p>
+    </div>
+    <a href="mailto:{{ email_soporte }}" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-medium text-center">✉️ {{ email_soporte }}</a>
+</div>
+
+<div class="flex gap-2 mb-5 flex-wrap">
+    {% for s in secciones %}
+    <button onclick="mostrarSeccion('{{ s.slug }}')" id="tab-{{ s.slug }}"
+        class="tab-ayuda px-4 py-2 rounded-lg text-sm transition {% if forloop.first %}bg-indigo-500/20 text-indigo-300{% else %}bg-white/5 text-gray-400 hover:bg-white/10{% endif %}">
+        {{ s.titulo }}
+    </button>
+    {% endfor %}
+</div>
+
+{% for s in secciones %}
+<div id="seccion-{{ s.slug }}" class="seccion-ayuda glass rounded-xl p-6 md:p-8 {% if not forloop.first %}hidden{% endif %}">
+    <div class="prose-ayuda">{{ s.html|safe }}</div>
+</div>
+{% endfor %}
+
+<style>
+.prose-ayuda { color: #9ca3af; font-size: 0.9rem; line-height: 1.7; }
+.prose-ayuda h1 { color: #fff; font-size: 1.4rem; font-weight: 700; margin: 0 0 1rem; }
+.prose-ayuda h2 { color: #fff; font-size: 1.15rem; font-weight: 600; margin: 1.75rem 0 0.6rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.06); }
+.prose-ayuda h3 { color: #e5e7eb; font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+.prose-ayuda p { margin: 0.5rem 0; }
+.prose-ayuda ul, .prose-ayuda ol { margin: 0.5rem 0 0.75rem 1.25rem; }
+.prose-ayuda ul { list-style: disc; }
+.prose-ayuda ol { list-style: decimal; }
+.prose-ayuda li { margin: 0.25rem 0; }
+.prose-ayuda a { color: #a5b4fc; }
+.prose-ayuda strong { color: #d1d5db; }
+.prose-ayuda code { background: rgba(255,255,255,0.08); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.8rem; color: #c4b5fd; }
+.prose-ayuda table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.85rem; }
+.prose-ayuda th, .prose-ayuda td { border: 1px solid rgba(255,255,255,0.08); padding: 0.4rem 0.6rem; text-align: left; }
+.prose-ayuda th { color: #d1d5db; background: rgba(255,255,255,0.04); }
+</style>
+
+<script>
+function mostrarSeccion(slug) {
+    document.querySelectorAll('.seccion-ayuda').forEach(el => el.classList.add('hidden'));
+    document.getElementById('seccion-' + slug).classList.remove('hidden');
+    document.querySelectorAll('.tab-ayuda').forEach(el => {
+        el.classList.remove('bg-indigo-500/20', 'text-indigo-300');
+        el.classList.add('bg-white/5', 'text-gray-400');
+    });
+    const tab = document.getElementById('tab-' + slug);
+    tab.classList.add('bg-indigo-500/20', 'text-indigo-300');
+    tab.classList.remove('bg-white/5', 'text-gray-400');
+}
+</script>
+{% endblock %}

@@ -5,6 +5,7 @@ All views scoped to the logged-in user. Non-staff users only.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from django.conf import settings
@@ -1451,6 +1452,32 @@ def app_api_keys(request):
         "new_key_reveal": new_key_reveal,
         "plan_slug": plan_slug,
         "limite_plan": limite_plan,
+    })
+
+
+# ── Ayuda ─────────────────────────────────────────────────────────────
+
+@login_required(login_url=APP_LOGIN_URL)
+def app_ayuda(request):
+    """Centro de ayuda: guía de inicio + FAQ + alertas, desde docs/usuario/."""
+    import markdown as md_lib
+
+    docs_dir = os.path.join(settings.BASE_DIR, "docs", "usuario")
+    secciones = []
+    for slug, titulo, archivo in [
+        ("guia", "Guía de inicio", "guia-inicio.md"),
+        ("faq", "Preguntas frecuentes", "preguntas-frecuentes.md"),
+        ("alertas", "Alertas y notificaciones", "alertas-y-notificaciones.md"),
+    ]:
+        ruta = os.path.join(docs_dir, archivo)
+        if os.path.exists(ruta):
+            with open(ruta, encoding="utf-8") as f:
+                html = md_lib.markdown(f.read(), extensions=["tables", "fenced_code", "toc"])
+            secciones.append({"slug": slug, "titulo": titulo, "html": html})
+    return render(request, "app/ayuda.html", {
+        "current_page": "ayuda",
+        "secciones": secciones,
+        "email_soporte": "contactocirrus@nubex.me",
     })
 
 

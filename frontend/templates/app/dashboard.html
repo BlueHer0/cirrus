@@ -45,7 +45,7 @@
     <div class="glass stat-card rounded-xl p-5" style="--glow-color: #3b82f6;">
         <div class="text-[11px] text-gray-500 uppercase tracking-wider">Descargas / mes</div>
         <div class="text-3xl font-bold text-white mt-2">{{ resumen.descargas.usadas }}</div>
-        <div class="text-xs text-gray-500 mt-1">de {{ resumen.descargas.limite }} limit</div>
+        <div class="text-xs text-gray-500 mt-1">de {{ resumen.descargas.limite }} al mes</div>
         <div class="mt-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px;">
             <div style="width: {{ resumen.descargas.pct }}%; height: 100%; border-radius: 4px; transition: width 0.5s;
                  background: {% if resumen.descargas.pct > 90 %}#f87171{% elif resumen.descargas.pct > 70 %}#fbbf24{% else %}#34d399{% endif %};"></div>
@@ -64,33 +64,34 @@
     </div>
 </div>
 
-{# ── Quick Actions ── #}
+{# ── Descubre (features que el menú principal no repite) ── #}
+{% if resumen.empresas.actuales == 0 %}
+<div class="glass rounded-xl p-6 border border-indigo-500/20">
+    <h3 class="text-white font-semibold mb-1">👋 Empieza aquí</h3>
+    <p class="text-gray-400 text-sm mb-4">Agrega tu primera empresa con su e.firma (FIEL) y Cirrus descargará tus facturas del SAT automáticamente. Toma menos de 5 minutos.</p>
+    <a href="{% url 'app:crear_empresa' %}" class="btn-primary inline-block px-5 py-2.5 rounded-xl text-white text-sm font-medium">Agregar mi empresa →</a>
+    <a href="{% url 'app:ayuda' %}" class="text-indigo-400 text-sm ml-4 hover:text-indigo-300">Ver guía de inicio</a>
+</div>
+{% else %}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <a href="{% url 'app:empresas' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
-        <div class="text-2xl mb-2">🏢</div>
-        <h3 class="text-white font-semibold mb-1">Mis Empresas</h3>
-        <p class="text-gray-500 text-sm">Agrega empresas, sube FIEL y descarga CFDIs</p>
-        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">Ver empresas →</span>
+    <a href="{% url 'app:analysis_summary' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
+        <div class="text-2xl mb-2">📈</div>
+        <h3 class="text-white font-semibold mb-1">Análisis fiscal</h3>
+        <p class="text-gray-500 text-sm">IVA, ISR estimado, top clientes y proveedores, y riesgos detectados en tus facturas</p>
+        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">Ver análisis →</span>
     </a>
-    <a href="{% url 'app:cfdis' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
-        <div class="text-2xl mb-2">📄</div>
-        <h3 class="text-white font-semibold mb-1">Mis CFDIs</h3>
-        <p class="text-gray-500 text-sm">Consulta, filtra y descarga PDF/XML de tus comprobantes</p>
-        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">Ver CFDIs →</span>
+    <a href="{% url 'reportes:selector' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
+        <div class="text-2xl mb-2">📊</div>
+        <h3 class="text-white font-semibold mb-1">Reportes</h3>
+        <p class="text-gray-500 text-sm">Reporte mensual o anual en PDF con resumen inteligente, listo para tu contador</p>
+        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">Generar reporte →</span>
     </a>
-    <a href="{% url 'app:api_keys' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
-        <div class="text-2xl mb-2">🔑</div>
-        <h3 class="text-white font-semibold mb-1">API Keys</h3>
-        <p class="text-gray-500 text-sm">
-            {% if resumen.api.permitido %}
-            Genera llaves para integrar Cirrus con tus sistemas
-            {% else %}
-            Disponible desde plan Profesional
-            {% endif %}
-        </p>
-        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">
-            {% if resumen.api.permitido %}Administrar →{% else %}Ver planes →{% endif %}
-        </span>
+    <a href="{% url 'app:ayuda' %}" class="glass rounded-xl p-5 group hover:border-indigo-500/20 transition">
+        <div class="text-2xl mb-2">💬</div>
+        <h3 class="text-white font-semibold mb-1">¿Necesitas ayuda?</h3>
+        <p class="text-gray-500 text-sm">Guía de inicio, preguntas frecuentes y contacto directo con soporte</p>
+        <span class="text-indigo-400 text-xs mt-3 block group-hover:text-indigo-300">Centro de ayuda →</span>
     </a>
 </div>
+{% endif %}
 {% endblock %}

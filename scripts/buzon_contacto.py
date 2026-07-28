@@ -4,11 +4,8 @@
 Detecta correos nuevos y alerta por Telegram con remitente, asunto y extracto,
 para que el director/Fernando respondan el mismo día (SLA < 4h hábiles).
 
-Credenciales: /home/farizpe/cirrus-direccion/credenciales/contactocirrus.env
-    IMAP_HOST=chocobo.mxrouting.net
-    IMAP_USER=contactocirrus@nubex.me
-    IMAP_PASS=...
-Si el archivo no existe, el script sale sin ruido (se avisa una sola vez).
+Credenciales: CONTACTO_IMAP_HOST/USER/PASS en /var/www/cirrus/.env
+(fallback legacy: cirrus-direccion/credenciales/contactocirrus.env).
 
 Estado (UIDs ya notificados): /var/www/cirrus/logs/buzon_contacto_state.json
 """
@@ -55,25 +52,31 @@ def _decode(s):
 
 st = _load_state()
 
-if not os.path.exists(CREDS):
+from decouple import config as env_config  # noqa: E402
+
+cfg = {
+    "IMAP_HOST": env_config("CONTACTO_IMAP_HOST", default=""),
+    "IMAP_USER": env_config("CONTACTO_IMAP_USER", default=""),
+    "IMAP_PASS": env_config("CONTACTO_IMAP_PASS", default=""),
+}
+if not cfg["IMAP_PASS"] and os.path.exists(CREDS):
+    with open(CREDS) as f:
+        for ln in f:
+            ln = ln.strip()
+            if "=" in ln and not ln.startswith("#"):
+                k, v = ln.split("=", 1)
+                cfg[k.strip()] = v.strip()
+
+if not cfg["IMAP_PASS"]:
     if not st.get("creds_warned"):
         send_telegram(
             "📮 Agente de buzón contactocirrus@ montado pero SIN credenciales.\n"
-            f"Fernando: crea `{CREDS}` (chmod 600) con IMAP_HOST/IMAP_USER/IMAP_PASS "
-            "para activar la vigilancia del buzón.",
+            "Fernando: agrega CONTACTO_IMAP_HOST/USER/PASS al .env de Cirrus.",
             level="warning", category="buzon",
         )
         st["creds_warned"] = True
         _save_state(st)
     sys.exit(0)
-
-cfg = {}
-with open(CREDS) as f:
-    for ln in f:
-        ln = ln.strip()
-        if "=" in ln and not ln.startswith("#"):
-            k, v = ln.split("=", 1)
-            cfg[k.strip()] = v.strip()
 
 try:
     M = imaplib.IMAP4_SSL(cfg.get("IMAP_HOST", "chocobo.mxrouting.net"))

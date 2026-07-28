@@ -168,36 +168,47 @@
             <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
                 {% with current_page=current_page|default:"dashboard" %}
                 <a href="{% url 'app:dashboard' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'dashboard' %}active{% endif %}">
-                    <span class="text-base">📊</span><span>Dashboard</span>
+                    <span class="text-base">🏠</span><span>Inicio</span>
                 </a>
                 <a href="{% url 'app:empresas' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'empresas' %}active{% endif %}">
                     <span class="text-base">🏢</span><span>Empresas</span>
                 </a>
-                <a href="{% url 'app:descargas' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'descargas' %}active{% endif %}">
-                    <span class="text-base">📥</span><span>Descargas</span>
-                </a>
                 <a href="{% url 'app:cfdis' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'cfdis' %}active{% endif %}">
-                    <span class="text-base">📄</span><span>CFDIs</span>
+                    <span class="text-base">📄</span><span>Mis facturas (CFDIs)</span>
                 </a>
-                <a href="{% url 'app:upload' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'upload' %}active{% endif %}">
-                    <span class="text-base">📤</span><span>Subir XMLs</span>
-                </a>
-                <a href="{% url 'app:api_keys' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'api_keys' %}active{% endif %}">
-                    <span class="text-base">🔑</span><span>API Keys</span>
-                </a>
-                <a href="{% url 'app:colaboradores' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'colaboradores' %}active{% endif %}">
-                    <span class="text-base">👥</span><span>Colaboradores</span>
+                <a href="{% url 'app:analysis_summary' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'analysis' %}active{% endif %}">
+                    <span class="text-base">📈</span><span>Análisis fiscal</span>
                 </a>
                 <a href="{% url 'reportes:selector' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'reportes' %}active{% endif %}">
                     <span class="text-base">📊</span><span>Reportes</span>
                 </a>
 
-                <div class="pt-4 mt-4 border-t border-white/5">
+                <div class="pt-3 mt-3 border-t border-white/5">
+                    <div class="px-3 pb-1 text-[10px] uppercase tracking-widest text-gray-600">Herramientas</div>
+                    <a href="{% url 'app:descargas' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'descargas' %}active{% endif %}">
+                        <span class="text-base">📥</span><span>Descargas del SAT</span>
+                    </a>
+                    <a href="{% url 'app:upload' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'upload' %}active{% endif %}">
+                        <span class="text-base">📤</span><span>Subir XMLs</span>
+                    </a>
+                    <a href="{% url 'app:api_keys' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'api_keys' %}active{% endif %}">
+                        <span class="text-base">🔑</span><span>API Keys</span>
+                    </a>
+                    <a href="{% url 'app:colaboradores' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'colaboradores' %}active{% endif %}">
+                        <span class="text-base">👥</span><span>Colaboradores</span>
+                    </a>
+                </div>
+
+                <div class="pt-3 mt-3 border-t border-white/5">
+                    <div class="px-3 pb-1 text-[10px] uppercase tracking-widest text-gray-600">Cuenta</div>
                     <a href="{% url 'app:perfil' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'perfil' %}active{% endif %}">
                         <span class="text-base">👤</span><span>Mi Cuenta</span>
                     </a>
                     <a href="{% url 'app:facturacion' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'facturacion' %}active{% endif %}">
                         <span class="text-base">🧾</span><span>Facturación</span>
+                    </a>
+                    <a href="{% url 'app:ayuda' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'ayuda' %}active{% endif %}">
+                        <span class="text-base">💬</span><span>Ayuda</span>
                     </a>
                     <a href="{% url 'app:mejorar_plan' %}" onclick="closeSidebar()" class="sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm {% if current_page == 'mejorar_plan' %}active{% endif %}" style="background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08)); border: 1px solid rgba(99,102,241,0.15);">
                         <span class="text-base">⭐</span><span class="text-indigo-300 font-medium">Mejorar plan →</span>
