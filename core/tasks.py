@@ -909,6 +909,161 @@ def auditoria_nocturna_periodos():
     return f"Audited {count_empresas} empresas, repaired {total_reparados} gaps"
 
 
+@shared_task(queue="sistema", soft_time_limit=3000, time_limit=3300)
+def verificar_estados_sat(limite: int = 400):
+    """Re-verifica el estado (vigente/cancelado) de CFDIs contra el SAT.
+
+    Usa ConsultaCFDIService (público, sin FIEL). Rotación:
+    - CFDIs de los últimos 6 meses: re-verificar cada 7 días.
+    - Más viejos: cada 30 días.
+    - Nunca verificados primero.
+    Corre diaria; con límite 400/corrida y ~30 req/min tarda ~15 min.
+    """
+    from datetime import timedelta
+    from django.db.models import F, Q
+    from django.utils import timezone as djtz
+
+    from core.models import CFDI
+    from core.services.verificador_sat import verificar_lote
+    from core.services.alerts import send_telegram
+
+    ahora = djtz.now()
+    corte_reciente = ahora - timedelta(days=180)
+
+    candidatos = (
+        CFDI.objects.filter(estado_sat="vigente")
+        .filter(
+            Q(estado_verificado_at__isnull=True)
+            | Q(fecha__gte=corte_reciente, estado_verificado_at__lt=ahora - timedelta(days=7))
+            | Q(fecha__lt=corte_reciente, estado_verificado_at__lt=ahora - timedelta(days=30))
+        )
+        # Nunca-verificados primero, luego los más recientes
+        .order_by(F("estado_verificado_at").asc(nulls_first=True), "-fecha")
+    )[:limite]
+
+    def _alerta_cancelado(cfdi, r):
+        send_telegram(
+            f"🔴 *CFDI CANCELADO detectado*\n"
+            f"{cfdi.rfc_empresa} · {str(cfdi.uuid)[:13]}…\n"
+            f"{cfdi.rfc_emisor} → {cfdi.rfc_receptor} · ${cfdi.total}\n"
+            f"Fecha CFDI: {cfdi.fecha:%Y-%m-%d} · {r.get('estatus_cancelacion', '')}",
+            "warning",
+        )
+
+    def _alerta_efos(cfdi, r):
+        send_telegram(
+            f"⚠️ *Emisor con marca EFOS* (ValidacionEFOS={r.get('efos')})\n"
+            f"Proveedor {cfdi.rfc_emisor} ({cfdi.nombre_emisor[:40]}) "
+            f"emisor de CFDI {str(cfdi.uuid)[:13]}… de {cfdi.rfc_empresa}",
+            "critical",
+        )
+
+    resumen = verificar_lote(
+        list(candidatos), on_cancelado=_alerta_cancelado, on_efos=_alerta_efos,
+    )
+    logger.info("verificar_estados_sat: %s", resumen)
+
+    if resumen["abortado"]:
+        send_telegram(
+            f"⚠️ verificar_estados_sat abortado por errores "
+            f"({resumen['errores']} fallas) — ¿SAT caído?",
+            "warning",
+        )
+    if resumen["cancelados_detectados"] or resumen["no_encontrados"] > 10:
+        send_telegram(
+            f"🔎 Verificación de estados SAT: {resumen['verificados']} vigentes, "
+            f"{resumen['cancelados_detectados']} cancelados detectados, "
+            f"{resumen['no_encontrados']} no encontrados, {resumen['errores']} errores",
+            "warning" if resumen["cancelados_detectados"] else "info",
+        )
+    return str(resumen)
+
+
+@shared_task(queue="sistema", soft_time_limit=3300, time_limit=3600)
+def compulsa_sat_periodica():
+    """Compulsa de completitud vs SAT (WS Descarga Masiva, metadata).
+
+    Corre semanal. Por cada empresa activa × tipo:
+    1. Retoma compulsas 'solicitadas' pendientes (paquete que no estaba listo).
+    2. Si no hay compulsa completada de los últimos 5 días que cubra los
+       últimos 3 meses → crea una nueva solicitud.
+    El diff, re-encolado de faltantes y alertas viven en compulsa_sat.py.
+    """
+    import time as _time
+    from datetime import timedelta
+    from django.utils import timezone as djtz
+
+    from core.models import CompulsaSAT, Empresa
+    from core.services.alerts import send_telegram
+    from core.services.compulsa_sat import procesar_compulsa, solicitar_compulsa
+
+    hoy = djtz.localdate()
+    fecha_inicio = (hoy.replace(day=1) - timedelta(days=62)).replace(day=1)  # ~3 meses
+    fecha_fin = hoy
+
+    resumen = {"retomadas": 0, "nuevas": 0, "completadas": 0, "errores": 0, "faltantes": 0}
+
+    # 1) Retomar pendientes (max 48h de antigüedad; más viejas expiran solas)
+    pendientes = CompulsaSAT.objects.filter(
+        estado="solicitada",
+        creado_at__gte=djtz.now() - timedelta(hours=72),
+    )
+    for c in pendientes:
+        resumen["retomadas"] += 1
+        try:
+            if procesar_compulsa(c):
+                c.refresh_from_db()
+                if c.estado == "completada":
+                    resumen["completadas"] += 1
+                    resumen["faltantes"] += c.faltantes_count or 0
+                else:
+                    resumen["errores"] += 1
+        except Exception as e:
+            resumen["errores"] += 1
+            logger.error("compulsa retomada %s fallo: %s", c.id, e)
+        _time.sleep(3)
+
+    # 2) Nuevas solicitudes por empresa × tipo
+    for empresa in Empresa.objects.filter(sync_activa=True, fiel_verificada=True):
+        for tipo in ["recibidos", "emitidos"]:
+            reciente = CompulsaSAT.objects.filter(
+                empresa=empresa, tipo=tipo,
+                estado__in=["completada", "solicitada"],
+                creado_at__gte=djtz.now() - timedelta(days=5),
+            ).exists()
+            if reciente:
+                continue
+            try:
+                c = solicitar_compulsa(empresa, tipo, fecha_inicio, fecha_fin)
+                resumen["nuevas"] += 1
+                _time.sleep(5)
+                # intento inline de completarla (metadata suele estar en <5 min)
+                if c.estado == "solicitada" and procesar_compulsa(c):
+                    c.refresh_from_db()
+                    if c.estado == "completada":
+                        resumen["completadas"] += 1
+                        resumen["faltantes"] += c.faltantes_count or 0
+            except Exception as e:
+                resumen["errores"] += 1
+                logger.error("compulsa nueva %s %s fallo: %s", empresa.rfc, tipo, e)
+            _time.sleep(3)
+
+    logger.info("compulsa_sat_periodica: %s", resumen)
+    if resumen["completadas"] and not resumen["faltantes"] and not resumen["errores"]:
+        send_telegram(
+            f"✅ Compulsa SAT semanal: {resumen['completadas']} compulsas completadas, "
+            f"0 faltantes — BD sincronizada con el SAT",
+            "success",
+        )
+    elif resumen["errores"]:
+        send_telegram(
+            f"⚠️ Compulsa SAT semanal: {resumen['completadas']} ok, "
+            f"{resumen['errores']} con error, {resumen['faltantes']} faltantes",
+            "warning",
+        )
+    return str(resumen)
+
+
 
 @shared_task(soft_time_limit=60, time_limit=90)
 def agente_sincronizacion():

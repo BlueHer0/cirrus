@@ -40,3 +40,6 @@ stripe>=14.0,<15.0
 # Cerebro Fiscal — RAG
 pgvector>=0.4
 tiktoken>=0.10
+
+# Verificación vs SAT — WS Descarga Masiva v1.5 (compulsa de completitud)
+cfdiclient>=1.6.3

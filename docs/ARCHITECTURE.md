@@ -119,7 +119,30 @@ Fix implementado (2026-07-12/13, requiere reinicio de cirrus-worker):
   el RFC de la empresa; si no, el paquete se DESCARTA completo y el job queda
   en error para retry (fase `package_validation` en telemetría).
 
-### Gap estructural de timbres tardíos (CONFIRMADO)
+### Verificación en capas (implementada 2026-07-27)
+
+Tres verificadores que convierten a Cirrus en fuente confiable:
+
+1. **Compulsa de completitud** (`core/services/compulsa_sat.py`, task
+   `compulsa_sat_periodica`, domingos 4am MX): pide METADATA al WS oficial
+   de Descarga Masiva v1.5 (SOAP + FIEL, librería `cfdiclient`) — el índice
+   completo de CFDIs de los últimos 3 meses por empresa/tipo — y lo diffea
+   contra la BD. Faltantes → re-encola el DescargaJob del mes + Telegram.
+   Resultados en tabla `CompulsaSAT`. Cierra el gap de timbres tardíos:
+   aunque el RPA se pierda algo, la compulsa lo detecta y repara.
+2. **Verificador de estado** (`core/services/verificador_sat.py`, task
+   `verificar_estados_sat`, diaria 3am MX): re-consulta CFDIs `vigente`
+   contra ConsultaCFDIService (público, sin FIEL). Cancelaciones →
+   `estado_sat='cancelado'` + `cancelado_at` + Telegram. Bonus: la misma
+   respuesta trae ValidacionEFOS del emisor → alerta 69-B de proveedores.
+   Rotación: recientes (<6m) cada 7 días, viejos cada 30.
+3. **Auditor nocturno reforzado** (`job_scheduler.auditar_y_reparar_jobs`):
+   ahora distingue por tipo (emitidos/recibidos), detecta jobs completados
+   con paquete de otro periodo (desc>0 pero 0 CFDIs reales del mes), respeta
+   cooldown de 7 días (antes re-scrapeaba meses vacíos CADA noche) y respeta
+   los meses que la compulsa ya confirmó vacíos en el SAT (no re-scrapear).
+
+### Gap estructural de timbres tardíos (MITIGADO por la compulsa — historial abajo)
 - La descarga es 1 vez por mes y el refetch (`refetch_meses_recientes_vacios`)
   solo re-encola meses con 0 CFDIs. Un CFDI timbrado DESPUÉS de que su mes ya
   se descargó (con datos) nunca se recupera. Casos confirmados VEN: factura

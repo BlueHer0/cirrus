@@ -209,6 +209,17 @@ class CFDI(models.Model):
         choices=[("vigente", "Vigente"), ("cancelado", "Cancelado")],
         db_index=True,
     )
+    # Re-verificación de estado contra ConsultaCFDIService (task
+    # verificar_estados_sat). El estado se congelaba al ingestar; desde
+    # 2026-07 se re-consulta periódicamente para detectar cancelaciones.
+    estado_verificado_at = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text="Última vez que se consultó el estatus en el SAT",
+    )
+    cancelado_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Cuándo detectamos la cancelación (no la fecha SAT de cancelación)",
+    )
 
     # ── Campos específicos de nómina (tipo_comprobante='N') ──────────
     # Extraídos del complemento nomina12:Nomina. Para conciliación contable
@@ -635,6 +646,63 @@ class DescargaLog(models.Model):
 
     def __str__(self):
         return f"{self.empresa.rfc} | {self.year}-{self.month_start:02d} | {self.estado}"
+
+
+class CompulsaSAT(models.Model):
+    """Compulsa oficial contra el SAT vía Web Service de Descarga Masiva.
+
+    Una fila por solicitud de METADATA (empresa + tipo + rango de fechas):
+    el SAT devuelve el índice completo de CFDIs del periodo (UUID, fecha,
+    total, estado) sin descargar XMLs. Se diffea contra la BD para detectar
+    faltantes — es la 'segunda pasada' de verificación de completitud.
+
+    El auditor nocturno consulta `resultado` para saber si un mes vacío en
+    BD está CONFIRMADO vacío en el SAT (→ no re-scrapear) o es un gap real.
+    """
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="compulsas")
+    tipo = models.CharField(max_length=15, choices=[
+        ("recibidos", "Recibidos"), ("emitidos", "Emitidos"),
+    ])
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
+
+    estado = models.CharField(max_length=20, default="solicitada", choices=[
+        ("solicitada", "Solicitada al SAT"),
+        ("lista", "Paquete listo"),
+        ("completada", "Completada (diff hecho)"),
+        ("error", "Error"),
+        ("sin_info", "SAT sin información en el rango"),
+    ], db_index=True)
+    folio_solicitud = models.CharField(max_length=40, blank=True, db_index=True)
+
+    # Totales del diff
+    sat_vigentes = models.IntegerField(null=True, blank=True)
+    sat_cancelados = models.IntegerField(null=True, blank=True)
+    en_bd = models.IntegerField(null=True, blank=True)
+    faltantes_count = models.IntegerField(null=True, blank=True)
+
+    # Detalle por mes: {"2026-06": {"sat_vigentes": n, "sat_cancelados": n,
+    #                               "en_bd": n, "faltantes": ["uuid", ...]}}
+    resultado = models.JSONField(default=dict, blank=True)
+    ultimo_error = models.TextField(blank=True)
+
+    creado_at = models.DateTimeField(auto_now_add=True)
+    actualizado_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-creado_at"]
+        verbose_name = "Compulsa SAT"
+        verbose_name_plural = "Compulsas SAT"
+        indexes = [
+            models.Index(fields=["empresa", "tipo", "estado"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.empresa.rfc} {self.tipo} {self.fecha_inicio}→{self.fecha_fin} "
+            f"[{self.estado}] faltantes={self.faltantes_count}"
+        )
 
 
 class ScheduleConfig(models.Model):

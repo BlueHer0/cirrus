@@ -199,48 +199,88 @@ def auditar_y_reparar_jobs(empresa):
     else:
         fin = date(hoy.year, hoy.month - 1, 1)
     
+    from datetime import timedelta as _td
+    RECHECK_COOLDOWN = _td(days=7)  # reintento semanal, no diario (evita churn RPA)
+    ahora = timezone.now()
+
+    def _mes_verificado_vacio_por_compulsa(year, month, tipo):
+        """True si una compulsa SAT (metadata oficial) ya confirmó que ese
+        mes/tipo NO tiene CFDIs en el SAT → mes resuelto, no re-scrapear."""
+        from core.models import CompulsaSAT
+        clave = f"{year}-{month:02d}"
+        for c in CompulsaSAT.objects.filter(
+            empresa=empresa, tipo=tipo, estado='completada',
+        ).order_by('-creado_at')[:6]:
+            r = (c.resultado or {}).get(clave)
+            if r is not None:
+                return r.get('sat_vigentes', -1) == 0
+        return False
+
+    def _reencolar(job, motivo):
+        prog_safe = _safe_programado(job.year, job.month, timezone.now())
+        job.estado = 'en_cola'
+        job.intentos = 0
+        job.programado_para = prog_safe
+        job.ultimo_error = motivo
+        job.save()
+
     mes = inicio
     while mes <= fin:
-        # Verificar CFDIs REALES en BD, no jobs
-        count = CFDI.objects.filter(
-            rfc_empresa=empresa.rfc,
-            fecha__year=mes.year,
-            fecha__month=mes.month
-        ).count()
-        
-        if count == 0:
+        for tipo in ['recibidos', 'emitidos']:
+            tipo_rel = 'recibido' if tipo == 'recibidos' else 'emitido'
+            count = CFDI.objects.filter(
+                rfc_empresa=empresa.rfc,
+                tipo_relacion=tipo_rel,
+                fecha__year=mes.year,
+                fecha__month=mes.month,
+            ).count()
+
             prog_safe = _safe_programado(mes.year, mes.month, timezone.now())
-            for tipo in ['recibidos', 'emitidos']:
-                job, created = DescargaJob.objects.get_or_create(
-                    empresa=empresa,
-                    year=mes.year,
-                    month=mes.month,
-                    tipo=tipo,
-                    defaults={
-                        'estado': 'en_cola',
-                        'prioridad': 5,
-                        'programado_para': prog_safe,
-                        'intentos': 0,
-                    }
-                )
-                # completado(/vacio) con 0 CFDIs en BD = fallo silencioso (timbre
-                # tardío del SAT). Incluye 'completado_vacio' (faltaba antes).
-                if not created and job.estado in ['error', 'completado', 'completado_vacio']:
-                    job.estado = 'en_cola'
-                    job.intentos = 0
-                    job.programado_para = prog_safe
-                    job.save()
-                    created = True
-                
-                if created:
-                    jobs_creados += 1
-        
+            job, created = DescargaJob.objects.get_or_create(
+                empresa=empresa,
+                year=mes.year,
+                month=mes.month,
+                tipo=tipo,
+                defaults={
+                    'estado': 'en_cola',
+                    'prioridad': 5,
+                    'programado_para': prog_safe,
+                    'intentos': 0,
+                },
+            )
+            if created:
+                jobs_creados += 1
+                continue
+
+            if job.estado not in ['error', 'completado', 'completado_vacio']:
+                continue  # en_cola/ejecutando: en proceso, no tocar
+
+            # Cooldown: si se consultó hace poco, esperar (antes era churn diario)
+            if job.completado_at and (ahora - job.completado_at) < RECHECK_COOLDOWN:
+                continue
+
+            if count == 0:
+                # Mes sin CFDIs de este tipo en BD.
+                # Si la compulsa oficial ya dijo "SAT también tiene 0" → resuelto.
+                if _mes_verificado_vacio_por_compulsa(mes.year, mes.month, tipo):
+                    continue
+                if job.cfdis_descargados > 0:
+                    # Fix punto ciego 'paquete equivocado' (2026-07): el job
+                    # reporta descargas pero NINGUN CFDI de este mes/tipo esta
+                    # en BD → el paquete que lo marco completado era de OTRO
+                    # periodo. Antes este caso era invisible (el refetch solo
+                    # miraba cfdis_descargados==0).
+                    _reencolar(job, 'auditor: completado con paquete de otro periodo (desc>0, 0 reales)')
+                else:
+                    _reencolar(job, 'auditor: mes sin CFDIs, sin compulsa que confirme vacio')
+                jobs_creados += 1
+
         # Siguiente mes
         if mes.month == 12:
             mes = date(mes.year + 1, 1, 1)
         else:
             mes = date(mes.year, mes.month + 1, 1)
-    
+
     return jobs_creados
 
 
