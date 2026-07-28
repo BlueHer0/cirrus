@@ -49,4 +49,5 @@ operar el SaaS como empresa (growth, comercial, soporte, UX, ops) y monetizarlo.
 - 0 clientes externos aún; 5 empresas internas. Lead contactado: JuanPerez@gmail.com (fundador: 2 meses Básico gratis, 2026-07-28).
 - SW Sapien sandbox dominado (PoC timbrado+cancelación OK, 30 timbres de prueba); folios reales pendientes; diseño del módulo de emisión en `cirrus-direccion/diseno-modulo-emision.md` (no implementado).
 - Completitud de descarga: atacada en commit `e877060` (compulsa WS + re-verificación estados). Validar en operación.
-- Pendientes inmediatos de dirección: commit de los cambios legales/flags, rutina diaria de ops, agente de buzón contactocirrus@nubex.me, analytics en landing, rotar la Stripe secret key (viajó por chat en el arranque).
+- Rutina de ops montada (2026-07-28): parte diario Telegram 8am MX (`scripts/parte_diario.py`), analytics GoAccess sobre nginx log dedicado (`/panel/analytics/`, refresh horario), agente de buzón contactocirrus@ (`scripts/buzon_contacto.py`, cron 15 min — **inactivo hasta que Fernando deje la contraseña IMAP en `cirrus-direccion/credenciales/contactocirrus.env`**).
+- Pendientes de dirección: contraseña IMAP de contactocirrus@, rotar la Stripe secret key (viajó por chat en el arranque), triage de los 7 leads Snowie, revisión de abogado del legal interim.

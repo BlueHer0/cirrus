@@ -65,4 +65,7 @@ urlpatterns = [
 
     # Monitor
     path("monitor/", views.monitor_view, name="monitor"),
+
+    # Analytics (GoAccess sobre nginx log)
+    path("analytics/", views.analytics_view, name="analytics"),
 ]

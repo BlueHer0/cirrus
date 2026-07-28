@@ -4,6 +4,7 @@ Session-authenticated Django views for the admin panel.
 Uses Django templates with glassmorphism + Tailwind v4.
 """
 
+import os
 import secrets
 import logging
 from datetime import datetime, timezone
@@ -1912,6 +1913,21 @@ def verificar_rfc_view(request):
         "ultima_sync": ultima_sync,
         "total_registros": total_registros,
     })
+
+
+# ── Analytics (panel staff) ──────────────────────────────────────────────
+
+@staff_required
+def analytics_view(request):
+    """Sirve el reporte GoAccess generado por scripts/analytics_report.sh."""
+    ruta = "/var/www/cirrus/logs/analytics.html"
+    if not os.path.exists(ruta):
+        return HttpResponse(
+            "Aún no hay reporte de analytics. Se genera cada hora "
+            "(scripts/analytics_report.sh).", content_type="text/plain",
+        )
+    with open(ruta, encoding="utf-8", errors="replace") as f:
+        return HttpResponse(f.read())
 
 
 # ── Public legal pages ───────────────────────────────────────────────────
