@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from core.api.router import api
-from core.views import landing_view, verificar_rfc_view
+from core.views import landing_view, verificar_rfc_view, terminos_view, privacidad_view
 
 logger = logging.getLogger("core.stripe_webhook")
 
@@ -111,6 +111,8 @@ def stripe_webhook(request):
 urlpatterns = [
     path("", landing_view, name="landing"),
     path("verificar-rfc/", verificar_rfc_view, name="verificar_rfc"),
+    path("terminos/", terminos_view, name="terminos"),
+    path("privacidad/", privacidad_view, name="privacidad"),
     path("djadmin-8x7k/", admin.site.urls),
     path("api/v1/", api.urls),
     path("api/v1/stripe/webhook/", stripe_webhook, name="stripe_webhook"),

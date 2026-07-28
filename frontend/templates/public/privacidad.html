@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aviso de Privacidad | Cirrus</title>
+  <meta name="description" content="Aviso de Privacidad de Cirrus — tratamiento de datos personales conforme a la LFPDPPP.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0a0b14; color: #cbd5e1; min-height: 100vh; }
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 20px 60px; }
+    .logo { text-align: center; margin-bottom: 28px; }
+    .logo a { text-decoration: none; }
+    .logo h1 { font-size: 26px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: inline-block; }
+    .doc-title { text-align: center; color: #e2e8f0; font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .doc-meta { text-align: center; font-size: 13px; color: #718096; margin-bottom: 28px; }
+    .card { background: rgba(30,30,50,0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 28px; }
+    .toc { margin-bottom: 20px; }
+    .toc h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #718096; margin-bottom: 12px; }
+    .toc ol { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; counter-reset: toc; }
+    .toc li { counter-increment: toc; font-size: 13px; }
+    .toc li::before { content: counter(toc) ". "; color: #6366f1; font-weight: 600; }
+    .toc a { color: #a5b4fc; text-decoration: none; }
+    .toc a:hover { color: #c7d2fe; text-decoration: underline; }
+    @media (max-width: 560px) { .toc ol { grid-template-columns: 1fr; } .card { padding: 20px; } }
+    article h2 { color: #e2e8f0; font-size: 17px; font-weight: 600; margin: 34px 0 12px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.06); scroll-margin-top: 24px; }
+    article h2:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+    article p { font-size: 14px; line-height: 1.75; margin-bottom: 12px; }
+    article ul, article ol { font-size: 14px; line-height: 1.75; margin: 0 0 12px 22px; }
+    article li { margin-bottom: 6px; }
+    article strong { color: #e2e8f0; }
+    article a { color: #818cf8; }
+    .table-wrap { overflow-x: auto; margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { border: 1px solid rgba(255,255,255,0.10); padding: 8px 14px; text-align: left; }
+    th { color: #e2e8f0; background: rgba(255,255,255,0.04); font-weight: 600; }
+    .highlight { background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.7; margin-bottom: 12px; }
+    .version { text-align: center; font-size: 13px; color: #a0aec0; margin-top: 28px; font-weight: 500; }
+    .meta { text-align: center; font-size: 12px; color: #4a5568; margin-top: 20px; line-height: 1.8; }
+    .meta a { color: #6366f1; text-decoration: none; }
+    .meta a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <a href="/"><h1>☁ Cirrus</h1></a>
+    </div>
+    <div class="doc-title">Aviso de Privacidad</div>
+    <div class="doc-meta">Última actualización: 28 de julio de 2026</div>
+
+    <div class="card toc">
+      <h2>Contenido</h2>
+      <ol>
+        <li><a href="#s1">Responsable del tratamiento</a></li>
+        <li><a href="#s2">Datos personales que recabamos</a></li>
+        <li><a href="#s3">Tratamiento de la e.firma (FIEL) y CSD</a></li>
+        <li><a href="#s4">Finalidades del tratamiento</a></li>
+        <li><a href="#s5">Transferencias y encargados</a></li>
+        <li><a href="#s6">Derechos ARCO y revocación</a></li>
+        <li><a href="#s7">Conservación y supresión</a></li>
+        <li><a href="#s8">Medidas de seguridad</a></li>
+        <li><a href="#s9">Cookies</a></li>
+        <li><a href="#s10">Cambios a este Aviso</a></li>
+        <li><a href="#s11">Aviso simplificado</a></li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <article>
+        <h2 id="s1">1. Responsable del tratamiento</h2>
+        <p><strong>Fernando Arizpe Pedraza, persona física con actividad empresarial (RFC AIPF760625HF5)</strong>, con domicilio en Ciudad Victoria, Tamaulipas, México (en adelante, "<strong>Cirrus</strong>" o el "<strong>Responsable</strong>"), con sitio web <a href="https://cirrus.nubex.me">https://cirrus.nubex.me</a>, es responsable del tratamiento de los datos personales que usted (el "<strong>Titular</strong>") nos proporciona al usar la plataforma Cirrus (el "<strong>Servicio</strong>"), en términos de la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP).</p>
+        <p>Contacto para temas de privacidad: <a href="mailto:contactocirrus@nubex.me">contactocirrus@nubex.me</a>.</p>
+
+        <h2 id="s2">2. Datos personales que recabamos</h2>
+        <p>Recabamos los datos directamente de usted, cuando los captura en la plataforma o los carga en ella, y de manera automatizada cuando el Servicio descarga documentos del SAT en su nombre.</p>
+        <p><strong>a) Datos de identificación y contacto:</strong> nombre o razón social, correo electrónico, y los datos que capture en su perfil.</p>
+        <p><strong>b) Datos fiscales:</strong> RFC, régimen fiscal, domicilio fiscal, Constancia de Situación Fiscal, y el contenido de sus CFDIs (emitidos y recibidos), que incluye RFCs y nombres de sus contrapartes, montos, conceptos, impuestos y demás campos del XML.</p>
+        <p><strong>c) Datos financieros y patrimoniales:</strong> la información contenida en sus CFDIs y en los análisis derivados (ingresos, egresos, impuestos estimados) constituye datos financieros y patrimoniales. <strong>Conforme al artículo 8 de la LFPDPPP, el tratamiento de estos datos requiere su consentimiento expreso, el cual se recaba mediante la casilla de aceptación (checkbox) del formulario de registro</strong> (ver el aviso simplificado en la sección 11).</p>
+        <p><strong>d) Credenciales criptográficas (e.firma/FIEL y, en su caso, CSD):</strong> archivos .cer y .key y su contraseña, que usted decide cargar voluntariamente para habilitar la descarga automatizada de CFDIs (y, próximamente, la emisión de facturas). Se tratan exclusivamente conforme a la sección 3.</p>
+        <p><strong>e) Datos de pago:</strong> los pagos se procesan a través de Stripe. <strong>Cirrus no almacena números de tarjeta</strong>; únicamente conservamos referencias de la transacción (últimos dígitos, estatus, plan contratado) que Stripe nos comparte.</p>
+        <p><strong>f) Datos de uso:</strong> registros técnicos de acceso (fecha, IP, acciones en la plataforma) necesarios para seguridad y soporte.</p>
+        <p><strong>Datos de terceros contenidos en sus documentos.</strong> Los CFDIs que descargamos por su cuenta pueden contener datos personales de terceros (sus clientes, proveedores y, en CFDIs de nómina, sus trabajadores). Respecto de esos datos, usted es el responsable del tratamiento y Cirrus actúa como <strong>encargado</strong>, tratándolos únicamente por su cuenta y conforme a sus instrucciones para prestarle el Servicio. Usted declara contar con la base legal para dicho tratamiento.</p>
+        <p><strong>No recabamos datos personales sensibles</strong> (salud, origen étnico, ideología, etc.). Si un documento que usted cargue llegara a contenerlos, no los tratamos para finalidad distinta al almacenamiento que usted nos instruye.</p>
+
+        <h2 id="s3">3. Tratamiento de la e.firma (FIEL) y CSD</h2>
+        <p>Sus archivos .cer y .key se almacenan en un repositorio de objetos privado con acceso restringido, en infraestructura controlada por el Responsable. La contraseña de la llave privada se almacena cifrada mediante criptografía simétrica con clave administrada por el servidor. Los archivos se utilizan <strong>exclusivamente</strong> para autenticar procesos automatizados ante el SAT (descarga de sus CFDIs y documentos fiscales y, en su caso, emisión de facturas que usted ordene); durante cada proceso se copian a un almacenamiento temporal que se elimina al concluir. No usamos su FIEL o CSD para ningún otro fin, no firmamos actos jurídicos en su nombre y no los compartimos con terceros.</p>
+        <p>Puede eliminar su FIEL/CSD de la plataforma en cualquier momento, lo que revoca la autorización de uso y conlleva su borrado de nuestros sistemas en un plazo máximo de cinco (5) días hábiles.</p>
+
+        <h2 id="s4">4. Finalidades del tratamiento</h2>
+        <p><strong>Finalidades primarias</strong> (necesarias para el Servicio):</p>
+        <ol>
+          <li>Crear y administrar su cuenta y autenticarlo en la plataforma.</li>
+          <li>Descargar del SAT, en su nombre, sus CFDIs y documentos fiscales, almacenarlos y ponerlos a su disposición.</li>
+          <li>Convertir y exportar sus documentos (PDF, Excel) y enviarle reportes por correo electrónico.</li>
+          <li>Generar análisis fiscales informativos (IVA, ISR provisional estimado, alertas relacionadas con listas públicas del SAT, como la del artículo 69-B del CFF).</li>
+          <li>Procesar los pagos de su suscripción y emitirle comprobantes.</li>
+          <li>Brindarle soporte y atender sus solicitudes.</li>
+          <li>Mantener la seguridad de la plataforma y prevenir fraudes y usos indebidos.</li>
+          <li>Cumplir obligaciones legales aplicables al Responsable.</li>
+        </ol>
+        <p><strong>Finalidades secundarias</strong> (no necesarias para el Servicio; puede oponerse a ellas sin que se le niegue el Servicio):</p>
+        <ol start="9">
+          <li>Enviarle comunicaciones sobre nuevas funciones, mejoras y ofertas de Cirrus.</li>
+          <li>Elaborar estadísticas internas con información agregada y anonimizada para mejorar el Servicio.</li>
+        </ol>
+        <p>Si no desea que tratemos sus datos para las finalidades secundarias, puede indicarlo desde la configuración de su cuenta o escribiendo al correo de contacto de la sección 1. La negativa no afectará la prestación del Servicio.</p>
+
+        <h2 id="s5">5. Transferencias y encargados</h2>
+        <p><strong>No vendemos ni rentamos sus datos personales a terceros.</strong></p>
+        <p>Para operar el Servicio utilizamos proveedores que tratan datos por cuenta de Cirrus (<strong>encargados</strong>) o a quienes se <strong>transfieren</strong> datos limitados:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Destinatario</th><th>Propósito</th><th>Datos</th></tr></thead>
+            <tbody>
+              <tr><td>Stripe (procesador de pagos)</td><td>Cobro de suscripciones</td><td>Datos de pago y facturación</td></tr>
+              <tr><td>Proveedores de infraestructura (servidores, almacenamiento, respaldo)</td><td>Alojamiento y operación de la plataforma</td><td>Los datos alojados en el Servicio</td></tr>
+              <tr><td>Proveedor de envío de correo</td><td>Reportes y notificaciones</td><td>Correo electrónico y contenido de reportes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Estos proveedores están obligados contractualmente a tratar los datos únicamente para los fines contratados y con medidas de seguridad adecuadas. Algunos de estos proveedores (por ejemplo, Stripe) pueden ubicarse o procesar información fuera de México; en tales casos, la transferencia se realiza con las salvaguardas contractuales y de seguridad descritas en este Aviso.</p>
+        <p>Adicionalmente, podremos comunicar datos cuando lo exija una autoridad competente mediante requerimiento fundado y motivado, o en los demás supuestos del artículo 37 de la LFPDPPP que no requieren consentimiento.</p>
+        <p>Fuera de estos casos, cualquier transferencia que requiera su consentimiento le será informada para obtenerlo.</p>
+
+        <h2 id="s6">6. Derechos ARCO y revocación del consentimiento</h2>
+        <p>Usted tiene derecho a <strong>Acceder</strong> a sus datos, <strong>Rectificarlos</strong> cuando sean inexactos, <strong>Cancelarlos</strong> y <strong>Oponerse</strong> a su tratamiento (derechos ARCO), así como a <strong>revocar su consentimiento</strong> en cualquier momento, sin efectos retroactivos.</p>
+        <p>Para ejercerlos, envíe una solicitud al correo <a href="mailto:contactocirrus@nubex.me">contactocirrus@nubex.me</a> indicando: (i) su nombre y correo asociado a la cuenta; (ii) documento que acredite su identidad (o la representación, en su caso); (iii) la descripción clara del derecho que desea ejercer y de los datos correspondientes.</p>
+        <p>Responderemos en un plazo máximo de <strong>20 días hábiles</strong> contados desde la recepción de la solicitud, y de resultar procedente, se hará efectiva dentro de los <strong>15 días hábiles</strong> siguientes, conforme a la LFPDPPP. Tome en cuenta que la cancelación de ciertos datos puede impedir la prestación del Servicio, y que algunos datos deben conservarse por obligación legal antes de su supresión definitiva.</p>
+        <p>Gran parte de estos derechos puede ejercerlos directamente desde la plataforma: editar sus datos de perfil, exportar sus documentos, eliminar su FIEL/CSD o cancelar su cuenta.</p>
+        <p>Si considera que su derecho a la protección de datos ha sido vulnerado, puede acudir a la autoridad garante en materia de protección de datos personales en México (funciones históricamente a cargo del INAI y, tras las reformas en la materia, de la autoridad que legalmente lo sustituya).</p>
+
+        <h2 id="s7">7. Conservación y supresión</h2>
+        <p>Conservamos sus datos mientras su cuenta esté activa. Al cancelar su cuenta, dispondrá de una ventana de treinta (30) días naturales para exportar su información; después eliminaremos sus CFDIs, documentos y archivos de FIEL/CSD, conservando únicamente lo estrictamente necesario para cumplir obligaciones legales del Responsable (por ejemplo, registros de facturación) y los respaldos técnicos que se depuran en ciclos ordinarios (máximo 30 días adicionales), tras lo cual los datos se suprimen o anonimizan.</p>
+
+        <h2 id="s8">8. Medidas de seguridad</h2>
+        <p>Aplicamos medidas administrativas, técnicas y físicas para proteger sus datos, entre ellas: cifrado de las comunicaciones (HTTPS/TLS), cifrado de contraseñas de llaves privadas, almacenamiento en repositorios privados con acceso restringido, controles de acceso por cuenta, registros de actividad y respaldos. Ninguna medida de seguridad es infalible; en caso de una vulneración de seguridad que afecte de forma significativa sus derechos, se lo notificaremos conforme a la ley.</p>
+
+        <h2 id="s9">9. Cookies y tecnologías similares</h2>
+        <p>La plataforma utiliza únicamente cookies esenciales para el funcionamiento del Servicio (autenticación de sesión y preferencias básicas). No utilizamos cookies de publicidad de terceros. Puede configurar su navegador para rechazar cookies, aunque ello puede impedir el inicio de sesión.</p>
+
+        <h2 id="s10">10. Cambios a este Aviso de Privacidad</h2>
+        <p>Podremos modificar este Aviso para reflejar cambios legales o del Servicio. Publicaremos la versión actualizada en <a href="https://cirrus.nubex.me">https://cirrus.nubex.me</a> con su fecha de última actualización y, si el cambio es sustancial (nuevas finalidades, nuevas transferencias), se lo notificaremos por correo electrónico o mediante aviso destacado en la plataforma antes de que surta efectos, recabando su consentimiento cuando la ley lo exija.</p>
+
+        <h2 id="s11">11. Aviso de privacidad simplificado</h2>
+        <div class="highlight">
+          <p style="margin-bottom: 0;">Fernando Arizpe Pedraza, persona física con actividad empresarial (RFC AIPF760625HF5), operador de Cirrus (<a href="https://cirrus.nubex.me">https://cirrus.nubex.me</a>), tratará sus datos de identificación, contacto y fiscales — incluidos los datos financieros y patrimoniales contenidos en sus CFDIs y, si usted la carga, su e.firma (FIEL) — para: crear su cuenta, descargar y gestionar sus CFDIs ante el SAT en su nombre, generar análisis informativos, procesar pagos (vía Stripe) y brindarle soporte. No vendemos sus datos. Puede ejercer sus derechos ARCO escribiendo a <a href="mailto:contactocirrus@nubex.me">contactocirrus@nubex.me</a>. Consulte el aviso de privacidad integral en esta página.</p>
+        </div>
+        <p>Este aviso simplificado se presenta en el formulario de registro junto con una casilla de aceptación obligatoria (no premarcada) mediante la cual usted otorga su consentimiento expreso.</p>
+      </article>
+
+      <div class="version">Versión 1.0 (interim) — vigente desde el 28 de julio de 2026.</div>
+    </div>
+
+    <div class="meta">
+      <a href="/">Inicio</a> · <a href="/terminos/">Términos del Servicio</a> · <a href="/verificar-rfc/">Verificador EFOS</a><br>
+      © {{ year|default:"2026" }} Cirrus · <a href="/">cirrus.nubex.me</a>
+    </div>
+  </div>
+</body>
+</html>

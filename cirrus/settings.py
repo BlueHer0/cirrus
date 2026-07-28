@@ -343,5 +343,5 @@ STRIPE_TEST_MODE = config("STRIPE_TEST_MODE", default=True, cast=bool)
 # ── Acceso público (toggleable, defaults cerrados para reparación) ──
 # Cuando False: /app/registro/ redirige a login y la landing pública (/)
 # redirige a /app/login/. Reversible cambiando a True + restart cirrus-web.
-REGISTRO_PUBLICO_ABIERTO = False
-LANDING_PUBLICA_HABILITADA = False
+REGISTRO_PUBLICO_ABIERTO = True
+LANDING_PUBLICA_HABILITADA = True

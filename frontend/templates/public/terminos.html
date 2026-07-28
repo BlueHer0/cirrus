@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Términos y Condiciones del Servicio | Cirrus</title>
+  <meta name="description" content="Términos y Condiciones del Servicio de Cirrus — plataforma de gestión de CFDIs del SAT.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0a0b14; color: #cbd5e1; min-height: 100vh; }
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 20px 60px; }
+    .logo { text-align: center; margin-bottom: 28px; }
+    .logo a { text-decoration: none; }
+    .logo h1 { font-size: 26px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: inline-block; }
+    .doc-title { text-align: center; color: #e2e8f0; font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .doc-meta { text-align: center; font-size: 13px; color: #718096; margin-bottom: 28px; }
+    .card { background: rgba(30,30,50,0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 28px; }
+    .toc { margin-bottom: 20px; }
+    .toc h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #718096; margin-bottom: 12px; }
+    .toc ol { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; counter-reset: toc; }
+    .toc li { counter-increment: toc; font-size: 13px; }
+    .toc li::before { content: counter(toc) ". "; color: #6366f1; font-weight: 600; }
+    .toc a { color: #a5b4fc; text-decoration: none; }
+    .toc a:hover { color: #c7d2fe; text-decoration: underline; }
+    @media (max-width: 560px) { .toc ol { grid-template-columns: 1fr; } .card { padding: 20px; } }
+    article h2 { color: #e2e8f0; font-size: 17px; font-weight: 600; margin: 34px 0 12px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.06); scroll-margin-top: 24px; }
+    article h2:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+    article p { font-size: 14px; line-height: 1.75; margin-bottom: 12px; }
+    article ul, article ol { font-size: 14px; line-height: 1.75; margin: 0 0 12px 22px; }
+    article li { margin-bottom: 6px; }
+    article strong { color: #e2e8f0; }
+    article a { color: #818cf8; }
+    .table-wrap { overflow-x: auto; margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { border: 1px solid rgba(255,255,255,0.10); padding: 8px 14px; text-align: left; }
+    th { color: #e2e8f0; background: rgba(255,255,255,0.04); font-weight: 600; }
+    .highlight { background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 12px 14px; font-size: 13px; margin-bottom: 12px; }
+    .version { text-align: center; font-size: 13px; color: #a0aec0; margin-top: 28px; font-weight: 500; }
+    .meta { text-align: center; font-size: 12px; color: #4a5568; margin-top: 20px; line-height: 1.8; }
+    .meta a { color: #6366f1; text-decoration: none; }
+    .meta a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <a href="/"><h1>☁ Cirrus</h1></a>
+    </div>
+    <div class="doc-title">Términos y Condiciones del Servicio</div>
+    <div class="doc-meta">Última actualización: 28 de julio de 2026</div>
+
+    <div class="card toc">
+      <h2>Contenido</h2>
+      <ol>
+        <li><a href="#s1">Objeto del Servicio</a></li>
+        <li><a href="#s2">Registro y cuenta</a></li>
+        <li><a href="#s3">Uso de la e.firma (FIEL) y CSD</a></li>
+        <li><a href="#s4">Obligaciones del Cliente</a></li>
+        <li><a href="#s5">Planes, pagos y cancelación</a></li>
+        <li><a href="#s6">Disponibilidad y dependencia del SAT</a></li>
+        <li><a href="#s7">Límites de responsabilidad</a></li>
+        <li><a href="#s8">Propiedad de los datos y borrado</a></li>
+        <li><a href="#s9">Confidencialidad</a></li>
+        <li><a href="#s10">Suspensión y terminación</a></li>
+        <li><a href="#s11">Propiedad intelectual</a></li>
+        <li><a href="#s12">Modificaciones a los Términos</a></li>
+        <li><a href="#s13">Datos personales</a></li>
+        <li><a href="#s14">Ley aplicable y jurisdicción</a></li>
+        <li><a href="#s15">Contacto</a></li>
+        <li><a href="#s16">Disposiciones generales</a></li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <article>
+        <p>Estos Términos y Condiciones del Servicio (los "<strong>Términos</strong>") regulan el acceso y uso de la plataforma <strong>Cirrus</strong>, disponible en <a href="https://cirrus.nubex.me">https://cirrus.nubex.me</a> (la "<strong>Plataforma</strong>" o el "<strong>Servicio</strong>"), operada por <strong>Fernando Arizpe Pedraza, persona física con actividad empresarial (RFC AIPF760625HF5)</strong>, con domicilio en Ciudad Victoria, Tamaulipas, México (en adelante, "<strong>Cirrus</strong>", "<strong>nosotros</strong>").</p>
+        <p>Al crear una cuenta, marcar la casilla de aceptación o utilizar el Servicio, usted (el "<strong>Cliente</strong>" o "<strong>Usuario</strong>") declara que ha leído y acepta estos Términos en su totalidad. Si actúa en representación de una persona moral, declara contar con facultades suficientes para obligarla. Si no está de acuerdo con estos Términos, no utilice el Servicio.</p>
+
+        <h2 id="s1">1. Objeto del Servicio</h2>
+        <p>1.1. Cirrus es una plataforma de software como servicio (SaaS) que ayuda al Cliente a gestionar sus Comprobantes Fiscales Digitales por Internet ("<strong>CFDIs</strong>"). Las funciones del Servicio incluyen, según el plan contratado:</p>
+        <ul>
+          <li><strong>Descarga automatizada de CFDIs</strong> (emitidos y recibidos) desde el portal del Servicio de Administración Tributaria ("<strong>SAT</strong>"), actuando en nombre y por cuenta del Cliente mediante la e.firma (FIEL) que el propio Cliente proporciona.</li>
+          <li><strong>Almacenamiento</strong> de los archivos XML descargados y de documentos relacionados (por ejemplo, Constancia de Situación Fiscal).</li>
+          <li><strong>Conversión y exportación</strong> de CFDIs a formatos PDF y Excel.</li>
+          <li><strong>Análisis fiscal informativo</strong>: cálculos estimados de IVA, ISR provisional estimado, y alertas informativas relacionadas con listas publicadas por el SAT (por ejemplo, la lista del artículo 69-B del Código Fiscal de la Federación, "EFOS").</li>
+          <li><strong>Reportes periódicos</strong> por correo electrónico.</li>
+          <li><strong>API</strong> para integraciones con sistemas del Cliente.</li>
+          <li>En el futuro, funciones adicionales como asistentes de inteligencia artificial de carácter informativo, emisión de facturas (con custodia de Certificados de Sello Digital, "<strong>CSD</strong>") y módulo contable, las cuales quedarán sujetas a estos Términos o a términos adicionales que se comuniquen en su momento.</li>
+        </ul>
+        <p>1.2. <strong>El Servicio es una herramienta informativa y de gestión documental. Cirrus NO presta servicios de asesoría fiscal, contable ni legal.</strong> Ningún resultado, cálculo, alerta, reporte o contenido generado por la Plataforma (incluidos los generados por funciones de inteligencia artificial) constituye asesoría profesional ni sustituye la opinión de un contador público o asesor fiscal. El Cliente es y permanece en todo momento el único responsable del cumplimiento de sus obligaciones fiscales.</p>
+        <p>1.3. Cirrus no es un Proveedor Autorizado de Certificación (PAC) ni actúa como autoridad fiscal, y no tiene relación, patrocinio ni asociación alguna con el SAT.</p>
+
+        <h2 id="s2">2. Registro y cuenta</h2>
+        <p>2.1. Para usar el Servicio, el Cliente debe crear una cuenta proporcionando información veraz, completa y actualizada (nombre o razón social, correo electrónico y los datos que se soliciten). El Cliente se obliga a mantener dicha información actualizada.</p>
+        <p>2.2. La cuenta es personal del Cliente (persona física o moral). El Cliente es responsable de mantener la confidencialidad de sus credenciales de acceso y de toda actividad que ocurra bajo su cuenta. Cirrus no será responsable por accesos no autorizados derivados de la falta de cuidado del Cliente sobre sus credenciales.</p>
+        <p>2.3. El Cliente debe notificar de inmediato a Cirrus cualquier uso no autorizado de su cuenta o cualquier compromiso de seguridad del que tenga conocimiento, al correo indicado en la cláusula 15.</p>
+        <p>2.4. Cirrus puede rechazar o cancelar registros que razonablemente considere fraudulentos, duplicados o contrarios a estos Términos.</p>
+
+        <h2 id="s3">3. Autorización expresa para el uso de la e.firma (FIEL) y, en su caso, CSD</h2>
+        <div class="highlight"><strong>Esta cláusula es esencial para el funcionamiento del Servicio. Léala con atención.</strong></div>
+        <p>3.1. <strong>Titularidad.</strong> La e.firma (FIEL) — integrada por los archivos de certificado (.cer), llave privada (.key) y su contraseña — es propiedad exclusiva del Cliente y constituye un medio de identificación personal e intransferible ante el SAT. El Cliente reconoce que la decisión de cargar su FIEL en la Plataforma es libre, voluntaria e informada, y que lo hace bajo su propia responsabilidad, con el único fin de habilitar las funciones del Servicio.</p>
+        <p>3.2. <strong>Autorización limitada (mandato).</strong> Al cargar su FIEL, el Cliente otorga a Cirrus una autorización expresa, limitada y revocable — con la naturaleza de un mandato para actos de administración limitados al objeto aquí descrito — para usar dicha FIEL <strong>exclusivamente</strong> para:</p>
+        <ul>
+          <li>autenticarse ante los portales y servicios electrónicos del SAT en nombre y por cuenta del Cliente;</li>
+          <li>solicitar, consultar y descargar los CFDIs emitidos y recibidos del Cliente, así como documentos fiscales relacionados (por ejemplo, Constancia de Situación Fiscal); y</li>
+          <li>en su caso, cuando el Cliente contrate el servicio de emisión de facturas, usar el CSD que el Cliente cargue exclusivamente para el sellado y timbrado de los CFDIs que el propio Cliente ordene emitir.</li>
+        </ul>
+        <p>3.3. <strong>Prohibiciones.</strong> Cirrus se obliga a NO usar la FIEL ni el CSD del Cliente para ningún fin distinto de los descritos en la cláusula 3.2. En particular, Cirrus no firmará declaraciones, promociones, avisos, trámites, contratos ni ningún otro acto jurídico en nombre del Cliente, ni cederá, venderá o compartirá la FIEL o el CSD con terceros, salvo requerimiento de autoridad competente conforme a la ley.</p>
+        <p>3.4. <strong>Custodia y medidas de seguridad.</strong> Cirrus custodiará los archivos de la FIEL (y en su caso del CSD) con las siguientes medidas: (i) almacenamiento en un repositorio de objetos privado con acceso restringido; (ii) cifrado de la contraseña de la llave privada mediante criptografía simétrica con clave administrada por el servidor; (iii) uso de los archivos únicamente durante los procesos automatizados de conexión con el SAT, descargándolos a almacenamiento temporal que se elimina al concluir cada proceso; y (iv) acceso restringido al personal o procesos estrictamente necesarios para operar el Servicio. El detalle del tratamiento de datos personales asociado consta en el <a href="/privacidad/">Aviso de Privacidad</a>.</p>
+        <p>3.5. <strong>Revocación.</strong> El Cliente puede revocar esta autorización en cualquier momento eliminando su FIEL/CSD desde la Plataforma o solicitándolo por escrito al correo de contacto. La revocación surtirá efectos en un plazo máximo de cinco (5) días hábiles y conllevará la eliminación de los archivos de la FIEL/CSD y de la contraseña cifrada de los sistemas de Cirrus, sin perjuicio de los CFDIs ya descargados, que permanecerán en la cuenta del Cliente conforme a la cláusula 8. La revocación deshabilitará las funciones del Servicio que dependen de la FIEL/CSD.</p>
+        <p>3.6. <strong>Responsabilidad del Cliente sobre su FIEL.</strong> El Cliente declara que la FIEL/CSD que carga es propia (o de la persona moral que representa con facultades para ello), se encuentra vigente y no ha sido revocada por el SAT. El Cliente se obliga a notificar a Cirrus si su FIEL/CSD es revocada, expira o se ve comprometida. Cirrus no es responsable de fallas del Servicio derivadas de una FIEL/CSD vencida, revocada o inválida.</p>
+
+        <h2 id="s4">4. Obligaciones del Cliente</h2>
+        <p>El Cliente se obliga a:</p>
+        <ul>
+          <li>Usar el Servicio únicamente para gestionar información fiscal propia o de personas que lo hayan facultado legalmente para ello, y de forma lícita.</li>
+          <li>Proporcionar información veraz y mantenerla actualizada.</li>
+          <li>Custodiar sus credenciales de acceso y su propia copia de la FIEL/CSD (Cirrus no es el archivo maestro de la FIEL del Cliente; el Cliente debe conservar sus propios respaldos).</li>
+          <li>Pagar oportunamente las contraprestaciones del plan contratado.</li>
+          <li>No intentar vulnerar la seguridad de la Plataforma, no realizar ingeniería inversa, no acceder a datos de otros usuarios y no usar el Servicio para fines ilícitos, incluida la gestión de comprobantes que amparen operaciones inexistentes.</li>
+          <li>Cumplir con sus propias obligaciones fiscales, incluyendo la presentación de declaraciones y el entero de contribuciones. El uso del Servicio no transfiere a Cirrus ninguna obligación fiscal del Cliente.</li>
+          <li>Cuando los CFDIs o documentos gestionados contengan datos personales de terceros (por ejemplo, contrapartes o trabajadores del Cliente en CFDIs de nómina), contar con la base legal necesaria para su tratamiento. En este supuesto, respecto de dichos datos, el Cliente actúa como responsable y Cirrus como encargado que los trata por cuenta del Cliente.</li>
+          <li>Usar la API dentro de los límites razonables de uso (rate limits) que la Plataforma establezca.</li>
+        </ul>
+
+        <h2 id="s5">5. Planes, pagos, renovación y cancelación</h2>
+        <p>5.1. <strong>Planes.</strong> El Servicio se ofrece en los siguientes planes de suscripción mensual (precios en pesos mexicanos, actualizados a la fecha de estos Términos; los precios vigentes son los publicados en la Plataforma):</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Plan</th><th>Precio mensual (MXN)</th></tr></thead>
+            <tbody>
+              <tr><td>Gratis</td><td>$0</td></tr>
+              <tr><td>Básico</td><td>$199</td></tr>
+              <tr><td>Pro</td><td>$499</td></tr>
+              <tr><td>Enterprise</td><td>$1,299</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Los precios están expresados en pesos mexicanos (MXN) e incluyen IVA cuando este resulte aplicable. Las funciones y límites de cada plan son los descritos en la página de precios de la Plataforma.</p>
+        <p>5.2. <strong>Facturación y cobro recurrente.</strong> Los pagos se procesan a través de <strong>Stripe</strong>, proveedor externo de procesamiento de pagos. Al contratar un plan de pago, el Cliente autoriza el cargo recurrente mensual automático al método de pago registrado. Cirrus no almacena números de tarjeta; estos son procesados y custodiados por Stripe conforme a sus propios términos y certificaciones. El Cliente puede solicitar CFDI por los pagos realizados proporcionando sus datos fiscales.</p>
+        <p>5.3. <strong>Renovación automática.</strong> Las suscripciones se renuevan automáticamente por periodos mensuales sucesivos, salvo que el Cliente cancele antes del inicio del siguiente periodo de facturación.</p>
+        <p>5.4. <strong>Cambios de plan.</strong> El Cliente puede subir o bajar de plan en cualquier momento desde la Plataforma. Al confirmar el cambio, la Plataforma o la pasarela de pagos le informará el momento en que surtirá efectos y, en su caso, el ajuste proporcional (prorrateo) o el cargo aplicable.</p>
+        <p>5.5. <strong>Cancelación.</strong> El Cliente puede cancelar su suscripción en cualquier momento desde la Plataforma, sin penalización. La cancelación surte efectos al término del periodo mensual ya pagado; el Cliente conserva acceso al plan contratado hasta esa fecha.</p>
+        <p>5.6. <strong>Reembolsos.</strong> Salvo disposición legal en contrario o error de cobro imputable a Cirrus, <strong>los pagos ya efectuados no son reembolsables</strong> y no se prorratean por cancelaciones a mitad de periodo. Cirrus corregirá y reembolsará cargos duplicados o erróneos que le sean imputables.</p>
+        <p>5.7. <strong>Cambios de precio.</strong> Cirrus puede modificar los precios de los planes notificándolo al Cliente con al menos treinta (30) días naturales de anticipación por correo electrónico o mediante aviso en la Plataforma. El nuevo precio aplicará a partir del siguiente ciclo de facturación posterior al plazo de aviso. Si el Cliente no está de acuerdo, puede cancelar antes de que el nuevo precio surta efectos.</p>
+        <p>5.8. <strong>Impago.</strong> Si un cargo recurrente es rechazado, Cirrus podrá reintentar el cobro y, de persistir el impago por más de diez (10) días naturales, suspender el acceso a las funciones de pago conforme a la cláusula 10, conservando los datos del Cliente durante el periodo previsto en la cláusula 8.</p>
+
+        <h2 id="s6">6. Disponibilidad del Servicio y dependencia del SAT</h2>
+        <p>6.1. <strong>Mejor esfuerzo.</strong> Cirrus opera el Servicio bajo un estándar de mejor esfuerzo comercialmente razonable. Salvo que el plan Enterprise incluya un acuerdo de nivel de servicio (SLA) por escrito, Cirrus no garantiza un porcentaje específico de disponibilidad de la Plataforma.</p>
+        <p>6.2. <strong>El SAT es un tercero ajeno a Cirrus.</strong> La descarga de CFDIs depende de la disponibilidad, funcionamiento y políticas de los portales y servicios electrónicos del SAT, los cuales son ajenos al control de Cirrus y presentan indisponibilidades frecuentes (históricamente, disponibilidad aproximada del 75%, dato meramente ilustrativo y variable). El Cliente reconoce y acepta que:</p>
+        <ul>
+          <li>las descargas pueden retrasarse, fallar temporalmente o requerir reintentos por causas atribuibles al SAT;</li>
+          <li><strong>Cirrus no garantiza que la descarga capture el 100% de los CFDIs del Cliente en todo momento</strong>; pueden existir retrasos de sincronización, CFDIs con timbrado tardío, o comprobantes que el propio SAT no ponga a disposición oportunamente; y</li>
+          <li>el Cliente debe verificar la integridad de su información fiscal antes de usarla para el cumplimiento de obligaciones (declaraciones, deducciones, etc.).</li>
+        </ul>
+        <p>6.3. <strong>Mantenimiento.</strong> Cirrus podrá realizar mantenimientos programados, procurando avisar con anticipación razonable, así como mantenimientos de emergencia sin previo aviso.</p>
+
+        <h2 id="s7">7. Límites de responsabilidad</h2>
+        <p>7.1. El Servicio se proporciona "tal cual" y "según disponibilidad". En la máxima medida permitida por la legislación aplicable, Cirrus no otorga garantías implícitas de idoneidad para un propósito particular ni de resultados fiscales específicos.</p>
+        <p>7.2. Cirrus no será responsable por: (a) indisponibilidad, fallas o cambios de los sistemas del SAT o de otros terceros (Stripe, proveedores de infraestructura, servicios de correo); (b) decisiones fiscales, contables o de negocio que el Cliente tome con base en la información o análisis informativos de la Plataforma; (c) multas, recargos, actualizaciones o cualquier consecuencia fiscal derivada del incumplimiento de obligaciones propias del Cliente; (d) daños indirectos, lucro cesante, pérdida de datos ocasionada por caso fortuito o fuerza mayor, o daño moral; (e) uso de la cuenta por terceros con las credenciales del Cliente.</p>
+        <p>7.3. <strong>Tope de responsabilidad.</strong> La responsabilidad total y acumulada de Cirrus frente al Cliente por cualquier reclamación derivada del Servicio se limita al monto total efectivamente pagado por el Cliente a Cirrus durante los <strong>doce (12) meses</strong> anteriores al hecho que dé origen a la reclamación. Para usuarios del plan Gratis, la responsabilidad se limita al mínimo que la legislación aplicable establezca con carácter irrenunciable.</p>
+        <p>7.4. Nada en estos Términos limita la responsabilidad que no pueda limitarse conforme a la legislación mexicana imperativa, incluyendo la derivada de dolo o mala fe.</p>
+
+        <h2 id="s8">8. Propiedad de los datos, exportación y borrado</h2>
+        <p>8.1. <strong>Los CFDIs y documentos fiscales del Cliente son y seguirán siendo propiedad del Cliente.</strong> Cirrus no adquiere derecho alguno sobre ellos, salvo la licencia limitada y no exclusiva necesaria para alojarlos, procesarlos y prestarle el Servicio al propio Cliente.</p>
+        <p>8.2. El Cliente puede <strong>exportar</strong> sus CFDIs y documentos (XML, PDF, Excel) en cualquier momento mientras su cuenta esté activa, mediante las herramientas de la Plataforma o la API.</p>
+        <p>8.3. <strong>Al cancelar la cuenta</strong>, el Cliente contará con una ventana de <strong>treinta (30) días naturales</strong> para exportar su información. Transcurrida dicha ventana, Cirrus eliminará de sus sistemas los CFDIs, documentos y archivos de FIEL/CSD del Cliente, salvo la información mínima que Cirrus deba conservar por obligación legal (por ejemplo, registros de facturación propios) o en respaldos técnicos que se depuran conforme a sus ciclos ordinarios (máximo 30 días adicionales).</p>
+        <p>8.4. Cirrus podrá usar información <strong>agregada y anonimizada</strong> (que no identifique al Cliente ni a sus contrapartes) para estadísticas y mejora del Servicio.</p>
+
+        <h2 id="s9">9. Confidencialidad</h2>
+        <p>9.1. Cirrus tratará como confidencial toda la información fiscal y documental del Cliente alojada en la Plataforma, y no la divulgará a terceros salvo: (a) instrucción del propio Cliente; (b) proveedores que la procesan por cuenta de Cirrus bajo obligaciones de confidencialidad (infraestructura, correo, pagos); o (c) requerimiento de autoridad competente fundado y motivado, en cuyo caso, de ser legalmente posible, Cirrus lo notificará al Cliente.</p>
+        <p>9.2. Esta obligación subsiste por tres (3) años después de terminada la relación, sin perjuicio de los plazos que la ley imponga para datos personales.</p>
+
+        <h2 id="s10">10. Suspensión y terminación por parte de Cirrus</h2>
+        <p>10.1. Cirrus podrá suspender total o parcialmente el acceso del Cliente, previa notificación cuando sea razonablemente posible, en los siguientes casos: (a) impago conforme a la cláusula 5.8; (b) uso del Servicio en violación de estos Términos o de la ley, incluyendo indicios razonables de uso para operaciones simuladas o fraude; (c) riesgo de seguridad para la Plataforma u otros usuarios; (d) requerimiento de autoridad competente.</p>
+        <p>10.2. Si la causa de suspensión no se subsana en quince (15) días naturales, Cirrus podrá dar por terminada la cuenta, aplicando la ventana de exportación de la cláusula 8.3 salvo impedimento legal.</p>
+        <p>10.3. El Cliente puede dar por terminada la relación en cualquier momento mediante la cancelación de su cuenta (cláusula 5.5).</p>
+
+        <h2 id="s11">11. Propiedad intelectual de la Plataforma</h2>
+        <p>11.1. La Plataforma, su código, diseño, marcas, logotipos y documentación son propiedad de Cirrus o de sus licenciantes. Estos Términos no transfieren al Cliente ningún derecho de propiedad intelectual, únicamente una licencia de uso limitada, no exclusiva, intransferible y revocable para usar el Servicio conforme a estos Términos mientras la suscripción esté vigente.</p>
+
+        <h2 id="s12">12. Modificaciones a los Términos</h2>
+        <p>12.1. Cirrus podrá modificar estos Términos. Los cambios sustanciales (precios, límites de responsabilidad, uso de la FIEL, propiedad de datos) se notificarán con al menos quince (15) días naturales de anticipación por correo electrónico o aviso destacado en la Plataforma. El uso continuado del Servicio después de la entrada en vigor de los cambios constituye aceptación. Si el Cliente no está de acuerdo, podrá cancelar su suscripción antes de esa fecha.</p>
+        <p>12.2. La versión vigente de los Términos estará siempre disponible en la Plataforma con su fecha de última actualización.</p>
+
+        <h2 id="s13">13. Datos personales</h2>
+        <p>El tratamiento de datos personales se rige por el <strong><a href="/privacidad/">Aviso de Privacidad</a></strong> disponible en la Plataforma, que forma parte integral de la relación entre las partes.</p>
+
+        <h2 id="s14">14. Ley aplicable y jurisdicción</h2>
+        <p>14.1. Estos Términos se rigen por las leyes federales de los Estados Unidos Mexicanos.</p>
+        <p>14.2. Para cualquier controversia, las partes se someten a la jurisdicción de los tribunales competentes de <strong>Ciudad Victoria, Tamaulipas</strong>, renunciando a cualquier otro fuero que pudiera corresponderles por razón de sus domicilios presentes o futuros. Lo anterior sin perjuicio de los derechos irrenunciables que asistan al Cliente cuando tenga el carácter de consumidor conforme a la Ley Federal de Protección al Consumidor.</p>
+
+        <h2 id="s15">15. Contacto</h2>
+        <p>Para dudas, soporte, notificaciones y avisos relacionados con estos Términos:</p>
+        <ul>
+          <li>Correo: <a href="mailto:contactocirrus@nubex.me">contactocirrus@nubex.me</a></li>
+          <li>Sitio: <a href="https://cirrus.nubex.me">https://cirrus.nubex.me</a></li>
+        </ul>
+
+        <h2 id="s16">16. Disposiciones generales</h2>
+        <p>16.1. Si alguna cláusula se declara nula o inaplicable, el resto de los Términos conservará su validez.</p>
+        <p>16.2. La falta de ejercicio de un derecho por Cirrus no constituye renuncia al mismo.</p>
+        <p>16.3. El Cliente no puede ceder su cuenta ni sus derechos bajo estos Términos sin consentimiento previo por escrito de Cirrus. Cirrus podrá ceder la relación en caso de reestructura o transmisión del negocio, notificándolo al Cliente.</p>
+        <p>16.4. Estos Términos, junto con el Aviso de Privacidad y la página de precios, constituyen el acuerdo íntegro entre las partes respecto del Servicio.</p>
+      </article>
+
+      <div class="version">Versión 1.0 (interim) — vigente desde el 28 de julio de 2026.</div>
+    </div>
+
+    <div class="meta">
+      <a href="/">Inicio</a> · <a href="/privacidad/">Aviso de Privacidad</a> · <a href="/verificar-rfc/">Verificador EFOS</a><br>
+      © {{ year|default:"2026" }} Cirrus · <a href="/">cirrus.nubex.me</a>
+    </div>
+  </div>
+</body>
+</html>

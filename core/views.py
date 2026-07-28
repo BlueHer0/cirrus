@@ -1913,3 +1913,17 @@ def verificar_rfc_view(request):
         "total_registros": total_registros,
     })
 
+
+# ── Public legal pages ───────────────────────────────────────────────────
+
+def terminos_view(request):
+    """Public Terms of Service page (v1.0 interim). No login required."""
+    from datetime import datetime
+    return render(request, "public/terminos.html", {"year": datetime.now().year})
+
+
+def privacidad_view(request):
+    """Public Privacy Notice page (v1.0 interim). No login required."""
+    from datetime import datetime
+    return render(request, "public/privacidad.html", {"year": datetime.now().year})
+

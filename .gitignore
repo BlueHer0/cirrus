@@ -7,6 +7,7 @@ venv/
 staticfiles/
 media/
 .env
+.env.bak*
 *.env.local
 *.env.production
 logs/

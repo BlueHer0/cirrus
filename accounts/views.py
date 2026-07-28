@@ -122,6 +122,7 @@ def app_register(request):
         nombre = request.POST.get("nombre", "").strip()
         empresa = request.POST.get("empresa", "").strip()
         telefono = request.POST.get("telefono", "").strip()
+        acepta_terminos = request.POST.get("acepta_terminos") == "on"
 
         errors = []
         if not email or "@" not in email:
@@ -134,6 +135,11 @@ def app_register(request):
             errors.append("Nombre es obligatorio")
         if User.objects.filter(username=email).exists():
             errors.append("Ya existe una cuenta con ese email")
+        if not acepta_terminos:
+            errors.append(
+                "Debes aceptar los Términos del Servicio y el Aviso de Privacidad "
+                "para crear tu cuenta"
+            )
 
         if errors:
             for e in errors:
@@ -165,8 +171,22 @@ def app_register(request):
         token = _generate_confirm_token(user)
         _send_confirmation_email(user, token)
 
+        # Registro de aceptación de Términos/Aviso de Privacidad (tos-v1).
+        # ClienteProfile no tiene campo de metadatos utilizable sin migración,
+        # así que la evidencia queda en logs (SystemLog persistente + logger).
+        aceptacion_ts = datetime.now(timezone.utc).isoformat()
+        logger.info(
+            "ToS/Privacidad aceptados: user_id=%s email=%s version=tos-v1 timestamp=%s",
+            user.id, email, aceptacion_ts,
+        )
+
         from core.services.monitor import log_info
-        log_info("auth", f"Nuevo registro: {email} (pendiente confirmación)")
+        log_info(
+            "auth",
+            f"Nuevo registro: {email} (pendiente confirmación) — aceptó tos-v1",
+            user_email=email,
+            detail=f"user_id={user.id} version=tos-v1 aceptado_en={aceptacion_ts}",
+        )
 
         return render(request, "app/registro_exitoso.html", {
             "email": email, "year": datetime.now().year,
@@ -319,7 +339,7 @@ def recuperar_password(request):
                 f"Este enlace expira en 1 hora.\n\n"
                 f"Si no solicitaste esto, ignora este mensaje.\n\n"
                 f"— Equipo Cirrus",
-                "Cirrus <cirrus@nubex.me>",
+                "Cirrus <noreply@nubex.me>",
                 [email],
                 fail_silently=True,
             )
