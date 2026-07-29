@@ -149,8 +149,12 @@ Tres verificadores que convierten a Cirrus en fuente confiable:
   Stripe mayo (timbrada 2-jun), 27 CFDIs de marzo (~$509k, timbrados 13-31 mar
   tras la descarga del 16-mar), 21 facturas del 29-jun + 3 nóminas jun/jul
   (timbradas horas después del job del 3-jul).
-- Solución diseñada (NO implementada): ventanas de descarga múltiples
-  solapadas por mes (días 1, 5, 10, 15, 20, 25 con solape de 5-10 días).
+- Solución IMPLEMENTADA (2026-07-29, auditor nocturno): (a) el mes corriente
+  se re-descarga cada 3 días (antes se bajaba 1 vez y quedaba rancio el resto
+  del mes — caso VEN jul-2026: bajado el 3-jul con 4 CFDIs, 6 en BD al 29-jul);
+  (b) un mes cerrado solo es confiable si su última descarga ocurrió DESPUÉS
+  del fin de mes +3 días — si no, se re-encola una vez (11 meses detectados
+  en el barrido inicial). La compulsa SAT semanal es la verificación de fondo.
 - El portal SAT SÍ devuelve búsquedas retrospectivas >3 meses (verificado
   2026-07-08: feb y mar 2026 completos en tabla), pero las re-consultas de
   producción a veces devuelven vacíos falsos; el guard 'fallo ≠ vacío' de

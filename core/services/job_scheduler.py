@@ -274,12 +274,42 @@ def auditar_y_reparar_jobs(empresa):
                 else:
                     _reencolar(job, 'auditor: mes sin CFDIs, sin compulsa que confirme vacio')
                 jobs_creados += 1
+            else:
+                # Timbres tardíos: un mes solo es confiable si su ÚLTIMA descarga
+                # ocurrió después de que el mes terminó (+margen de timbrado 72h).
+                # Caso real: VEN jul-2026 descargado el 3-jul con 4 CFDIs y
+                # marcado completado para siempre. Tras re-descargar post-cierre,
+                # completado_at queda después del corte y la regla deja de aplicar.
+                corte = date(mes.year + (1 if mes.month == 12 else 0),
+                             1 if mes.month == 12 else mes.month + 1, 1) + _td(days=3)
+                if job.completado_at and job.completado_at.date() < corte:
+                    _reencolar(job, 'auditor: descargado antes del cierre del mes (timbres tardios)')
+                    jobs_creados += 1
 
         # Siguiente mes
         if mes.month == 12:
             mes = date(mes.year + 1, 1, 1)
         else:
             mes = date(mes.year, mes.month + 1, 1)
+
+    # ── Frescura del MES CORRIENTE (el loop de arriba termina en el mes
+    # anterior, así que el mes en curso jamás se auditaba: se descargaba una
+    # vez al inicio y quedaba rancio el resto del mes). Re-descarga cada 3 días.
+    FRESCURA_MES_CORRIENTE = _td(days=3)
+    for tipo in ['recibidos', 'emitidos']:
+        prog_safe = _safe_programado(hoy.year, hoy.month, timezone.now())
+        job, created = DescargaJob.objects.get_or_create(
+            empresa=empresa, year=hoy.year, month=hoy.month, tipo=tipo,
+            defaults={'estado': 'en_cola', 'prioridad': 5,
+                      'programado_para': prog_safe, 'intentos': 0},
+        )
+        if created:
+            jobs_creados += 1
+        elif (job.estado in ['completado', 'completado_vacio', 'error']
+              and job.completado_at
+              and (ahora - job.completado_at) > FRESCURA_MES_CORRIENTE):
+            _reencolar(job, 'auditor: refresco de mes corriente (cada 3 dias)')
+            jobs_creados += 1
 
     return jobs_creados
 
