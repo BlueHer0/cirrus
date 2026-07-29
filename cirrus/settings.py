@@ -136,6 +136,20 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(day_of_month="1", hour="3", minute="0"),
         "options": {"queue": "scheduler"},
     },
+    # El auditor de frescura (re-encola el mes corriente cada 3 días y los
+    # meses cerrados sin descarga post-cierre) vive DENTRO de
+    # generar_jobs_mensuales. Con solo la entrada mensual de arriba se
+    # evaluaba únicamente el día 1, así que el mes en curso volvía a quedar
+    # rancio el resto del mes — justo el bug que el auditor debía cerrar
+    # (VEN jul-2026: bajado el 3-jul con 4 CFDIs; alerta cfdi_parado en ZL
+    # 14 días después). La tarea es idempotente (get_or_create + guardas de
+    # frescura propias), así que correrla a diario es seguro y es lo que
+    # hace efectiva la regla de 3 días.
+    "auditor-jobs-diario": {
+        "task": "core.tasks.generar_jobs_mes",
+        "schedule": crontab(hour="3", minute="30"),
+        "options": {"queue": "scheduler"},
+    },
     "health-check-playwright": {
         "task": "core.tasks.health_check_playwright",
         "schedule": 900,  # every 15 minutes

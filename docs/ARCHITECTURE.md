@@ -155,6 +155,15 @@ Tres verificadores que convierten a Cirrus en fuente confiable:
   (b) un mes cerrado solo es confiable si su última descarga ocurrió DESPUÉS
   del fin de mes +3 días — si no, se re-encola una vez (11 meses detectados
   en el barrido inicial). La compulsa SAT semanal es la verificación de fondo.
+- **Corrección 2026-07-29 (tarde) — el fix de la mañana estaba inerte:** el
+  auditor vive DENTRO de `generar_jobs_mensuales()`, y en beat esa tarea solo
+  estaba agendada `crontab(day_of_month="1", hour=3)`. O sea, la regla de
+  "cada 3 días" se evaluaba **una vez al mes**: el mes corriente volvía a
+  quedar rancio el resto del mes, exactamente el bug que se quería cerrar.
+  Se agregó la entrada beat `auditor-jobs-diario` (`cirrus/settings.py`,
+  misma tarea, diario 03:30 UTC). Es idempotente (`get_or_create` + guardas
+  de frescura propias), así que correrla a diario es seguro. Requiere
+  `systemctl restart cirrus-beat` para tomar el calendario nuevo.
 - El portal SAT SÍ devuelve búsquedas retrospectivas >3 meses (verificado
   2026-07-08: feb y mar 2026 completos en tabla), pero las re-consultas de
   producción a veces devuelven vacíos falsos; el guard 'fallo ≠ vacío' de
